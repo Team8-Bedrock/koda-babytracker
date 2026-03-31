@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { 
   Bell, ClipboardList, User, Home, 
   PlusSquare, BarChart2, MessageCircle, Settings,
-  ChevronDown // Add this for the dropdown arrow
+  ChevronDown 
 } from 'lucide-react'; 
 import '../App.css';
 
 const ParentDashboard = () => {
-  const [activities] = useState([]);
+  //placeholder for now, basically empty
+  const [activities] = useState([]); 
+  //^ same thing here
   const [caregivers] = useState([]);
 
   return (
@@ -29,7 +31,7 @@ const ParentDashboard = () => {
           <ClipboardList size={24} strokeWidth={2} />
           <span>todays activities</span>
         </div>
-        {/* Updated Class Name for the Light Font */}
+
         <p className="empty-msg-light">No activities yet. Tap the + to get started!</p>
       </div>
 
@@ -38,7 +40,7 @@ const ParentDashboard = () => {
           <User size={24} strokeWidth={2} />
           <span>caregivers</span>
         </div>
-        {/* Updated Class Name for the Light Font */}
+        
         <p className="empty-msg-light">No caregivers yet. Add a caregiver to share the load!</p>
       </div>
 
