@@ -19,7 +19,7 @@ const Welcome = () => {
 
       {/* sparkles */}
 
-      <img src="/koda-logo.png" alt="Koda" className="setup-logo" />
+      <img src="/koda-logo.png" alt="Koda" className="setup-logo-x" />
 
       <div className="setup-card">
         <h1 className="setup-title">Welcome to KODA</h1>
