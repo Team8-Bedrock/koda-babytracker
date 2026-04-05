@@ -96,13 +96,19 @@
 
 /* logo */
 .setup-logo {
-  height: 60px;
+  height: 60px;;
   width: auto;
   margin-bottom: 0;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
   animation: logoBounce 3s ease-in-out infinite;
 }
-
+.setup-logo-x{
+ height: 100px;
+  width: auto;
+  margin-bottom: 0;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+  animation: logoBounce 3s ease-in-out infinite;
+}
 @keyframes logoBounce {
   0% {
     transform: translateY(0px);
@@ -231,7 +237,7 @@
 
 /*buttons */
 .setup-btn-green {
-  width: 100%;
+  width: 90%;
   padding: 16px;
   border-radius: 18px;
   background: #8faf6f;
@@ -261,7 +267,7 @@
 }
 
 .setup-btn-brown {
-  width: 100%;
+  width: 90%;
   padding: 16px;
   border-radius: 18px;
   background: #a8845a;
