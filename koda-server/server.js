@@ -19,4 +19,4 @@ mongoose.connect(process.env.MONGO_URI)
 app.get('/', (req, res) => res.send("Koda API is Running..."));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
+
