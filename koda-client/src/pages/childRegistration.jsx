@@ -19,7 +19,10 @@ const ChildRegistration = () => {
   return (
     <div className="setup-container">
       {/* back button */}
-      <button className="setup-back" onClick={() => navigate("/avatarSelection")}>
+      <button
+        className="setup-back"
+        onClick={() => navigate("/avatarSelection")}
+      >
         <ChevronLeft size={18} /> back
       </button>
 
@@ -32,6 +35,7 @@ const ChildRegistration = () => {
         <div className="firefly" />
         <div className="firefly" />
       </div>
+      <img src="/koda-logo.png" alt="Koda" className="setup-logo" />
 
       <div className="setup-card">
         <div className="setup-progress">
