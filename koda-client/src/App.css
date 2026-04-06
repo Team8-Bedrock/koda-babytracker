@@ -170,3 +170,57 @@ html, body {
 .name-dropdown-btn:active {
   background: rgba(255, 255, 255, 0.2); /* Slight feedback when tapped */
 }
+
+/* Custom styling for the Select dropdown */
+.custom-select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  font-family: 'Londrina Solid', cursive;
+  font-size: 20px;
+  color: #333;
+  appearance: none; /* Removes default arrow */
+  cursor: pointer;
+}
+
+/* Custom styling for the Text Input */
+.activity-input {
+  width: 90%;
+  background: none;
+  border: none;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+  padding: 10px 0;
+  outline: none;
+  font-size: 18px;
+  color: #000;
+}
+
+.activity-input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+/* Save Button Card Hover */
+.save-btn-card {
+  margin-top: 30px;
+  background: rgba(255, 255, 255, 0.4); /* Slightly more solid for a button */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  border: none;
+  width: 85%; /* Match card width */
+  transition: transform 0.2s ease;
+}
+
+.save-btn-card:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.save-btn-card span {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 24px;
+}

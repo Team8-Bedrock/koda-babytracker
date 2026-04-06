@@ -77,14 +77,14 @@ const Registering = () => {
       <img src="/koda-logo.png" alt="Koda" className="setup-logo" />
 
       <div className="setup-card">
-        <div class="setup-progress">
-          <div class="setup-dot active"></div>
-          <div class="setup-dot"></div>
-          <div class="setup-dot"></div>
+        <div className="setup-progress">
+          <div className="setup-dot active"></div>
+          <div className="setup-dot"></div>
+          <div className="setup-dot"></div>
         </div>
 
-        <h1 class="setup-title">Create your account</h1>
-        <p class="setup-sub">Let's get you set up 🌱</p>
+        <h1 className="setup-title">Create your account</h1>
+        <p className="setup-sub">Let's get you set up 🌱</p>
 
         <div className="setup-field">
           <label>Username</label>
