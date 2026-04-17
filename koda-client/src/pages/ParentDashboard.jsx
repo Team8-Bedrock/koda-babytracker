@@ -43,6 +43,15 @@ const ParentDashboard = () => {
           });
         };
 
+        const getDuration = (start, end) => {
+          if (!start || !end) return '';
+          const diffInMs = new Date(end) - new Date(start);
+          const diffInMins = Math.round(diffInMs / 60000);
+          const hours = Math.floor(diffInMins / 60);
+          const minutes = diffInMins % 60;
+          return `${hours > 0 ? `${hours}h ` : ''}${minutes}m`;
+        };
+
         const combinedActivities = [
           ...feedings.map((item) => ({
             type: 'feeding',
@@ -51,7 +60,7 @@ const ParentDashboard = () => {
           })),
           ...sleeps.map((item) => ({
             type: 'sleep',
-            value: `${formatTime(item.startTime)} - ${formatTime(item.endTime)}${item.quality ? ` (${item.quality})` : ''}`,
+            value: `${getDuration(item.startTime, item.endTime)}${item.quality ? ` (${item.quality})` : ''}`,
             time: '',
           })),
           ...diapers.map((item) => ({
