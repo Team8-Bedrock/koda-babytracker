@@ -60,20 +60,55 @@ const ParentDashboard = () => {
             type: 'feeding',
             value: `${item.type || 'feeding'}${item.amount ? ` - ${item.amount} oz` : ''}${item.side && item.side !== 'N/A' ? ` (${item.side})` : ''}`,
             time: formatTime(item.timestamp),
+            rawTime: item.timestamp,
           })),
           ...sleeps.map((item) => ({
             type: 'sleep',
             value: `${getDuration(item.startTime, item.endTime)}${item.quality ? ` (${item.quality})` : ''}`,
             time: '',
+            rawTime: item.timestamp || item.endTime || item.startTime,
           })),
           ...diapers.map((item) => ({
             type: 'diaper',
             value: item.type || 'diaper change',
             time: formatTime(item.timestamp),
+            rawTime: item.timestamp,
           })),
         ];
 
-        setActivities(combinedActivities);
+        //to get the latest log activity
+        const latestFeeding = feedings.length > 0
+          ? {
+            type: 'feeding',
+            value: `${feedings[0].type || 'feeding'}${feedings[0].amount ? ` - ${feedings[0].amount} oz` : ''}${feedings[0].side && feedings[0].side !== 'N/A' ? ` (${feedings[0].side})` : ''}`,
+            time: formatTime(feedings[0].timestamp),
+            rawTime: feedings[0].timestamp,
+          }
+          : null;
+
+        const latestSleep = sleeps.length > 0
+          ? {
+            type: 'sleep',
+            value: `${formatTime(sleeps[0].startTime)} - ${formatTime(sleeps[0].endTime)}${sleeps[0].quality ? ` (${sleeps[0].quality})` : ''}`,
+            time: '',
+            rawTime: sleeps[0].timestamp || sleeps[0].endTime || sleeps[0].startTime,
+          }
+          : null;
+
+        const latestDiaper = diapers.length > 0
+          ? {
+            type: 'diaper',
+            value: diapers[0].type || 'diaper change',
+            time: formatTime(diapers[0].timestamp),
+            rawTime: diapers[0].timestamp,
+          }
+          : null;
+
+        const recentActivities = [latestFeeding, latestSleep, latestDiaper]
+          .filter(Boolean)
+          .sort((a, b) => new Date(b.rawTime) - new Date(a.rawTime));
+
+        setActivities(recentActivities);
         // setCaregivers(careRes.data);
         setLoading(false);
       } catch (err) {
