@@ -1,15 +1,49 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { useGLTF } from "@react-three/drei";
 import {
-  Bell, ClipboardList, User, Home,
-  PlusSquare, BarChart2, MessageCircle, Settings,
-  ChevronDown
-} from 'lucide-react';
-import '../App.css';
-import { getSelectedChildForUser } from '../utils/authStorage';
+  Bell,
+  ClipboardList,
+  User,
+  Home,
+  PlusSquare,
+  BarChart2,
+  MessageCircle,
+  Settings,
+  ChevronDown,
+} from "lucide-react";
+import "../App.css";
+import { getSelectedChildForUser } from "../utils/authStorage";
+
+function ActivityModel({ model }) {
+  const group = useRef();
+  const { scene } = useGLTF(model);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    group.current.position.y = Math.sin(t * 0.8) * 0.1;
+  });
+
+  return (
+    <primitive
+      ref={group}
+      object={scene}
+      scale={0.8}
+      position={[0, -0.5, 0]}
+      rotation={[0, -0.1, 0]}
+    />
+  );
+}
+// preload all models
+useGLTF.preload("/bear.glb");
+useGLTF.preload("/feeding.glb");
+useGLTF.preload("/sleep.glb");
+useGLTF.preload("/diaper.glb");
 
 const ParentDashboard = () => {
+  // user states
   const navigate = useNavigate();
   const [activities, setActivities] = useState([]);
   const [caregivers, setCaregivers] = useState([]);
@@ -18,7 +52,7 @@ const ParentDashboard = () => {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const settingsMenuRef = useRef(null);
 
-  // 1. Fetch data from Maria's Backend API
+  // Fetch data from Maria's Backend API
   useEffect(() => {
     const savedChild = getSelectedChildForUser();
     if (savedChild) {
@@ -27,48 +61,50 @@ const ParentDashboard = () => {
 
     const fetchData = async () => {
       try {
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+        const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
         // Fetching activities for now.
         // Caregiver request can be added back once that route is available.
         const childName = getSelectedChildForUser()?.name || "Gracie";
-        const actRes = await axios.get(`${apiUrl}/api/activities?childName=${encodeURIComponent(childName)}`);
+        const actRes = await axios.get(
+          `${apiUrl}/api/activities?childName=${encodeURIComponent(childName)}`,
+        );
         console.log("ACTIVITY RESPONSE:", actRes.data);
         // const careRes = await axios.get(`${apiUrl}/api/auth/caregivers`);
 
         const { feedings = [], sleeps = [], diapers = [] } = actRes.data;
 
         const formatTime = (value) => {
-          if (!value) return '';
+          if (!value) return "";
           return new Date(value).toLocaleTimeString([], {
-            hour: 'numeric',
-            minute: '2-digit',
+            hour: "numeric",
+            minute: "2-digit",
           });
         };
 
         const getDuration = (start, end) => {
-          if (!start || !end) return '';
+          if (!start || !end) return "";
           const diffInMs = new Date(end) - new Date(start);
           const diffInMins = Math.round(diffInMs / 60000);
           const hours = Math.floor(diffInMins / 60);
           const minutes = diffInMins % 60;
-          return `${hours > 0 ? `${hours}h ` : ''}${minutes}m`;
+          return `${hours > 0 ? `${hours}h ` : ""}${minutes}m`;
         };
 
         const combinedActivities = [
           ...feedings.map((item) => ({
-            type: 'feeding',
-            value: `${item.type || 'feeding'}${item.amount ? ` - ${item.amount} oz` : ''}${item.side && item.side !== 'N/A' ? ` (${item.side})` : ''}`,
+            type: "feeding",
+            value: `${item.type || "feeding"}${item.amount ? ` - ${item.amount} oz` : ""}${item.side && item.side !== "N/A" ? ` (${item.side})` : ""}`,
             time: formatTime(item.timestamp),
           })),
           ...sleeps.map((item) => ({
-            type: 'sleep',
-            value: `${getDuration(item.startTime, item.endTime)}${item.quality ? ` (${item.quality})` : ''}`,
-            time: '',
+            type: "sleep",
+            value: `${getDuration(item.startTime, item.endTime)}${item.quality ? ` (${item.quality})` : ""}`,
+            time: "",
           })),
           ...diapers.map((item) => ({
-            type: 'diaper',
-            value: item.type || 'diaper change',
+            type: "diaper",
+            value: item.type || "diaper change",
             time: formatTime(item.timestamp),
           })),
         ];
@@ -87,7 +123,10 @@ const ParentDashboard = () => {
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (settingsMenuRef.current && !settingsMenuRef.current.contains(event.target)) {
+      if (
+        settingsMenuRef.current &&
+        !settingsMenuRef.current.contains(event.target)
+      ) {
         setIsSettingsMenuOpen(false);
       }
     };
@@ -95,32 +134,43 @@ const ParentDashboard = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+  const getActivityModel = () => {
+    if (activities.length === 0) return "/bear.glb";
+    const latest = activities[0];
+    if (latest.type === "feeding") return "/feeding.glb";
+    if (latest.type === "sleep") return "/sleep.glb";
+    if (latest.type === "diaper") return "/diaper.glb";
+    return "/bear.glb";
+  };
 
   const backgroundStyle = {
-    backgroundImage: `url(${process.env.PUBLIC_URL + '/lightmode.jpg'})`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundAttachment: 'fixed',
-    height: '100vh',
-    width: '100vw',
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    paddingTop: '120px',
-    overflowY: 'auto',
-    overflowX: 'hidden'
+    backgroundImage: `url(${process.env.PUBLIC_URL + "/lightmode.jpg"})`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundAttachment: "fixed",
+    height: "100vh",
+    width: "100vw",
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    paddingTop: "120px",
+    overflowY: "auto",
+    overflowX: "hidden",
   };
 
   return (
     <div className="dashboard-container" style={backgroundStyle}>
-
       {/* FULL-WIDTH GLASS HEADER */}
       <header className="dashboard-header">
         <img src="/koda-logo.png" alt="Koda" className="koda-logo" />
 
-        <button className="name-dropdown-btn" onClick={() => console.log("Open Child Switcher")}>
-          {selectedChild?.name || "Gracie"} <ChevronDown size={20} strokeWidth={2.5} />
+        <button
+          className="name-dropdown-btn"
+          onClick={() => console.log("Open Child Switcher")}
+        >
+          {selectedChild?.name || "Gracie"}{" "}
+          <ChevronDown size={20} strokeWidth={2.5} />
         </button>
 
         <Bell size={28} strokeWidth={1.5} className="nav-icon" />
@@ -137,12 +187,15 @@ const ParentDashboard = () => {
           <div className="activity-list">
             {activities.map((act, index) => (
               <p key={index} className="empty-msg-light">
-                <strong>{act.type}:</strong> {act.value}{act.time ? ` at ${act.time}` : ''}
+                <strong>{act.type}:</strong> {act.value}
+                {act.time ? ` at ${act.time}` : ""}
               </p>
             ))}
           </div>
         ) : (
-          <p className="empty-msg-light">No activities yet. Tap the + to get started!</p>
+          <p className="empty-msg-light">
+            No activities yet. Tap the + to get started!
+          </p>
         )}
       </div>
 
@@ -156,35 +209,67 @@ const ParentDashboard = () => {
         {caregivers.length > 0 ? (
           <div className="caregiver-list">
             {caregivers.map((cg, index) => (
-              <p key={index} className="empty-msg-light">{cg.name}</p>
+              <p key={index} className="empty-msg-light">
+                {cg.name}
+              </p>
             ))}
           </div>
         ) : (
-          <p className="empty-msg-light">No caregivers yet. Add a caregiver to share the load!</p>
+          <p className="empty-msg-light">
+            No caregivers yet. Add a caregiver to share the load!
+          </p>
         )}
       </div>
 
-      {/* KODA BEAR */}
-      <img
-        src="/bear-character.png"
-        alt="Koda Bear"
-        className="bear-character"
-      />
-
+      {/* KODA BEAR / ACTIVITY 3D */}
+      {!loading && (
+        <div
+          style={{
+            width: "250px",
+            height: "250px",
+            position: "absolute",
+            bottom: "120px",
+            left: "30%",
+            transform: "translateX(-80%)",
+          }}
+        >
+          <Canvas camera={{ position: [0, 0, 3], fov: 50 }}>
+            <ambientLight intensity={3} />
+            <directionalLight position={[5, 5, 5]} intensity={3} />
+            <pointLight position={[10, 10, 10]} intensity={3} />
+            <ActivityModel model={getActivityModel()} />
+          </Canvas>
+        </div>
+      )}
       {/* BOTTOM NAVIGATION */}
       <nav className="bottom-nav">
-        <Home size={28} strokeWidth={1.5} className="nav-icon" onClick={() => navigate('/ParentDashboard')} />
+        <Home
+          size={28}
+          strokeWidth={1.5}
+          className="nav-icon"
+          onClick={() => navigate("/ParentDashboard")}
+        />
 
         {/* The Add Button - Links to activity logging */}
         <PlusSquare
           size={36}
           strokeWidth={1.5}
           className="nav-icon plus-btn"
-          onClick={() => navigate('/add-activity')}
+          onClick={() => navigate("/add-activity")}
         />
 
-        <BarChart2 size={28} strokeWidth={1.5} className="nav-icon" onClick={() => navigate('/stats')} />
-        <MessageCircle size={28} strokeWidth={1.5} className="nav-icon" onClick={() => navigate('/chat')} />
+        <BarChart2
+          size={28}
+          strokeWidth={1.5}
+          className="nav-icon"
+          onClick={() => navigate("/stats")}
+        />
+        <MessageCircle
+          size={28}
+          strokeWidth={1.5}
+          className="nav-icon"
+          onClick={() => navigate("/chat")}
+        />
         <div className="settings-menu-wrapper" ref={settingsMenuRef}>
           <button
             type="button"
@@ -193,7 +278,7 @@ const ParentDashboard = () => {
             aria-haspopup="menu"
             aria-expanded={isSettingsMenuOpen}
           >
-            <Settings size={28} strokeWidth={.5} className="nav-icon" />
+            <Settings size={28} strokeWidth={0.5} className="nav-icon" />
           </button>
 
           {isSettingsMenuOpen && (
@@ -203,7 +288,7 @@ const ParentDashboard = () => {
                 className="settings-dropdown-item"
                 onClick={() => {
                   setIsSettingsMenuOpen(false);
-                  navigate('/settings');
+                  navigate("/settings");
                 }}
               >
                 Account Settings
