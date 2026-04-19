@@ -61,16 +61,16 @@ const ParentDashboard = () => {
 
     const fetchData = async () => {
       try {
-        const API_URL = process.env.REACT_APP_API_URL || "https://koda-babytracker.onrender.com";
+        const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
         // Fetching activities for now.
         // Caregiver request can be added back once that route is available.
         const childName = getSelectedChildForUser()?.name || "Gracie";
         const actRes = await axios.get(
-          `${API_URL}/api/activities?childName=${encodeURIComponent(childName)}`,
+          `${apiUrl}/api/activities?childName=${encodeURIComponent(childName)}`,
         );
         console.log("ACTIVITY RESPONSE:", actRes.data);
-        // const careRes = await axios.get(`${API_URL}/api/auth/caregivers`);
+        // const careRes = await axios.get(`${apiUrl}/api/auth/caregivers`);
 
         const { feedings = [], sleeps = [], diapers = [] } = actRes.data;
 

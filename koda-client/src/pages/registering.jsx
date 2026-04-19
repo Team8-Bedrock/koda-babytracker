@@ -56,7 +56,7 @@ const Registering = () => {
     setLoading(true);
 
     try {
-      const API_URL = process.env.REACT_APP_API_URL || "https://koda-babytracker.onrender.com";
+      const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
       const res = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
