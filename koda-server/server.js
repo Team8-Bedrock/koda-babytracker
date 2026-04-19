@@ -10,7 +10,11 @@ const activitiesRouter = require('./routes/activities'); //mdz0019 import activi
 const app = express();
 app.use(express.json());
 app.use(cors({
-  origin: ["http://localhost:3000", "https://koda-app-yy9x.onrender.com"]
+  origin: [
+    "http://localhost:3000", 
+    "https://koda-app-yy9x.onrender.com"
+  ],
+  credentials: true
 }));
 app.use('/api', activitiesRouter);
 
