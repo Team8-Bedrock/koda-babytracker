@@ -62,11 +62,11 @@ const AccountSettings = () => {
         const legacyChildRaw = localStorage.getItem("selectedChild");
         const legacyChild = legacyChildRaw ? JSON.parse(legacyChildRaw) : null;
 
-        const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
+        const API_URL = process.env.REACT_APP_API_URL || "https://koda-babytracker.onrender.com";
         const token = localStorage.getItem("token");
 
         if (token) {
-          const response = await fetch(`${apiUrl}/api/children`, {
+          const response = await fetch(`${API_URL}/api/children`, {
             headers: {
               "x-auth-token": token,
             },
@@ -114,10 +114,10 @@ const AccountSettings = () => {
     }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || "http://localhost:5000";
+      const API_URL = process.env.REACT_APP_API_URL || "https://koda-babytracker.onrender.com";
       const token = localStorage.getItem("token");
 
-      const response = await fetch(`${apiUrl}/api/children/${child._id}`, {
+      const response = await fetch(`${API_URL}/api/children/${child._id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

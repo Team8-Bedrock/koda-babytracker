@@ -16,7 +16,7 @@ const ForgotPassword = () => {
   
     try {
       // Ensure this matches your server's port
-      const API_URL = "http://localhost:5000"; 
+      const API_URL = process.env.REACT_APP_API_URL || "https://koda-babytracker.onrender.com"; 
   
       const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: "POST",
