@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
@@ -21,29 +20,13 @@ useFrame(({ clock }) => {
     <primitive ref={group} object={scene} scale={0.55} position={[0, -0.5, 0]} rotation={[0, -0.1, 0]} />
   );
 }
-const backgroundStyle = {
-  backgroundImage: `url(${process.env.PUBLIC_URL + "/lightmode.jpg"})`,
-  backgroundSize: "cover",
-  backgroundPosition: "center",
-  backgroundAttachment: "fixed",
-  height: "100vh",
-  width: "100vw",
-  position: "relative",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  paddingTop: "120px",  
-  overflowY: "auto",
-  overflowX: "hidden",
-};
 useGLTF.preload("/bear.glb");
 useGLTF.preload("/feeding.glb");
 useGLTF.preload("/sleep.glb");
 
 const ParentDashboard = () => {
-  const navigate = useNavigate();
   const [activities, setActivities] = useState([]);
-  const [caregivers, setCaregivers] = useState([]);
+  const [caregivers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

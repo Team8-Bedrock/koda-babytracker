@@ -97,38 +97,45 @@ router.post("/login", async (req, res) => {
 
 router.post('/forgot-password', async (req, res) => {
   const { email } = req.body;
-
   try {
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(404).json({ msg: "User not found" });
+      return res.status(404).json({ success: false, error: "Email could not be sent" });
     }
-
-    const token = crypto.randomBytes(20).toString('hex');
-    user.resetPasswordToken = token;
-    user.resetPasswordExpires = Date.now() + 3600000;
-    await user.save();
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: user.email,
-      subject: 'Koda Password Reset',
-      text: `Reset your password here: http://localhost:3000/reset-password/${token}`
-    };
-
-    await transporter.sendMail(mailOptions);    
-    res.json({ msg: "Email sent!" });
-
+  
+    const resetToken = user.getResetPasswordToken();
+    await user.save({ validateBeforeSave: false });
+    const frontendUrl = process.env.NODE_ENV === 'production' 
+      ? "https://koda-app-8f5h.onrender.com" 
+      : "http://localhost:3000";
+    // actual link
+    const resetUrl = `${frontendUrl}/reset-password/${resetToken}`;
+    const message = `
+      <h1>You have requested a password reset</h1>
+      <p>You are receiving this email because you (or someone else) requested a password reset for your Koda account.</p>
+      <p>Please click the button below to reset your password. This link is valid for 10 minutes.</p>
+      <a href="${resetUrl}">Reset Password</a>
+      <p>If you did not request this, please ignore this email and your password will remain unchanged.</p>
+    `;
+  
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: "Koda Password Reset",
+        html: message,
+      });
+  
+      res.status(200).json({ success: true, data: "Email Sent" });
+    } catch (err) {
+      console.log(err);
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+  
+      await user.save({ validateBeforeSave: false });
+      return res.status(500).json({ success: false, error: "Email could not be sent" });
+    }
   } catch (err) {
-    res.status(500).json({ msg: "Server error" });
+    next(err);
   }
 });
 
