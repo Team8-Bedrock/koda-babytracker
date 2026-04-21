@@ -14,13 +14,13 @@ html, body {
   overflow-x: hidden;
 }
 
-/* Main Dashboard Layout */
+/* Layout */
 .dashboard-container {
   margin: 0;
   padding: 0;
   width: 100vw;
   min-height: 100vh;
-  background-position: top center; 
+  background-position: top center;
   background-size: cover;
   background-attachment: fixed;
   display: flex;
@@ -29,16 +29,15 @@ html, body {
   position: relative;
 }
 
-/* The Header */
+/* Header */
 .dashboard-header {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0; 
-  margin: 0;
+  right: 0;
   width: 100%;
-  height: 100px; /* for spacing */
-  background: rgba(255, 255, 255, 0.2);
+  height: 100px;
+  background: rgba(255, 255, 255, 0.11);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(15px);
   display: flex;
@@ -50,105 +49,15 @@ html, body {
 }
 
 .dashboard-header h1 {
-  font-size: 38px; 
-  font-weight: 400; /* Regular weight for this font */
+  font-size: 38px;
+  font-weight: 400;
   letter-spacing: 1px;
   text-transform: capitalize;
 }
 
-/* Glass Card Look */
-.glass-card {
-  width: 90%;
-  max-width: 380px;
-  background: rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(5px);
-  border-radius: 28px;
-  padding: 24px;
-  margin-bottom: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 24px;
-  color: #000000; 
-}
-
-.first-card {
-  margin-top: 140px !important; /* Pushes the first card 130px down from the top edge */
-}
-
-/* Content inside cards */
-.empty-msg {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 26px; 
-  font-weight: 400;
-  margin-bottom: 15px;
-  text-transform: lowercase;
-}
-
-.empty-msg-light {
-  font-family: 'Londrina Solid', cursive;
-  font-weight: 300;
-  font-size: 18px;  
-  color: #000000;
-  margin-top: 5px;
-  letter-spacing: 0.3px;
-  opacity: 0.9;
-}
-
-/* The Character (Bear) */
-.bear-character {
-  position: absolute;
-  bottom: 100px;
-  left: 20%;    
-  width: 80px;  
-  z-index: 50;
-  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
-}
-
 .koda-logo {
-  height: 70px; 
+  height: 70px;
   width: auto;
-}
-
-.baby-name {
-  font-size: 32px;
-  margin-left: -20px; 
-}
-
-/* Bottom Navigation Bar */
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  height: 80px; 
-  padding-bottom: env(safe-area-inset-bottom);
-  background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(5px);
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  z-index: 1000;
-}
-
-.nav-icon {
-  color: #000000; 
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.nav-icon:hover {
-  opacity: 0.6;
-}
-
-.plus-btn {
-  color: #000;
-  transform: scale(1.1);
 }
 
 .name-dropdown-btn {
@@ -168,92 +77,45 @@ html, body {
 }
 
 .name-dropdown-btn:active {
-  background: rgba(255, 255, 255, 0.2); /* Slight feedback when tapped */
-}
-
-/* Custom styling for the Select dropdown */
-.custom-select {
-  width: 100%;
   background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  padding: 12px;
-  font-family: 'Londrina Solid', cursive;
-  font-size: 20px;
-  color: #333;
-  appearance: none; /* Removes default arrow */
-  cursor: pointer;
 }
 
-/* Custom styling for the Text Input */
-.activity-input {
-  width: 90%;
-  background: none;
-  border: none;
-  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
-  padding: 10px 0;
-  outline: none;
-  font-size: 18px;
-  color: #000;
+.baby-name {
+  font-size: 32px;
+  margin-left: -20px;
 }
 
-.activity-input::placeholder {
-  color: rgba(0, 0, 0, 0.4);
-}
-
-/* Save Button Card Hover */
-.save-btn-card {
-  margin-top: 30px;
-  background: rgba(255, 255, 255, 0.4); /* Slightly more solid for a button */
+/* Bottom nav */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 70px;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: rgba(255, 255, 255, 0.027);
+  backdrop-filter: blur(5px);
   display: flex;
-  justify-content: center;
+  justify-content: space-around;
   align-items: center;
-  gap: 10px;
+  z-index: 1000;
+}
+
+.nav-icon {
+  color: #000000;
   cursor: pointer;
-  border: none;
-  width: 85%; /* Match card width */
-  transition: transform 0.2s ease;
+  transition: opacity 0.2s;
 }
 
-.save-btn-card:active {
-  transform: scale(0.95);
-  background: rgba(255, 255, 255, 0.6);
+.nav-icon:hover {
+  opacity: 0.6;
 }
 
-.save-btn-card span {
-  font-family: 'Londrina Solid', cursive;
-  font-size: 24px;
+.plus-btn {
+  color: #000;
+  transform: scale(1.1);
 }
 
-.sleep-field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-  width: 100%;
-}
-
-.sleep-label {
-  font-family: 'Londrina Solid', sans-serif;
-  font-size: 18px;
-  color: black;
-  text-transform: lowercase;
-  margin-left: 4px;
-}
-
-.sleep-form-container {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.activity-list {
-  max-height: 180px;
-  overflow-y: auto;
-  width: 100%;
-  padding-right: 6px;
-}
-
+/* Settings dropdown */
 .settings-menu-wrapper {
   position: relative;
   display: flex;
@@ -301,6 +163,68 @@ html, body {
   background: rgba(0, 0, 0, 0.05);
 }
 
+/* Glass cards */
+.glass-card {
+  width: 90%;
+  max-width: 380px;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(5px);
+  border-radius: 28px;
+  padding: 24px;
+  margin-bottom: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 24px;
+  color: #000000;
+}
+
+.first-card {
+  margin-top: 140px !important;
+}
+
+/* Text styles */
+.empty-msg {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 26px;
+  font-weight: 400;
+  margin-bottom: 15px;
+  text-transform: lowercase;
+}
+
+.empty-msg-light {
+  font-family: 'Londrina Solid', cursive;
+  font-weight: 300;
+  font-size: 18px;
+  color: #000000;
+  margin-top: 5px;
+  letter-spacing: 0.3px;
+  opacity: 0.9;
+}
+
+.bear-character {
+  position: absolute;
+  bottom: 100px;
+  left: 20%;
+  width: 80px;
+  z-index: 50;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+}
+
+/* Activity log */
+.activity-list {
+  max-height: 180px;
+  overflow-y: auto;
+  width: 100%;
+  padding-right: 6px;
+}
+
 .activity-menu-btn {
   width: 100%;
   border: none;
@@ -318,4 +242,663 @@ html, body {
 
 .activity-menu-btn:hover {
   transform: scale(1.01);
+}
+
+.activity-input {
+  width: 90%;
+  background: none;
+  border: none;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+  padding: 10px 0;
+  outline: none;
+  font-size: 18px;
+  color: #000;
+}
+
+.activity-input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+/* Sleep form */
+.sleep-form-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sleep-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.sleep-label {
+  font-family: 'Londrina Solid', sans-serif;
+  font-size: 18px;
+  color: black;
+  text-transform: lowercase;
+  margin-left: 4px;
+}
+
+/* Save button */
+.save-btn-card {
+  margin-top: 30px;
+  background: rgba(255, 255, 255, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  border: none;
+  width: 85%;
+  transition: transform 0.2s ease;
+}
+
+.save-btn-card:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.save-btn-card span {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 24px;
+}
+
+.custom-select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  font-family: 'Londrina Solid', cursive;
+  font-size: 20px;
+  color: #333;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* ZZZ animation */
+.zzz-overlay {
+  position: absolute;
+  top: 120px;
+  right: 80px;
+  pointer-events: none;
+}
+
+.zzz {
+  position: absolute;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #a78bfa;
+  animation: floatZ 2s ease-in-out infinite;
+  opacity: 0;
+}
+
+.z1 { right: 0px; top: 0px; animation-delay: 0s; font-size: 0.8rem; }
+.z2 { right: -8px; top: -16px; animation-delay: 0.6s; font-size: 1rem; }
+.z3 { right: -16px; top: -30px; animation-delay: 1.2s; font-size: 1.2rem; }
+
+@keyframes floatZ {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.8); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-8px, -20px) scale(1.1); }
+}
+
+/* Bubbles animation */
+.bubbles-overlay {
+  position: absolute;
+  bottom: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  width: 80px;
+}
+
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(147, 210, 255, 0.7);
+  border: 2px solid rgba(147, 210, 255, 1);
+  animation: floatBubble 2.5s ease-in infinite;
+  opacity: 0;
+}
+
+.b1 { width: 10px; height: 10px; left: 10px; animation-delay: 0s; }
+.b2 { width: 14px; height: 14px; left: 30px; animation-delay: 0.5s; }
+.b3 { width: 8px; height: 8px; left: 50px; animation-delay: 1s; }
+.b4 { width: 12px; height: 12px; left: 20px; animation-delay: 1.5s; }
+
+@keyframes floatBubble {
+  0% { opacity: 0; transform: translateY(0) scale(0.5); }
+  20% { opacity: 0.8; }
+  100% { opacity: 0; transform: translateY(-120px) scale(1); }
+}
+/* Account / Baby settings page */
+.account-settings-page {
+  min-height: 100vh;
+  color: #1f1d1a;
+  padding: 100px 20px 100px;
+}
+
+.account-settings-shell {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.account-settings-header {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.account-settings-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+
+.account-settings-header h1 {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 48px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.account-settings-subtitle {
+  font-size: 15px;
+  line-height: 1.5;
+  opacity: 0.75;
+}
+
+.profile-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.account-settings-card {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 28px;
+  padding: 24px;
+}
+
+.profile-card {
+  position: relative;
+}
+
+.profile-edit-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(5px);
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.profile-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.profile-avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+.profile-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+
+.profile-preview h2 {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 18px;
+  margin-bottom: 8px;
+}
+
+.profile-meta-label {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.profile-meta-value {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.profile-editor {
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  padding-top: 16px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.settings-field span {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 20px;
+}
+
+.settings-field input,
+.settings-field textarea {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: 'Londrina Solid', cursive;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(5px);
+  color: #1f1d1a;
+  outline: none;
+}
+
+.settings-field textarea {
+  resize: vertical;
+}
+
+.settings-field.compact {
+  margin-bottom: 12px;
+}
+
+.avatar-picker {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.avatar-option {
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(4px);
+  border-radius: 14px;
+  font-size: 26px;
+  padding: 10px 0;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.avatar-option.selected {
+  outline: 2px solid #1f1d1a;
+  background: rgba(255, 255, 255, 0.7);
+  transform: translateY(-2px);
+}
+
+.save-profile-button {
+  width: 100%;
+  border: none;
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(31, 29, 26, 0.82);
+  color: #fff;
+  font-family: 'Londrina Solid', cursive;
+  font-size: 24px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.mood-card {
+  padding: 22px 24px;
+}
+
+.mood-copy {
+  font-size: 15px;
+  line-height: 1.5;
+  margin-top: 6px;
+  opacity: 0.85;
+}
+
+.settings-message {
+  margin-top: 12px;
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+@media (max-width: 420px) {
+  .avatar-picker { grid-template-columns: repeat(3, 1fr); }
+  .profile-grid { grid-template-columns: 1fr; }
+}
+/* Baby Settings Page */
+
+.as-page {
+  background-image: none;
+  padding: 0 0 120px;
+}
+
+.as-shell {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 110px 18px 20px;
+}
+
+.as-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(255,255,255,0.35);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 32px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.as-bear-canvas {
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.as-hero-text {
+  flex: 1;
+}
+
+.as-eyebrow {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  opacity: 0.5;
+  margin-bottom: 2px;
+}
+
+.as-name {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.as-age {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 16px;
+  opacity: 0.6;
+}
+
+.as-edit-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.4);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.as-edit-btn:active {
+  transform: scale(0.93);
+}
+
+.as-toast {
+  position: fixed;
+  top: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    90deg, 
+    rgba(60, 200, 100, 0) 0%, 
+    rgba(60, 200, 100, 0.15) 20%, 
+    rgba(60, 200, 100, 0.15) 80%, 
+    rgba(60, 200, 100, 0) 100%
+  );
+  padding: 12px 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: 'Londrina Solid', cursive;
+  font-size: 20px;
+  color: #1a6630; 
+  z-index: 2000;
+  pointer-events: none;  
+  animation: softFadeIn 0.6s ease-out forwards;
+}
+
+@keyframes softFadeIn {
+  0% { 
+    opacity: 0; 
+    letter-spacing: 2px;
+    filter: blur(4px);
+  }
+  100% { 
+    opacity: 1; 
+    letter-spacing: 0px;
+    filter: blur(0px);
+  }
+}
+
+.as-loading {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 22px;
+  opacity: 0.5;
+  text-align: center;
+  padding: 40px 0;
+}
+
+.as-section-label {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  opacity: 0.45;
+  margin-bottom: 10px;
+  padding-left: 4px;
+}
+
+.as-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.as-info-card {
+  background: rgba(255,255,255,0.3);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.45);
+  border-radius: 28px;
+  padding: 22px 20px;
+}
+.as-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 15px;
+}
+
+.as-info-label {
+  display: block;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+
+.as-info-val {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.as-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.as-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.as-field-group {
+  background: rgba(255,255,255,0.3);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.45);
+  border-radius: 28px;
+  padding: 6px 4px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.as-field {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  cursor: text;
+}
+
+.as-field:last-child {
+  border-bottom: none;
+}
+
+.as-field span {
+  font-family: 'Londrina Solid', cursive;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.45;
+  margin-bottom: 4px;
+}
+
+.as-field input,
+.as-field textarea {
+  background: none;
+  border: none;
+  outline: none;
+  font-family: 'Londrina Solid', cursive;
+  font-size: 20px;
+  color: #1f1d1a;
+  width: 100%;
+  resize: none;
+}
+
+.as-field input::placeholder,
+.as-field textarea::placeholder {
+  opacity: 0.3;
+}
+
+.as-avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.as-avatar-opt {
+  aspect-ratio: 1;
+  border-radius: 16px;
+  border: 2px solid rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.3);
+  backdrop-filter: blur(4px);
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.as-avatar-opt.active {
+  border-color: #1f1d1a;
+  background: rgba(255,255,255,0.7);
+  transform: scale(1.08);
+}
+
+.as-error {
+  font-size: 14px;
+  color: #c0392b;
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+
+.as-save-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: 22px;
+  background: rgba(31,29,26,0.85);
+  color: #fff;
+  font-family: 'Londrina Solid', cursive;
+  font-size: 24px;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.as-save-btn:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+.as-edit-btn {
+  position: absolute;
+  top: 15px;       
+  right: 15px;     
+  width: 32px;   
+  height: 32px;
+  background: none;
+  border-radius: 20%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.as-edit-btn svg {
+  width: 18px;
+  height: 18px;
 }
