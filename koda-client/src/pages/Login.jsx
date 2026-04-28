@@ -115,7 +115,7 @@ const Login = () => {
             marginTop: "10px",
             fontSize: "14px"
           }}
-          onClick={() => navigate("/forgotpassword")}
+          onClick={() => navigate("/forgot-password")}
         >
           Forgot Password?
         </button>

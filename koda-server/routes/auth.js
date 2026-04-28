@@ -4,6 +4,8 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 const nodemailer = require('nodemailer');
+const crypto = require('crypto');
+
 const router = express.Router();
 
 const authMiddleware = (req, res, next) => {
@@ -19,28 +21,6 @@ const authMiddleware = (req, res, next) => {
   } catch (err) {
     return res.status(401).json({ msg: "Token is not valid" });
   }
-};
-
-const sendEmail = async (options) => {
-  const transporter = nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    tls: {
-      rejectUnauthorized: false
-    }
-  });
-
-  const mailOptions = {
-    from: `Koda App <${process.env.EMAIL_USER}>`,
-    to: options.email,
-    subject: options.subject,
-    html: options.html,
-  };
-
-  await transporter.sendMail(mailOptions);
 };
 
 // Register a new user
@@ -115,7 +95,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.post('/forgotpassword', async (req, res) => {
+router.post('/forgot-password', async (req, res) => {
   const { email } = req.body;
   try {
     const user = await User.findOne({ email });

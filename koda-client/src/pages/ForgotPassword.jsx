@@ -16,7 +16,7 @@ const ForgotPassword = () => {
     setMessage("");
   
     try {  
-      const res = await fetch(`${API_URL}/api/auth/forgotpassword`, {
+      const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email }), // Ensure 'email' matches your state
