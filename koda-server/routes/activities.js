@@ -752,7 +752,7 @@ router.post('/offline_sync', async (req, res) => {
         for (const item of activities) {
             const { type, data } = item;
             if(!data.babyId || !data.userId) {
-                console.warm('[Sunc Warning] Missing babyId or userId in offline activity data:', data);
+                console.warn('[Sync Warning] Missing babyId or userId in offline activity data:', data);
                 continue; // Skip this entry
             }
 

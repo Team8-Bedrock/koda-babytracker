@@ -1,12 +1,13 @@
-import { getOfflineQueue, markOfflineQueueAsSynced } from './offlineStorage.js';
+import { getQueuedActivities, markActivityAsSynced } from './offlineStorage';
+import { API_URL } from '../config';
 
-const SERVER_URL = "http://Localhost:5000/api/activities/offline_sync";
+const SERVER_URL = `${API_URL}/api/offline_sync`;
 let isSyncing = false;
 
 export async function syncOfflineActivities() {
     if (isSyncing) return; // Prevent multiple syncs at the same time
    
-    const queue = await getOfflineQueue();
+    const queue = await getQueuedActivities();
     if (queue.length === 0) return; // No activities to sync
 
     isSyncing = true;
@@ -22,7 +23,7 @@ export async function syncOfflineActivities() {
         });
 
         if (response.ok) {
-            await clearOfflineQueue(); // Mark as not synced if server response is not ok
+            await markActivityAsSynced();
             console.log ("[Sync Engine] Synchronication complete. Local cache cleared safely");
         } else {
             console.warn("[Sync Engine] Server responded with an error during offline sync:", response.statusText);
@@ -36,7 +37,7 @@ export async function syncOfflineActivities() {
 
 export function initializeSyncEngine() {
     window.addEventListener('online', () => {
-        syncOfflineActivitivies();
+        syncOfflineActivities();
     });
 
     setInterval(() => {

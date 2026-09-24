@@ -11,23 +11,25 @@ router.post('/offline-log', async(req, res) => {
     }
 
     try {
-        const operations = log.map(log => ({
-            updaeOne: {
-                filter: { logID: log.logId || log.id},
-                $setOnInsert: {
-                    logId: log.logId || log.id,
-                    timestamp: log.timestamp ? new Date(log.timestamp) : new Date(),
-                    level: log.level || 'INFO',
-                    message: log.message,
-                    context: log.context || {}
-                }
-            },
-            upsert: true
+        const operations = logs.map(log => ({
+            updateOne: {
+                filter: { logId: log.logId || log.id },
+                update: {
+                    $setOnInsert: {
+                        logId: log.logId || log.id,
+                        timestamp: log.timestamp ? new Date(log.timestamp) : new Date(),
+                        level: log.level || 'INFO',
+                        message: log.message,
+                        context: log.context || {}
+                    }
+                },
+                upsert: true
+            }
         }));
         const result = await Log.bulkWrite(operations, { ordered: false});
         return res.status(200).json({
             status: 'Success',
-            received: log.length,
+            received: logs.length,
             inserted: result.upsertedCount,
             matched: result.matchedCount
         });
