@@ -740,4 +740,57 @@ router.post('/reports/generate', authMiddleware, async (req, res) => {
     }
 });
 
+//Ofline sync route
+router.post('/offline_sync', async (req, res) => {
+    const activities = req.body;
+
+    if (!Array.isArray(activities) || activities.length === 0) {
+        return res.status(400).json({ error: 'Invalid or empty activities array' });
+    }
+
+    try {
+        for (const item of activities) {
+            const { type, data } = item;
+            if(!data.babyId || !data.userId) {
+                console.warm('[Sunc Warning] Missing babyId or userId in offline activity data:', data);
+                continue; // Skip this entry
+            }
+
+            if(type === 'feeding') {
+                await Feeding.create({
+                    babyId: data.babyId,
+                    userId: data.userId,
+                    amount: data.amount,
+                    type: data.type,
+                    timestamp: data.timestamp,
+                });
+            } else if(type === 'sleep') {
+                await Sleep.create({
+                    babyId: data.babyId,
+                    userId: data.userId,
+                    startTime: data.startTime,
+                    endTime: data.endTime,
+                    duration: data.duration,
+                    quality: data.quality,
+                    timestamp: data.timestamp,
+                });
+            } else if(type === 'diaper') {
+                await Diaper.create({
+                    babyId: data.babyId,
+                    userId: data.userId,
+                    type: data.type,
+                    timestamp: data.timestamp,
+                });
+            }
+        }
+        return res.status(200).json({
+            status: 'Success',
+            message: 'Offline activities synchronized successfully',
+        });
+        } catch (error) {
+            console.error('[Sync Error] Failed to synchronize offline activities:', error);
+            return res.status(500).json({ error: 'Failed to synchronize offline activities' });
+        }
+    });
+
 module.exports = router;

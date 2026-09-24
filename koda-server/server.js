@@ -18,6 +18,8 @@ app.use(cors());
 
 app.use('/api', activitiesRouter); //mdz0019 use activities routes
 
+app.use('/api/telemetry', require('./routes/offlineLog')); //Offline
+
 // Connect to MongoDB using the secret variable
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ Koda Database Connected!"))
