@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import "../../styling/pages/setUp.css";
 import { getCurrentUserId, selectedChildStorageKey } from "../../utils/authStorage";
 import { API_URL } from "../../config";
+import PasswordInput from "../../components/PasswordInput";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -92,8 +93,7 @@ const Login = () => {
 
         <div className="setup-field">
           <label>Password</label>
-          <input
-            type="password"
+          <PasswordInput
             placeholder="enter your password"
             value={form.password}
             onChange={set("password")}
@@ -110,10 +110,12 @@ const Login = () => {
           style={{ 
             background: "none", 
             border: "none", 
-            textDecoration: "underline", 
             cursor: "pointer", 
             marginTop: "10px",
-            fontSize: "14px"
+            fontSize: "14px",
+            fontFamily: "'Londrina Solid', cursive",
+            fontWeight: 300,
+            color: "#000"
           }}
           onClick={() => navigate("/forgot-password")}
         >

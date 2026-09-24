@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import "../../styling/pages/setUp.css";
 import { API_URL } from "../../config";
+import PasswordInput from "../../components/PasswordInput";
 
 const Registering = () => {
   const navigate = useNavigate();
@@ -120,8 +121,7 @@ const Registering = () => {
         {/* PASSWORD FIELD #1 */}
         <div className="setup-field">
           <label>Password</label>
-          <input
-            type="password"
+          <PasswordInput
             placeholder="create a password"
             value={form.password}
             onChange={set("password")}
@@ -147,8 +147,7 @@ const Registering = () => {
         {/* PASSWORD FIELD #2 (CONFIRM) */}
         <div className="setup-field" style={{ marginTop: '15px' }}>
           <label>Confirm Password</label>
-          <input
-            type="password"
+          <PasswordInput
             placeholder="confirm your password"
             value={form.confirm}
             onChange={set("confirm")}

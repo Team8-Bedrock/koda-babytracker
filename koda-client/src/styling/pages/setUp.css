@@ -254,6 +254,32 @@
   color: #c0b8a8;
 }
 
+.setup-password-wrap {
+  position: relative;
+}
+
+.setup-password-wrap input {
+  padding-right: 46px;
+}
+
+.setup-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #8a8070;
+  display: flex;
+  align-items: center;
+}
+
+.setup-password-toggle:hover {
+  color: #2c2c2c;
+}
+
 /*buttons */
 .setup-btn-green {
   width: 90%;
@@ -372,9 +398,10 @@
 }
 
 .setup-footer a {
-  color: #3f5c26;
-  font-weight: 700;
-  text-decoration: underline;
+  font-family: "Londrina Solid", cursive;
+  font-weight: 300;
+  color: #000;
+  text-decoration: none;
   cursor: pointer;
 }
 
