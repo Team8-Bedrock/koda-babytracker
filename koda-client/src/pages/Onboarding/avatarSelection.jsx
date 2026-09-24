@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import "../../styling/pages/setUp.css";
@@ -10,6 +10,8 @@ import AvatarHabitatBackdrop from "../../components/AvatarHabitatBackdrop";
 
 const AvatarSelection = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAddChildMode = location.state?.mode === "addChild";
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [modelLoading, setModelLoading] = useState(true);
   const mountRef = useRef(null);
@@ -185,7 +187,7 @@ const AvatarSelection = () => {
   const handleConfirm = () => {
     bounceStart.current = Date.now();
     setTimeout(() => {
-      navigate("/childRegistration", { state: { avatar: selected.id } });
+      navigate("/childRegistration", { state: { avatar: selected.id, mode: location.state?.mode } });
     }, 420);
   };
 
@@ -193,7 +195,10 @@ const AvatarSelection = () => {
     <div className="setup-container setup-container--habitat">
       <AvatarHabitatBackdrop avatarId={selected.id} />
 
-      <button className="setup-back setup-back--on-habitat" onClick={() => navigate("/registering")}>
+      <button
+        className="setup-back setup-back--on-habitat"
+        onClick={() => navigate(isAddChildMode ? "/account" : "/registering")}
+      >
 
         <ChevronLeft size={18} /> back
       </button>
@@ -275,10 +280,12 @@ const AvatarSelection = () => {
           Confirm
         </button>
 
-        <p className="setup-footer">
-          Already have a child profile?{" "}
-          <a onClick={() => navigate("/login")}>Join here</a>
-        </p>
+        {!isAddChildMode && (
+          <p className="setup-footer">
+            Already have a child profile?{" "}
+            <a onClick={() => navigate("/login")}>Join here</a>
+          </p>
+        )}
       </div>
     </div>
   );

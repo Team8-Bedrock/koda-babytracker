@@ -12,6 +12,7 @@ const ChildRegistration = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const avatarId = location.state?.avatar ?? "bear";
+  const isAddChildMode = location.state?.mode === "addChild";
   const character = getAvatarById(avatarId);
   const characterModel = character?.model || DEFAULT_MODEL;
 
@@ -160,7 +161,7 @@ const ChildRegistration = () => {
       }
 
       setSelectedChildForUser(data);
-      navigate("/parentDashboard");
+      navigate(isAddChildMode ? "/account" : "/parentDashboard");
     } catch (err) {
       console.error("Could not create child profile:", err);
     }
@@ -174,7 +175,7 @@ const ChildRegistration = () => {
       {/* back button */}
       <button
         className="setup-back"
-        onClick={() => navigate("/avatarSelection")}
+        onClick={() => navigate("/avatarSelection", { state: { mode: location.state?.mode } })}
       >
         <ChevronLeft size={18} /> back
       </button>
@@ -225,7 +226,7 @@ const ChildRegistration = () => {
           disabled={!name || !dob}
           onClick={handleCreate}
         >
-          Create Baby Profile
+          {isAddChildMode ? "Add Child" : "Create Baby Profile"}
         </button>
       </div>
     </div>

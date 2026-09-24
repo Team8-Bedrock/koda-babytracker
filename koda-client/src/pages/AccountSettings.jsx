@@ -14,6 +14,7 @@ import Layout from '../components/Layout';
 import { getSelectedChildForUser } from '../utils/authStorage';
 import CaregiverLinkPanel from '../components/settings/CaregiverLinkPanel';
 import CaregiverManagementPanel from '../components/settings/CaregiverManagementPanel';
+import ChildProfilePicker from '../components/settings/ChildProfilePicker';
 
 const CollapseRow = ({ open, children, topGap = false }) => (
   <div
@@ -247,16 +248,7 @@ const AccountSettings = () => {
                       <span>{panelTitles.baby}</span>
                     </div>
 
-                    <div className="account-baby-panel-body">
-                      <button
-                        type="button"
-                        className="glass-card save-btn-card"
-                        onClick={() => navigate('/babysettings')}
-                      >
-                        <Baby size={20} />
-                        <span>go to {childName}'s settings</span>
-                      </button>
-                    </div>
+                    <ChildProfilePicker />
 
                     <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
                       show less
