@@ -334,3 +334,147 @@
 .sleep-warning svg {
   flex-shrink: 0;
 }
+
+/* Duplicate entry confirmation */
+.duplicate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(20, 30, 22, 0.6);
+}
+
+.duplicate-dialog {
+  width: 100%;
+  max-width: 380px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: 24px;
+  background: #fdfae8;
+  color: #4a3a26;
+  border: 3px solid #5a4635;
+  border-radius: 24px;
+  box-shadow: 0 5px 0 #3d2e22;
+}
+
+.duplicate-dialog h2 {
+  margin-bottom: 12px;
+  font-family: "Baloo 2", "Nunito", sans-serif;
+  font-size: 24px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.duplicate-dialog p {
+  margin-bottom: 12px;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.duplicate-details {
+  padding: 12px;
+  margin: 16px 0;
+  background: #eef7e8;
+  border-radius: 12px;
+}
+
+.duplicate-details p:last-child {
+  margin-bottom: 0;
+}
+
+.duplicate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.duplicate-actions button {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 16px;
+  border: 2px solid #5a4635;
+  border-radius: 16px;
+  background: #f5f2e6;
+  color: #4a3a26;
+  font-family: "Baloo 2", "Nunito", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.duplicate-actions button:first-child {
+  background: #b9d99d;
+}
+
+.duplicate-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.duplicate-actions button:focus-visible {
+  outline: 3px solid #38701a;
+  outline-offset: 3px;
+}
+
+.duplicate-dialog .duplicate-error {
+  color: #8a3f3f;
+}
+
+/*offline display*/
+.offline-save-notice {
+  position: fixed;
+  bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1500;
+  box-sizing: border-box;
+  width: calc(100% - 32px);
+  max-width: 380px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #eef7e8;
+  color: #4a3a26;
+  border: 2px solid #5a4635;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  font-family: inherit;
+}
+
+.offline-save-notice strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.offline-save-notice p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.offline-save-notice button {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #4a3a26;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.offline-save-notice button:focus-visible {
+  outline: 2px solid #4a3a26;
+  outline-offset: 2px;
+}

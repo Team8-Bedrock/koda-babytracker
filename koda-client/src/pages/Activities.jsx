@@ -6,7 +6,8 @@ import { Save, Milk, Moon, Baby, Clock, Calendar, AlertTriangle } from 'lucide-r
 import '../styling/global/App.css';
 import '../styling/pages/activities.css';
 
-import { getSelectedChildForUser } from '../utils/authStorage';
+import { getSelectedChildForUser, getCurrentUserId } from '../utils/authStorage';
+import { queueActivityOffline } from '../utils/offlineStorage';
 import { API_URL } from "../config";
 import Layout from '../components/Layout';
 
@@ -51,6 +52,8 @@ const Activities = () => {
   const [sleepError, setSleepError] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [duplicateEntry, setDuplicateEntry] = useState(null);
+  const [pendingActivity, setPendingActivity] = useState(null);
 
   const toggleRepeatDay = (day) => {
     setRepeatDays((prev) =>
@@ -85,6 +88,75 @@ const Activities = () => {
     return { value };
   };
 
+  //Catches duplicate response
+  const saveActivity = async (activityType, activityData, requestConfig) => {
+    const storeOffline = async () => {
+      const userId = getCurrentUserId();
+
+      if (!userId) {
+        throw new Error('Please log in before saving an activity.');
+      }
+
+      await queueActivityOffline(activityType, {
+        ...activityData,
+        loggedBy: userId
+      });
+
+      sessionStorage.setItem(
+        'showOfflineSaveNotice',
+        JSON.stringify({
+          title: navigator.onLine
+            ? 'Entry saved on this device'
+            : 'You’re offline. Entry saved on this device.',
+          message: 'It will sync automatically when the connection is restored.'
+        })
+      );
+
+      return true;
+    };
+
+    if (!navigator.onLine) {
+      return storeOffline();
+    }
+
+    try {
+      await axios.post(
+        `${API_URL}/api/${activityType}`,
+        activityData,
+        {
+          ...requestConfig,
+          timeout: 15000
+        }
+      );
+
+      return true;
+    } catch (err) {
+      if (
+        err.response?.status === 409 &&
+        err.response?.data?.code === 'DUPLICATE_ACTIVITY'
+      ) {
+        setDuplicateEntry(err.response.data.existingEntry);
+        setPendingActivity({
+          activityType,
+          activityData
+        });
+
+        return false;
+      }
+
+      // Queue the entry if the server cannot be reached.
+      // HTTP errors will show normally
+      if (
+        !err.response &&
+        ['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT'].includes(err.code)
+      ) {
+        return storeOffline();
+      }
+
+      throw err;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
@@ -101,6 +173,7 @@ const Activities = () => {
 
       setSubmitting(true);
       const requestConfig = { headers: { 'x-auth-token': token } };
+      let saved = true;
 
       if (mode === 'schedule') {
         await axios.post(`${API_URL}/api/schedule`, {
@@ -125,7 +198,7 @@ const Activities = () => {
 
         const duration = Math.round((sleepEnd - sleepStart) / (1000 * 60));
 
-        await axios.post(`${API_URL}/api/sleep`, {
+        saved = await saveActivity('sleep', {
           childId,
           startTime: sleepStart,
           endTime: sleepEnd,
@@ -133,26 +206,72 @@ const Activities = () => {
           quality,
         }, requestConfig);
       } else if (type === 'feeding') {
-        await axios.post(`${API_URL}/api/feeding`, {
+        saved = await saveActivity('feeding', {
           childId,
           type: feedingType,
           amount: feedingAmount ? Number(feedingAmount) : undefined,
           side: feedingSide || 'N/A',
         }, requestConfig);
       } else if (type === 'diaper') {
-        await axios.post(`${API_URL}/api/diaper`, {
+        saved = await saveActivity('diaper', {
           childId,
           type: diaperType,
         }, requestConfig);
       }
 
-      navigate('/ParentDashboard');
+      if (saved) {
+        navigate('/ParentDashboard');
+      }
     } catch (err) {
       console.error("Error saving activity:", err);
       setSubmitError(err.response?.data?.error || err.response?.data?.msg || err.message || 'could not save that activity. please try again.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  //Duplicate detection keep and discard
+  const handleKeepDuplicate = async () => {
+    if (!pendingActivity || submitting) return;
+
+    setSubmitting(true);
+    setSubmitError('');
+
+    try {
+      const token = localStorage.getItem('token');
+
+      await axios.post(
+        `${API_URL}/api/${pendingActivity.activityType}`,
+        {
+          ...pendingActivity.activityData,
+          allowDuplicate: true
+        },
+        {
+          headers: { 'x-auth-token': token }
+        }
+      );
+
+      setDuplicateEntry(null);
+      setPendingActivity(null);
+      navigate('/ParentDashboard');
+    } catch (err) {
+      setSubmitError(
+        err.response?.data?.error ||
+        err.response?.data?.msg ||
+        'Could not save the entry. Please try again.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelDuplicate = () => {
+    if (submitting) return;
+
+    setDuplicateEntry(null);
+    setPendingActivity(null);
+    setSubmitError('');
+    navigate('/ParentDashboard');
   };
 
   const typeLabel = ACTIVITY_OPTIONS.find((o) => o.type === type)?.label || '';
@@ -483,6 +602,66 @@ const Activities = () => {
 
         </form>
       </div>
+
+      {duplicateEntry && (
+        <div className="duplicate-overlay">
+          <div
+            className="duplicate-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="duplicate-title"
+            aria-describedby="duplicate-description"
+          >
+            <h2 id="duplicate-title">Duplicate Entry Detected</h2>
+
+            <p id="duplicate-description">
+              Was this activity already logged? A similar entry for this
+              child was recorded within the past 15 minutes.
+            </p>
+
+            <div className="duplicate-details">
+              <p>
+                <strong>Activity:</strong> {duplicateEntry.activityType}
+              </p>
+              <p>
+                <strong>User:</strong> {duplicateEntry.username}
+                {duplicateEntry.role ? ` (${duplicateEntry.role})` : ''}
+              </p>
+              <p>
+                <strong>Time:</strong>{' '}
+                {new Date(duplicateEntry.timestamp).toLocaleString()}
+              </p>
+            </div>
+
+            <p><strong>Are you sure you want to keep this record?</strong></p>
+
+            {submitError && (
+              <p className="duplicate-error" role="alert">
+                {submitError}
+              </p>
+            )}
+
+            <div className="duplicate-actions">
+              <button
+                type="button"
+                onClick={handleKeepDuplicate}
+                disabled={submitting}
+              >
+                {submitting ? 'Saving…' : 'Keep'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCancelDuplicate}
+                disabled={submitting}
+                autoFocus
+              >
+                Cancel Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };
