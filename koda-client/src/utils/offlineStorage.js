@@ -32,6 +32,15 @@ export async function getQueuedActivities() {
     return (await activityStore.getItem('activityQueue')) || [];
 }
 
-export async function markActivityAsSynced() {
-    await activityStore.setItem('activityQueue', []);
+export async function markActivityAsSynced(processedIds = []) {
+    if (processedIds.length === 0) return;
+
+    const currentQueue =
+        (await activityStore.getItem('activityQueue')) || [];
+
+    const remainingQueue = currentQueue.filter(
+        (activity) => !processedIds.includes(activity.id)
+    );
+
+    await activityStore.setItem('activityQueue', remainingQueue);
 }

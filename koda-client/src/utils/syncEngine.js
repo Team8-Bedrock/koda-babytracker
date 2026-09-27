@@ -1,35 +1,64 @@
 import { getQueuedActivities, markActivityAsSynced } from './offlineStorage';
 import { API_URL } from '../config';
+import { getCurrentUserId } from './authStorage';
 
 const SERVER_URL = `${API_URL}/api/offline_sync`;
 let isSyncing = false;
 
 export async function syncOfflineActivities() {
-    if (isSyncing) return; // Prevent multiple syncs at the same time
-   
-    const queue = await getQueuedActivities();
-    if (queue.length === 0) return; // No activities to sync
+    if (isSyncing || !navigator.onLine) return;
+
+    const token = localStorage.getItem('token');
+    const userId = getCurrentUserId();
+
+    if (!token || !userId) return;
 
     isSyncing = true;
-    console.log('Starting offline sync for activities:', queue);
 
     try {
+        const allActivities = await getQueuedActivities();
+
+        // Sync only entries belonging to the logged-in user.
+        const queue = allActivities.filter((activity) => {
+            const loggedBy =
+                activity.data?.loggedBy || activity.data?.userId;
+
+            return String(loggedBy) === String(userId);
+        });
+
+        if (queue.length === 0) return;
+
         const response = await fetch(SERVER_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'x-auth-token': token,
             },
             body: JSON.stringify(queue),
         });
 
-        if (response.ok) {
-            await markActivityAsSynced();
-            console.log ("[Sync Engine] Synchronication complete. Local cache cleared safely");
-        } else {
-            console.warn("[Sync Engine] Server responded with an error during offline sync:", response.statusText);
+        if (!response.ok) {
+            throw new Error(
+                `Offline sync failed: ${response.status}`
+            );
         }
+
+        const result = await response.json();
+
+        const sentIds = new Set(queue.map((activity) => activity.id));
+
+        const processedIds = Array.isArray(result.processedIds)
+            ? result.processedIds.filter((id) => sentIds.has(id))
+            : [];
+
+        await markActivityAsSynced(processedIds);
+
+        if (processedIds.length > 0) {
+            window.dispatchEvent(new Event('offline-sync-complete'));
+        }
+        
     } catch (error) {
-        console.error("[Sync Engine] Error during offline sync:", error);
+        console.error('[Sync Engine]', error);
     } finally {
         isSyncing = false;
     }

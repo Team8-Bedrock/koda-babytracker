@@ -7,6 +7,8 @@ const Feeding = require('../models/feeding');
 const Sleep = require('../models/sleep');
 const Diaper = require('../models/diaper');
 const Child = require('../models/Child');
+const OfflineActivity = require('../models/OfflineActivity');
+const User = require('../models/user');
 const { drawSleepChart, drawFeedingChart, drawDiaperSummary, drawReportHeader, drawChildInformation, drawActivitySummary, drawAtAGlance, drawChartsPanel } = require('../reports/pdfReport');
 
 const authMiddleware = (req, res, next) => {
@@ -503,13 +505,43 @@ const buildReportText = ({ feedings, sleeps, diapers, range, childName, childPro
 //Feeding routes
 router.post("/feeding", authMiddleware, async (req, res) => {
     try {
-        const { childId, type, amount, side } = req.body;
+        const { childId, type, amount, side, allowDuplicate } = req.body;
 
         const child = await findAuthorizedChild(childId, req.user.id);
         if (!child) {
             return res.status(404).json({ error: "Child profile not found or access denied" });
         }
+        //Checks duplicate entry
+        if (allowDuplicate !== true) {
+            const now = new Date();
+            const fifteenMinutesAgo = new Date(
+                now.getTime() - 15 * 60 * 1000
+            );
 
+            const existingEntry = await Feeding.findOne({
+                childId,
+                timestamp: {
+                    $gte: fifteenMinutesAgo,
+                    $lte: now
+                }
+            })
+                .sort({ timestamp: -1 })
+                .populate('loggedBy', 'username role');
+
+            if (existingEntry) {
+                return res.status(409).json({
+                    code: 'DUPLICATE_ACTIVITY',
+                    message: 'Duplicate Entry Detected',
+                    existingEntry: {
+                        id: existingEntry._id,
+                        activityType: 'feeding',
+                        timestamp: existingEntry.timestamp,
+                        username: existingEntry.loggedBy?.username || 'Unknown user',
+                        role: existingEntry.loggedBy?.role || ''
+                    }
+                });
+            }
+        }
         const newFeeding = await Feeding.create({
             childId,
             loggedBy: req.user.id,
@@ -519,21 +551,52 @@ router.post("/feeding", authMiddleware, async (req, res) => {
         });
 
         res.status(201).json(newFeeding);
-      } catch (err) {
+    } catch (err) {
         res.status(400).json({ error: err.message });
-  }
+    }
 });
 
 //Sleep routes
 router.post('/sleep', authMiddleware, async (req, res) => {
     try {
-        const { childId, startTime, endTime, duration, type, quality } = req.body;
+        const { childId, startTime, endTime, duration, type, quality, allowDuplicate } = req.body;
 
         const child = await findAuthorizedChild(childId, req.user.id);
         if (!child) {
             return res.status(404).json({ error: "Child profile not found or access denied" });
         }
 
+        //checks for duplicate entry
+        if (allowDuplicate !== true) {
+            const now = new Date();
+            const fifteenMinutesAgo = new Date(
+                now.getTime() - 15 * 60 * 1000
+            );
+
+            const existingEntry = await Sleep.findOne({
+                childId,
+                timestamp: {
+                    $gte: fifteenMinutesAgo,
+                    $lte: now
+                }
+            })
+                .sort({ timestamp: -1 })
+                .populate('loggedBy', 'username role');
+
+            if (existingEntry) {
+                return res.status(409).json({
+                    code: 'DUPLICATE_ACTIVITY',
+                    message: 'Duplicate Entry Detected',
+                    existingEntry: {
+                        id: existingEntry._id,
+                        activityType: 'sleep',
+                        timestamp: existingEntry.timestamp,
+                        username: existingEntry.loggedBy?.username || 'Unknown user',
+                        role: existingEntry.loggedBy?.role || ''
+                    }
+                });
+            }
+        }
         const sleep = await Sleep.create({
             childId,
             loggedBy: req.user.id,
@@ -553,13 +616,44 @@ router.post('/sleep', authMiddleware, async (req, res) => {
 //Diaper routes
 router.post('/diaper', authMiddleware, async (req, res) => {
     try {
-        const { childId, type } = req.body;
+        const { childId, type, allowDuplicate } = req.body;
 
         const child = await findAuthorizedChild(childId, req.user.id);
         if (!child) {
             return res.status(404).json({ error: "Child profile not found or access denied" });
         }
 
+        //checks for duplicate
+        if (allowDuplicate !== true) {
+            const now = new Date();
+            const fifteenMinutesAgo = new Date(
+                now.getTime() - 15 * 60 * 1000
+            );
+
+            const existingEntry = await Diaper.findOne({
+                childId,
+                timestamp: {
+                    $gte: fifteenMinutesAgo,
+                    $lte: now
+                }
+            })
+                .sort({ timestamp: -1 })
+                .populate('loggedBy', 'username role');
+
+            if (existingEntry) {
+                return res.status(409).json({
+                    code: 'DUPLICATE_ACTIVITY',
+                    message: 'Duplicate Entry Detected',
+                    existingEntry: {
+                        id: existingEntry._id,
+                        activityType: 'diaper',
+                        timestamp: existingEntry.timestamp,
+                        username: existingEntry.loggedBy?.username || 'Unknown user',
+                        role: existingEntry.loggedBy?.role || ''
+                    }
+                });
+            }
+        }
         const diaper = await Diaper.create({
             childId,
             loggedBy: req.user.id,
@@ -741,56 +835,326 @@ router.post('/reports/generate', authMiddleware, async (req, res) => {
 });
 
 //Ofline sync route
-router.post('/offline_sync', async (req, res) => {
+// Sync offline entries and hold possible duplicates for parent review.
+router.post('/offline_sync', authMiddleware, async (req, res) => {
     const activities = req.body;
 
     if (!Array.isArray(activities) || activities.length === 0) {
-        return res.status(400).json({ error: 'Invalid or empty activities array' });
+        return res.status(400).json({
+            error: 'Invalid or empty activities array'
+        });
     }
 
-    try {
-        for (const item of activities) {
-            const { type, data } = item;
-            if(!data.babyId || !data.userId) {
-                console.warn('[Sync Warning] Missing babyId or userId in offline activity data:', data);
-                continue; // Skip this entry
+    const models = {
+        feeding: Feeding,
+        sleep: Sleep,
+        diaper: Diaper
+    };
+
+    const processedIds = [];
+    const errors = [];
+
+    for (const item of activities) {
+        try {
+            const { id, type, data } = item || {};
+            const Model = models[type];
+
+            if (!id || typeof id !== 'string' || !Model || !data) {
+                throw new Error('Invalid offline activity');
             }
 
-            if(type === 'feeding') {
-                await Feeding.create({
-                    babyId: data.babyId,
-                    userId: data.userId,
-                    amount: data.amount,
-                    type: data.type,
-                    timestamp: data.timestamp,
+            const childId = data.childId || data.babyId;
+            const child = await findAuthorizedChild(childId, req.user.id);
+
+            if (!child) {
+                throw new Error('Child profile not found or access denied');
+            }
+
+            // Recognize entries already received during a previous sync.
+            let offlineEntry = await OfflineActivity.findOne({
+                loggedBy: req.user.id,
+                clientEntryId: id
+            });
+
+            if (offlineEntry && offlineEntry.status !== 'queued') {
+                processedIds.push(id);
+                continue;
+            }
+
+            if (!offlineEntry) {
+                const loggedAt = new Date(item.timestamp);
+
+                if (Number.isNaN(loggedAt.getTime())) {
+                    throw new Error('Invalid offline logging time');
+                }
+
+                // Copy only the fields this activity is allowed to contain.
+                let details;
+
+                if (type === 'feeding') {
+                    details = {
+                        type: data.type,
+                        amount: data.amount,
+                        side: data.side
+                    };
+                } else if (type === 'sleep') {
+                    details = {
+                        startTime: data.startTime,
+                        endTime: data.endTime,
+                        duration: data.duration,
+                        type: data.type,
+                        quality: data.quality
+                    };
+                } else {
+                    details = { type: data.type };
+                }
+
+                const candidate = new Model({
+                    ...details,
+                    childId: child._id,
+                    loggedBy: req.user.id,
+                    timestamp: loggedAt
                 });
-            } else if(type === 'sleep') {
-                await Sleep.create({
-                    babyId: data.babyId,
-                    userId: data.userId,
-                    startTime: data.startTime,
-                    endTime: data.endTime,
-                    duration: data.duration,
-                    quality: data.quality,
-                    timestamp: data.timestamp,
-                });
-            } else if(type === 'diaper') {
-                await Diaper.create({
-                    babyId: data.babyId,
-                    userId: data.userId,
-                    type: data.type,
-                    timestamp: data.timestamp,
+
+                await candidate.validate();
+
+                offlineEntry = await OfflineActivity.findOneAndUpdate(
+                    {
+                        loggedBy: req.user.id,
+                        clientEntryId: id
+                    },
+                    {
+                        $setOnInsert: {
+                            childId: child._id,
+                            parentId: child.userId,
+                            activityType: type,
+                            details,
+                            loggedAt,
+                            status: 'queued',
+                            savedEntryId: candidate._id
+                        }
+                    },
+                    {
+                        upsert: true,
+                        returnDocument: 'after',
+                        runValidators: true
+                    }
+                );
+            }
+
+            if (offlineEntry.status !== 'queued') {
+                processedIds.push(id);
+                continue;
+            }
+
+            const EntryModel = models[offlineEntry.activityType];
+
+            // Recover safely if an earlier attempt saved the activity
+            // but was interrupted before updating its sync status.
+            const alreadySaved = await EntryModel.findById(
+                offlineEntry.savedEntryId
+            );
+
+            if (alreadySaved) {
+                offlineEntry.status = 'saved';
+                await offlineEntry.save();
+                processedIds.push(id);
+                continue;
+            }
+
+            const windowMs = 15 * 60 * 1000;
+            const loggedTime = offlineEntry.loggedAt.getTime();
+
+            const existingEntry = await EntryModel.findOne({
+                childId: offlineEntry.childId,
+                timestamp: {
+                    $gte: new Date(loggedTime - windowMs),
+                    $lte: new Date(loggedTime + windowMs)
+                }
+            }).sort({ timestamp: -1 });
+
+            if (existingEntry) {
+                offlineEntry.status = 'pending_review';
+                offlineEntry.existingEntryId = existingEntry._id;
+                await offlineEntry.save();
+            } else {
+                await EntryModel.updateOne(
+                    { _id: offlineEntry.savedEntryId },
+                    {
+                        $setOnInsert: {
+                            childId: offlineEntry.childId,
+                            loggedBy: offlineEntry.loggedBy,
+                            timestamp: offlineEntry.loggedAt,
+                            ...offlineEntry.details
+                        }
+                    },
+                    { upsert: true, runValidators: true }
+                );
+
+                offlineEntry.status = 'saved';
+                await offlineEntry.save();
+            }
+
+            processedIds.push(id);
+        } catch (error) {
+            errors.push({
+                id: item?.id || null,
+                message: error.message
+            });
+        }
+    }
+
+    return res.json({ processedIds, errors });
+});
+
+// Return offline duplicates awaiting review by the logged-in parent.
+router.get('/offline-duplicates', authMiddleware, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+
+        if (!user || user.role !== 'parent') {
+            return res.status(403).json({
+                error: 'Only parents can review offline duplicates.'
+            });
+        }
+
+        const entries = await OfflineActivity.find({
+            parentId: req.user.id,
+            status: 'pending_review'
+        })
+            .populate('childId', 'name')
+            .populate('loggedBy', 'username role')
+            .sort({ loggedAt: -1 });
+
+        return res.json({ entries });
+    } catch (error) {
+        console.error('Could not load offline duplicates:', error);
+
+        return res.status(500).json({
+            error: 'Could not load entries waiting for review.'
+        });
+    }
+});
+
+// Let the parent keep or discard an offline duplicate.
+router.post(
+    '/offline-duplicates/:id/review',
+    authMiddleware,
+    async (req, res) => {
+        const { action } = req.body;
+
+        if (!['keep', 'discard'].includes(action)) {
+            return res.status(400).json({
+                error: 'Choose keep or discard.'
+            });
+        }
+
+        if (!/^[a-fA-F0-9]{24}$/.test(req.params.id)) {
+            return res.status(400).json({
+                error: 'Invalid entry ID.'
+            });
+        }
+
+        let session;
+
+        try {
+            const user = await User.findById(req.user.id);
+
+            if (!user || user.role !== 'parent') {
+                return res.status(403).json({
+                    error: 'Only parents can review offline duplicates.'
                 });
             }
-        }
-        return res.status(200).json({
-            status: 'Success',
-            message: 'Offline activities synchronized successfully',
-        });
+
+            const models = {
+                feeding: Feeding,
+                sleep: Sleep,
+                diaper: Diaper
+            };
+
+            const targetStatus =
+                action === 'keep' ? 'saved' : 'discarded';
+
+            session = await OfflineActivity.startSession();
+
+            // Save the activity and review decision together.
+            await session.withTransaction(async () => {
+                const entry = await OfflineActivity.findOne({
+                    _id: req.params.id,
+                    parentId: req.user.id
+                }).session(session);
+
+                if (!entry) {
+                    const error = new Error('Entry not found.');
+                    error.status = 404;
+                    throw error;
+                }
+
+                // Repeating the same decision is safe.
+                if (entry.status === targetStatus) return;
+
+                if (entry.status !== 'pending_review') {
+                    const error = new Error(
+                        'This entry is no longer waiting for review.'
+                    );
+                    error.status = 409;
+                    throw error;
+                }
+
+                const child = await Child.findOne({
+                    _id: entry.childId,
+                    userId: req.user.id
+                }).session(session);
+
+                if (!child) {
+                    const error = new Error(
+                        'Child profile not found or access denied.'
+                    );
+                    error.status = 404;
+                    throw error;
+                }
+
+                if (action === 'keep') {
+                    const Model = models[entry.activityType];
+
+                    await Model.updateOne(
+                        { _id: entry.savedEntryId },
+                        {
+                            $setOnInsert: {
+                                ...entry.details,
+                                childId: entry.childId,
+                                loggedBy: entry.loggedBy,
+                                timestamp: entry.loggedAt
+                            }
+                        },
+                        {
+                            upsert: true,
+                            runValidators: true,
+                            session
+                        }
+                    );
+                }
+
+                entry.status = targetStatus;
+                await entry.save({ session });
+            });
+
+            return res.json({
+                success: true,
+                status: targetStatus
+            });
         } catch (error) {
-            console.error('[Sync Error] Failed to synchronize offline activities:', error);
-            return res.status(500).json({ error: 'Failed to synchronize offline activities' });
+            console.error('Offline duplicate review failed:', error);
+
+            return res.status(error.status || 500).json({
+                error: error.status
+                    ? error.message
+                    : 'Could not save your decision. Please try again.'
+            });
+        } finally {
+            if (session) await session.endSession();
         }
-    });
+    }
+);
 
 module.exports = router;
