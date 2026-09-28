@@ -30,6 +30,7 @@ const CaregiverManagementPanel = () => {
   const [pendingSelections, setPendingSelections] = useState({});
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  const [savingPermissionId, setSavingPermissionId] = useState(null);
 
   const loadAll = async () => {
     try {
@@ -112,6 +113,32 @@ const CaregiverManagementPanel = () => {
     }
   };
 
+  const toggleChatPermission = async (link, key) => {
+    const currentValue = link.chatPermissions?.[key] !== false;
+    setSavingPermissionId(link.id);
+    setStatus("");
+
+    try {
+      const res = await axios.patch(
+        `${API_URL}/api/caregiver-links/${link.id}/chat-permissions`,
+        { [key]: !currentValue },
+        { headers: authHeaders() }
+      );
+
+      setLinks((prev) =>
+        prev.map((item) =>
+          item.id === link.id
+            ? { ...item, chatPermissions: res.data.chatPermissions }
+            : item
+        )
+      );
+    } catch (err) {
+      setStatus(err.response?.data?.msg || "could not update chat permissions.");
+    } finally {
+      setSavingPermissionId(null);
+    }
+  };
+
   if (loading) return null;
 
   const pendingLinks = links.filter((l) => l.status === "pending");
@@ -169,6 +196,32 @@ const CaregiverManagementPanel = () => {
                 checkedIds={link.sharedChildren}
                 onToggle={(childId) => toggleApprovedChild(link, childId)}
               />
+              <div className="caregiver-child-toggle-list caregiver-chat-permissions">
+                <span className="account-field-label">chat permissions</span>
+                {[
+                  ["enabled", "allow chat"],
+                  ["photos", "send photos"],
+                  ["voice", "send voice messages"],
+                  ["urgent", "mark messages urgent"],
+                ].map(([key, label]) => (
+                  <label key={key} className="caregiver-child-toggle">
+                    <span>{label}</span>
+                    <input
+                      type="checkbox"
+                      checked={
+                        link.chatPermissions?.[key] !== false &&
+                        (key === "enabled" || link.chatPermissions?.enabled !== false)
+                      }
+                      disabled={
+                        savingPermissionId === link.id ||
+                        (key !== "enabled" && link.chatPermissions?.enabled === false)
+                      }
+                      onChange={() => toggleChatPermission(link, key)}
+                    />
+                    <span className="caregiver-toggle-switch" aria-hidden="true" />
+                  </label>
+                ))}
+              </div>
               <button type="button" className="account-toggle-link caregiver-remove-btn" onClick={() => removeLink(link.id)}>
                 <Trash2 size={13} /> remove access
               </button>

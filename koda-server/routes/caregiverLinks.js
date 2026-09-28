@@ -155,6 +155,7 @@ router.get("/mine", authMiddleware, requireRole("caregiver"), async (req, res) =
       status: link.status,
       parent: link.parentId ? { id: link.parentId._id, username: link.parentId.username } : null,
       sharedChildren: link.sharedChildren,
+      chatPermissions: link.chatPermissions,
     });
   } catch (err) {
     console.error(err);
@@ -178,6 +179,7 @@ router.get("/requests", authMiddleware, requireRole("parent"), async (req, res) 
         status: link.status,
         caregiver: link.caregiverId ? { id: link.caregiverId._id, username: link.caregiverId.username, email: link.caregiverId.email } : null,
         sharedChildren: link.sharedChildren.map((id) => id.toString()),
+        chatPermissions: link.chatPermissions,
       })),
     });
   } catch (err) {
@@ -228,6 +230,39 @@ router.post("/:linkId/deny", authMiddleware, requireRole("parent"), async (req, 
   }
 });
 
+router.patch("/:linkId/chat-permissions",
+  authMiddleware,
+  requireRole("parent"),
+  async (req, res) => {
+    try {
+      const link = await CaregiverLink.findOne({
+        _id: req.params.linkId,
+        parentId: req.currentUser._id,
+        status: "approved",
+      });
+
+      if (!link) {
+        return res.status(404).json({ msg: "Approved caregiver link not found." });
+      }
+
+      const allowed = ["enabled", "photos", "voice", "urgent"];
+      for (const key of allowed) {
+        if (req.body[key] !== undefined) {
+          if (typeof req.body[key] !== "boolean") {
+            return res.status(400).json({ msg: `${key} must be true or false.` });
+          }
+          link.set(`chatPermissions.${key}`, req.body[key]);
+        }
+      }
+
+      await link.save();
+      res.json({ chatPermissions: link.chatPermissions });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ msg: "Could not update chat permissions." });
+    }
+  }
+);
 // Parent: toggle which children an already-approved caregiver can access.
 router.patch("/:linkId/children", authMiddleware, requireRole("parent"), async (req, res) => {
   try {

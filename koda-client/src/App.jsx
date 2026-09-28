@@ -12,6 +12,7 @@ import ResetPassword from "./pages/Onboarding/ResetPassword";
 import AccountSettings from './pages/AccountSettings';
 import HistoryPage from './pages/HistoryPage';
 import AnalyticsPage from './pages/analyticsPage';
+import Chat from './pages/Chat';
 import Layout from './components/Layout';
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/chat" element={<Layout><Chat /></Layout>} />
       </Routes>
     </Router>
   );
