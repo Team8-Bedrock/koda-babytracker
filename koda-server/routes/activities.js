@@ -9,7 +9,7 @@ const Diaper = require('../models/diaper');
 const Child = require('../models/Child');
 const OfflineActivity = require('../models/OfflineActivity');
 const User = require('../models/user');
-const { drawSleepChart, drawFeedingChart, drawDiaperSummary, drawReportHeader, drawChildInformation, drawActivitySummary, drawAtAGlance, drawChartsPanel } = require('../reports/pdfReport');
+const { drawSleepChart, drawFeedingChart, drawDiaperSummary, drawReportHeader, drawChildInformation, drawActivitySummary, drawAtAGlance, drawChartsPanel, drawActivityDetails } = require('../reports/pdfReport');
 
 const authMiddleware = (req, res, next) => {
     const token = req.header('x-auth-token');
@@ -442,8 +442,6 @@ const buildReportText = ({ feedings, sleeps, diapers, range, childName, childPro
     if (childProfile) {
         lines.push(`Date of Birth: ${formatDate(childProfile.dob)}`);
         lines.push(`Age: ${calculateAge(childProfile.dob)}`);
-        lines.push(`Weight: ${childProfile.weight || 'Not provided'}`);
-        lines.push(`Allergies: ${childProfile.allergies || 'Not provided'}`);
 
         if (childProfile.other) {
             lines.push(`Other Notes: ${childProfile.other}`);
@@ -722,8 +720,6 @@ router.post('/reports/generate', authMiddleware, async (req, res) => {
             name: childName,
             dob: childProfile.dob ? formatDate(childProfile.dob) : 'Not provided',
             age: childProfile.dob ? calculateAge(childProfile.dob) : 'Not provided',
-            weight: childProfile.weight || 'Not provided',
-            allergies: childProfile.allergies || 'Not provided'
         };
 
         const reportInfo = {
@@ -825,6 +821,19 @@ router.post('/reports/generate', authMiddleware, async (req, res) => {
         const chartY = doc.y + 20;
 
         drawChartsPanel(doc, sleepChartData, feedingChartData, diaperSummary, range, chartStats, chartY);
+
+        doc.addPage();
+        drawReportHeader(doc, range);
+        drawActivityDetails(
+            doc,
+            {
+                feedings: scopedFeedings,
+                sleeps: scopedSleeps,
+                diapers: scopedDiapers
+            },
+            range,
+            reportInfo.period
+        );
 
         doc.end();
 
