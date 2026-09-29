@@ -19,6 +19,12 @@ const CaregiverLinkSchema = new mongoose.Schema(
       enum: ["pending", "approved", "denied"],
       default: "pending",
     },
+    chatPermissions: {
+      enabled: { type: Boolean, default: true },
+      photos: { type: Boolean, default: true },
+      voice: { type: Boolean, default: true },
+      urgent: { type: Boolean, default: true },
+    },
     sharedChildren: [
       {
         type: mongoose.Schema.Types.ObjectId,
