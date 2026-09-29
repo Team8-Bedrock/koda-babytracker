@@ -478,3 +478,12 @@
   outline: 2px solid #4a3a26;
   outline-offset: 2px;
 }
+
+.caregiver-chat-permissions {
+  margin-top: 16px;
+  gap: 9px;
+}
+
+.caregiver-chat-permissions>.account-field-label {
+  margin-bottom: 3px;
+}

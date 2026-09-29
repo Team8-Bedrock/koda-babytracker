@@ -30,17 +30,23 @@ const UserSchema = new mongoose.Schema(
         ref: "Child",
       },
     ],
-    resetPasswordToken: { 
-      type: String 
+    resetPasswordToken: {
+      type: String
     },
-    resetPasswordExpires: { 
-      type: Date 
+    resetPasswordExpires: {
+      type: Date
     },
     // 6-character code parents share with caregivers so they can request access.
     linkCode: {
       type: String,
       unique: true,
       sparse: true,
+    },
+    familyChatName: {
+      type: String,
+      trim: true,
+      maxlength: 60,
+      default: "",
     },
   },
   { timestamps: true }
