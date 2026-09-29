@@ -10,7 +10,7 @@ import NavIconButton from "../components/NavIconButton";
 
 const ParentDashboard = () => {
   const [activities, setActivities] = useState([]);
-  const [caregivers] = useState([]);
+  const [caregivers, setCaregivers] = useState([]);
 
   const [isActivitiesOpen, setIsActivitiesOpen] = useState(true);
   const [isCaregiversOpen, setIsCaregiversOpen] = useState(true);
