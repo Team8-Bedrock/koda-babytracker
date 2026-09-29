@@ -228,11 +228,13 @@ const AvatarSelection = () => {
           <div className="setup-dot active" />
           <div className="setup-dot" />
         </div>
-        <h1 className="setup-title avatar-select-heading">Who will represent your little one? 🍃</h1>
-        <p key={selected.id} className="avatar-habitat-label">
-          <MapPin size={13} strokeWidth={2.5} />
-          <span>{selected.habitat}</span>
-        </p>
+        <div className="avatar-select-header">
+          <h1 className="setup-title avatar-select-heading">Who will represent your little one? 🍃</h1>
+          <p key={selected.id} className="avatar-habitat-label">
+            <MapPin size={13} strokeWidth={2.5} />
+            <span>{selected.habitat}</span>
+          </p>
+        </div>
 
 
         {/* 3D character stage */}
@@ -276,16 +278,18 @@ const AvatarSelection = () => {
           ))}
         </div>
 
-        <button className="setup-btn-primary" onClick={handleConfirm}>
-          Confirm
-        </button>
+        <div className="avatar-select-actions">
+          <button className="setup-btn-primary" onClick={handleConfirm}>
+            Confirm
+          </button>
 
-        {!isAddChildMode && (
-          <p className="setup-footer">
-            Already have a child profile?{" "}
-            <a onClick={() => navigate("/login")}>Join here</a>
-          </p>
-        )}
+          {!isAddChildMode && (
+            <p className="setup-footer">
+              Already have an account?{" "}
+              <a onClick={() => navigate("/login")}>Log in</a>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

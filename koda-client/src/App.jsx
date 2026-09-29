@@ -13,6 +13,7 @@ import AccountSettings from './pages/AccountSettings';
 import HistoryPage from './pages/HistoryPage';
 import AnalyticsPage from './pages/analyticsPage';
 import Layout from './components/Layout';
+import Caregiver from './pages/Onboarding/Caregiver';
 function App() {
   return (
     <Router>
@@ -22,6 +23,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/avatarSelection" element={<AvatarSelection />} />
         <Route path="/childRegistration" element={<ChildRegistration />} />
+        <Route path="/caregiver" element={<Caregiver />} />
         <Route path="/add-activity" element={<Activities />} />
         <Route path="/ParentDashboard" element={<Layout><ParentDashboard /></Layout>} />
         <Route path="/account" element={<AccountSettings />} />

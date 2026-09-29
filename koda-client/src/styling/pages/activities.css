@@ -370,7 +370,7 @@
 
 .duplicate-dialog p {
   margin-bottom: 12px;
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -449,13 +449,13 @@
 
 .offline-save-notice strong {
   display: block;
-  font-size: 15px;
+  font-size: 19px;
   line-height: 1.4;
 }
 
 .offline-save-notice p {
   margin: 6px 0 0;
-  font-size: 14px;
+  font-size: 17px;
   line-height: 1.5;
 }
 

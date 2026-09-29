@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
-import "../../styling/pages/setUp.css" // Reuse your existing styling
+import "../../styling/pages/setUp.css";
 import { API_URL } from "../../config";
 
 const ForgotPassword = () => {
@@ -14,16 +14,16 @@ const ForgotPassword = () => {
     e.preventDefault();
     setError("");
     setMessage("");
-  
-    try {  
+
+    try {
       const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email }), // Ensure 'email' matches your state
+        body: JSON.stringify({ email: email }),
       });
-  
+
       const data = await res.json();
-  
+
       if (!res.ok) {
         setError(data.msg || "Something went wrong.");
       } else {
@@ -35,10 +35,19 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="setup-container">
+    <div className="setup-container setup-container--form">
       <button className="setup-back" onClick={() => navigate("/login")}>
         <ChevronLeft size={18} /> back to login
       </button>
+
+      <div className="firefly-layer">
+        <div className="firefly" />
+        <div className="firefly" />
+        <div className="firefly" />
+        <div className="firefly" />
+        <div className="firefly" />
+        <div className="firefly" />
+      </div>
 
       <div className="setup-card">
         <h1 className="setup-title">Reset Password</h1>
@@ -46,16 +55,16 @@ const ForgotPassword = () => {
 
         <div className="setup-field">
           <label>Email Address</label>
-          <input 
-            type="email" 
-            placeholder="your-email@email.com" 
+          <input
+            type="email"
+            placeholder="your-email@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
 
         {error && <p className="setup-error">{error}</p>}
-        {message && <p style={{ color: "#4caf50", fontSize: "14px" }}>{message}</p>}
+        {message && <p className="setup-success-msg">{message}</p>}
 
         <button className="setup-btn-primary" onClick={handleResetRequest}>
           Send Reset Link
