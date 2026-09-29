@@ -145,7 +145,7 @@ const Layout = ({ children }) => {
       <nav className="layout-bottom-nav">
         <NavIconButton icon={Home} onClick={() => navigate("/ParentDashboard")} />
         <NavIconButton icon={PlusSquare} onClick={() => navigate("/add-activity")} />
-        <NavIconButton icon={BarChart2} strokeWidth={2} onClick={() => navigate("/analytics")} />
+        <NavIconButton icon={BarChart2} strokeWidth={2} onClick={() => navigate("/history")} />
         <NavIconButton icon={MessageCircle} onClick={() => navigate("/chat")} />
         <NavIconButton icon={SettingsIcon} onClick={() => navigate("/account")} />
       </nav>
