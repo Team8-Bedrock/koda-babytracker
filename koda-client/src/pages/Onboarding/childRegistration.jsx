@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Leaf } from "lucide-react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import "../../styling/pages/setUp.css";
@@ -91,7 +91,7 @@ const ChildRegistration = () => {
 
       if (currentModel.current) {
         const baseY = currentModel.current.userData.baseY ?? 0;
-        let y = baseY + Math.sin(Date.now() * 0.002) * 0.08;
+        let y = baseY + Math.sin((Date.now() / 6800) * Math.PI * 2) * 0.045;
 
         if (bounceStart.current !== null) {
           const elapsed = Date.now() - bounceStart.current;
@@ -169,12 +169,12 @@ const ChildRegistration = () => {
 
   return (
     <div
-      className="setup-container"
+      className="setup-container setup-container--child"
       style={{ background: character?.bg }}
     >
       {/* back button */}
       <button
-        className="setup-back"
+        className="setup-back setup-back--child"
         onClick={() => navigate("/avatarSelection", { state: { mode: location.state?.mode } })}
       >
         <ChevronLeft size={18} /> back
@@ -189,9 +189,9 @@ const ChildRegistration = () => {
         <div className="firefly" />
         <div className="firefly" />
       </div>
-      <img src="/koda-logo.png" alt="Koda" className="setup-logo" onError={(e) => { e.target.style.visibility = "hidden"; }} />
+      <img src="/assets/koda-logo.png" alt="Koda" className="setup-logo setup-logo--corner" onError={(e) => { e.target.style.visibility = "hidden"; }} />
 
-      <div className="setup-card">
+      <div className="setup-card setup-card--child">
         <div className="setup-progress">
           <div className="setup-dot" />
           <div className="setup-dot" />
@@ -202,32 +202,36 @@ const ChildRegistration = () => {
           {modelLoading && <div className="avatar-stage-loading">loading…</div>}
           <div className="avatar-sculpture-stage" ref={mountRef} />
         </div>
-        <h1 className="setup-title"> Please Enter your child's </h1>
-        <h1 className="setup-title"> details</h1>
-        <div className="setup-field">
-          <label>Name</label>
-          <input
-            placeholder="e.g. Gracie"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        <div className="setup-field">
-          <label>Date of Birth</label>
-          <input
-            type="date"
-            value={dob}
-            onChange={(e) => setDob(e.target.value)}
-          />
-        </div>
+        <section className="child-details-panel">
+          <h1 className="setup-title">Please Enter your child's details</h1>
+          <div className="setup-field">
+            <label htmlFor="child-name">Name</label>
+            <input
+              id="child-name"
+              placeholder="e.g. Gracie"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="setup-field">
+            <label htmlFor="child-dob">Date of Birth</label>
+            <input
+              id="child-dob"
+              type="date"
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+            />
+          </div>
 
-        <button
-          className="setup-btn-primary"
-          disabled={!name || !dob}
-          onClick={handleCreate}
-        >
-          {isAddChildMode ? "Add Child" : "Create Baby Profile"}
-        </button>
+          <button
+            className="setup-btn-primary"
+            disabled={!name || !dob}
+            onClick={handleCreate}
+          >
+            {isAddChildMode ? "Add Child" : "Create Baby Profile"}
+            <Leaf className="btn-leaf" aria-hidden="true" />
+          </button>
+        </section>
       </div>
     </div>
   );

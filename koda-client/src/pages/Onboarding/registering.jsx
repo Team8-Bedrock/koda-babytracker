@@ -19,7 +19,6 @@ const Registering = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Real-time tracking for the checkpoints
   const [passwordChecks, setPasswordChecks] = useState({
     length: false,
     number: false,
@@ -30,8 +29,7 @@ const Registering = () => {
   const set = (key) => (e) => {
     const val = e.target.value;
     setForm((f) => ({ ...f, [key]: val }));
-    
-    // Only run validation if we are typing in the password field
+
     if (key === "password") {
       setPasswordChecks({
         length: val.length >= 8,
@@ -89,7 +87,7 @@ const Registering = () => {
   };
 
   return (
-    <div className="setup-container">
+    <div className="setup-container setup-container--form">
       <button className="setup-back" onClick={() => navigate("/")}>
         <ChevronLeft size={18} /> back
       </button>
@@ -101,14 +99,19 @@ const Registering = () => {
         <div className="firefly" />
         <div className="firefly" />
       </div>
-      <img src="/koda-logo.png" alt="Koda" className="setup-logo" onError={(e) => { e.target.style.visibility = "hidden"; }} />
+
+      <img
+        src="/assets/koda-logo.png"
+        alt="Koda"
+        className="setup-logo setup-logo--right"
+        onError={(e) => { e.target.style.visibility = "hidden"; }}
+      />
 
       <div className="setup-card">
         <h1 className="setup-title">
           {isCaregiver ? "Create your caregiver account" : "Create your parent account"}
         </h1>
-        
-        {/* Username & Email Fields */}
+
         <div className="setup-field">
           <label>Username</label>
           <input placeholder="pick a username" value={form.username} onChange={set("username")} />
@@ -118,7 +121,6 @@ const Registering = () => {
           <input type="email" placeholder="email@email.com" value={form.email} onChange={set("email")} />
         </div>
 
-        {/* PASSWORD FIELD #1 */}
         <div className="setup-field">
           <label>Password</label>
           <PasswordInput
@@ -126,26 +128,24 @@ const Registering = () => {
             value={form.password}
             onChange={set("password")}
           />
-          
-          {/* Checkpoints nested under the first password box */}
-          <div className="password-checkpoints" style={{ marginTop: '10px', fontSize: '13px', textAlign: 'left', width: '100%' }}>
-            <p style={{ color: passwordChecks.length ? '#4caf50' : '#f44336', margin: '2px 0' }}>
-              {passwordChecks.length ? '✓' : '✕'} At least 8 characters
+
+          <div className="password-checkpoints">
+            <p className={passwordChecks.length ? "met" : ""}>
+              <i>{passwordChecks.length ? "✓" : "✕"}</i> At least 8 characters
             </p>
-            <p style={{ color: passwordChecks.uppercase ? '#4caf50' : '#f44336', margin: '2px 0' }}>
-              {passwordChecks.uppercase ? '✓' : '✕'} Contains an uppercase letter
+            <p className={passwordChecks.uppercase ? "met" : ""}>
+              <i>{passwordChecks.uppercase ? "✓" : "✕"}</i> Contains an uppercase letter
             </p>
-            <p style={{ color: passwordChecks.number ? '#4caf50' : '#f44336', margin: '2px 0' }}>
-              {passwordChecks.number ? '✓' : '✕'} Contains a number
+            <p className={passwordChecks.number ? "met" : ""}>
+              <i>{passwordChecks.number ? "✓" : "✕"}</i> Contains a number
             </p>
-            <p style={{ color: passwordChecks.special ? '#4caf50' : '#f44336', margin: '2px 0' }}>
-              {passwordChecks.special ? '✓' : '✕'} Contains a symbol (@$!%*?&)
+            <p className={passwordChecks.special ? "met" : ""}>
+              <i>{passwordChecks.special ? "✓" : "✕"}</i> Contains a symbol (@$!%*?&)
             </p>
           </div>
         </div>
 
-        {/* PASSWORD FIELD #2 (CONFIRM) */}
-        <div className="setup-field" style={{ marginTop: '15px' }}>
+        <div className="setup-field">
           <label>Confirm Password</label>
           <PasswordInput
             placeholder="confirm your password"
@@ -154,7 +154,7 @@ const Registering = () => {
           />
         </div>
 
-        {error && <p className="setup-error" style={{ color: '#f44336', marginTop: '10px' }}>{error}</p>}
+        {error && <p className="setup-error">{error}</p>}
 
         <button className="setup-btn-primary" onClick={handleSubmit} disabled={loading}>
           {loading ? "signing up..." : "Sign Up"}
