@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { User, Users, Baby, Lock, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { User, Users, Baby, ChevronRight, Lock, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import '../styling/global/App.css';
 import '../styling/pages/accountSettings.css';
 import { API_URL } from '../config';
@@ -64,7 +64,7 @@ const AccountSettings = () => {
 
   const panelTitles = {
     account: 'account settings',
-    caretaker: isCaregiver ? 'link to a parent' : 'caretaker settings',
+    caretaker: isCaregiver ? 'link to a parent' : 'caregiver settings',
     baby: `${childName}'s settings`,
   };
 
@@ -210,9 +210,10 @@ const AccountSettings = () => {
                   </button>
                 </div>
               ) : (
-                <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('account')}>
-                  <User size={20} />
-                  <span>account settings</span>
+                <button type="button" className="account-menu-btn" onClick={() => openCategory('account')}>
+                  <span className="account-menu-icon"><User size={20} /></span>
+                  <span className="account-menu-label">account settings</span>
+                  <ChevronRight size={20} className="account-menu-chevron" />
                 </button>
               )}
             </CollapseRow>
@@ -232,9 +233,10 @@ const AccountSettings = () => {
                   </button>
                 </div>
               ) : (
-                <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('caretaker')}>
-                  <Users size={20} />
-                  <span>{panelTitles.caretaker}</span>
+                <button type="button" className="account-menu-btn" onClick={() => openCategory('caretaker')}>
+                  <span className="account-menu-icon"><Users size={20} /></span>
+                  <span className="account-menu-label">{panelTitles.caretaker}</span>
+                  <ChevronRight size={20} className="account-menu-chevron" />
                 </button>
               )}
             </CollapseRow>
@@ -255,9 +257,10 @@ const AccountSettings = () => {
                     </button>
                   </div>
                 ) : (
-                  <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('baby')}>
-                    <Baby size={20} />
-                    <span>{childName}'s settings</span>
+                  <button type="button" className="account-menu-btn" onClick={() => openCategory('baby')}>
+                    <span className="account-menu-icon"><Baby size={20} /></span>
+                    <span className="account-menu-label">{childName}'s settings</span>
+                    <ChevronRight size={20} className="account-menu-chevron" />
                   </button>
                 )}
               </CollapseRow>

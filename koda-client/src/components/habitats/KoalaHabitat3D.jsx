@@ -3,6 +3,17 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
+function HideWhenAnimated({ children }) {
+  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+  React.useEffect(() => {
+    const onChange = (e) => setHidden(!!e.detail?.active);
+    window.addEventListener("mood-animation", onChange);
+    return () => window.removeEventListener("mood-animation", onChange);
+  }, []);
+  return hidden ? null : children;
+}
+
+
 const KOALA_HEIGHT = 0.3;
 const KOALA_POSITION = [0.02, 0.72];
 const KOALA_PERCH_Y = 0;
@@ -559,9 +570,9 @@ const KoalaHabitat3D = ({ showCharacter = true }) => {
             <Stones />
             <Mist />
             {showCharacter && (
-              <KoalaErrorBoundary>
+              <HideWhenAnimated><KoalaErrorBoundary>
                 <Koala />
-              </KoalaErrorBoundary>
+              </KoalaErrorBoundary></HideWhenAnimated>
             )}
           </group>
         </Suspense>

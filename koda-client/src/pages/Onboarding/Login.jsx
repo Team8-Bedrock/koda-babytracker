@@ -65,7 +65,7 @@ const Login = () => {
   };
 
   return (
-    <div className="setup-container">
+    <div className="setup-container setup-container--form">
       <button className="setup-back" onClick={() => navigate("/")}>
         <ChevronLeft size={18} /> back
       </button>
@@ -75,7 +75,14 @@ const Login = () => {
         {[...Array(6)].map((_, i) => <div key={i} className="firefly" />)}
       </div>
 
-      <img src="/koda-logo.png" alt="Koda" className="setup-logo" onError={(e) => { e.target.style.visibility = "hidden"; }} />
+      <div className="logo-nest">
+        <img
+          src="/koda-logo.png"
+          alt="Koda"
+          className="setup-logo"
+          onError={(e) => { e.target.style.visibility = "hidden"; }}
+        />
+      </div>
 
       <div className="setup-card">
         <h1 className="setup-title">Welcome Back</h1>
@@ -105,20 +112,7 @@ const Login = () => {
         <button className="setup-btn-primary" onClick={handleLogin} disabled={loading}>
           {loading ? "logging in..." : "Login"}
         </button>
-        <button 
-          type="button"
-          style={{ 
-            background: "none", 
-            border: "none", 
-            cursor: "pointer", 
-            marginTop: "10px",
-            fontSize: "14px",
-            fontFamily: "'Londrina Solid', cursive",
-            fontWeight: 300,
-            color: "#000"
-          }}
-          onClick={() => navigate("/forgot-password")}
-        >
+        <button type="button" className="setup-forgot" onClick={() => navigate("/forgot-password")}>
           Forgot Password?
         </button>
 

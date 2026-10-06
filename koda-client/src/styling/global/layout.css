@@ -1,10 +1,8 @@
-/* App shell layout: fixed header, fixed bottom nav, and the mobile frame wrapper shared by every page. */
 .layout-mobile-frame {
   width: 100%;
   min-height: 100vh;
   position: relative;
   overflow: hidden;
-  transform: translateZ(0);
   border-top: 1px solid rgba(90, 70, 53, 0.35);
   border-bottom: 1px solid rgba(90, 70, 53, 0.35);
 }
@@ -86,7 +84,7 @@
 
 .name-dropdown-btn {
   justify-self: center;
-  font-size: var(--pill-font-size, 22px);
+  font-size: 18px;
   background: rgba(255, 253, 247, 0.8);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
@@ -188,4 +186,19 @@
   font-size: 13px;
   color: #5a4635;
   white-space: nowrap;
+}
+
+.name-dropdown-btn,
+.layout-name-pill-static {
+  font-size: 18px;
+  background: rgba(245, 240, 232, 0.9);
+  border: 1.5px solid var(--k-ink);
+  color: var(--k-ink);
+  padding: 5px 14px;
+}
+.name-dropdown-btn,
+.name-dropdown-btn * {
+  font-family: "Baloo 2", "Nunito", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
 }

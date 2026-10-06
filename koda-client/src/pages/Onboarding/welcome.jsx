@@ -1,7 +1,9 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { Leaf } from "lucide-react";
 import "../../styling/pages/setUp.css";
-const kodaLogo = "/assets/koda-logo.png";  
+const kodaLogo = "/assets/koda-logo.png";
+
 const Welcome = () => {
   const navigate = useNavigate();
 
@@ -17,8 +19,6 @@ const Welcome = () => {
         <div className="firefly" />
       </div>
 
-      {/* sparkles */}
-
       <img src={kodaLogo} alt="Koda" className="setup-logo-x" onError={(e) => { e.target.style.visibility = "hidden"; }} />
 
       <div className="setup-card">
@@ -29,13 +29,13 @@ const Welcome = () => {
           className="setup-btn-green"
           onClick={() => navigate("/registering?role=parent")}
         >
-          Parent
+          Parent <Leaf className="btn-leaf" />
         </button>
         <button
           className="setup-btn-brown"
-          onClick={() => navigate("/registering?role=caregiver")}
+          onClick={() => navigate("/caregiver")}
         >
-          Caregiver
+          Caretaker
         </button>
 
         <p className="setup-footer">

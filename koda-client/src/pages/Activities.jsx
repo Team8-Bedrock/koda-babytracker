@@ -19,6 +19,9 @@ const ACTIVITY_OPTIONS = [
   { type: 'mood', label: 'mood' },
 ];
 
+const MOOD_OPTIONS = ['tired', 'upset', 'sad', 'mad', 'happy', 'energetic', 'angry', 'quiet', 'other'];
+const PLAYTIME_OPTIONS = ['complete', 'not complete'];
+
 const DAYS_OF_WEEK = [
   { key: 'Sunday', short: 'Su' },
   { key: 'Monday', short: 'Mo' },
@@ -43,6 +46,8 @@ const Activities = () => {
   const [endTime, setEndTime] = useState('');
   const [quality, setQuality] = useState('');
   const [diaperType, setDiaperType] = useState('');
+  const [moodChoice, setMoodChoice] = useState('');
+  const [moodNote, setMoodNote] = useState('');
 
   const [repeat, setRepeat] = useState('once');
   const [scheduleDate, setScheduleDate] = useState('');
@@ -62,13 +67,25 @@ const Activities = () => {
   };
 
   const handleBack = () => {
-    if (step === 3) {
-      setStep(2);
-    } else if (step === 2) {
-      setStep(1);
-      setType('');
-      setMode('');
-    }
+    setStep(1);
+    setType('');
+    setMode('');
+    setValue('');
+    setMoodChoice('');
+    setMoodNote('');
+    setFeedingAmount('');
+    setFeedingType('');
+    setFeedingSide('');
+    setStartTime('');
+    setEndTime('');
+    setQuality('');
+    setDiaperType('');
+    setRepeat('once');
+    setScheduleDate('');
+    setScheduleTime('');
+    setRepeatDays([]);
+    setSleepError('');
+    setSubmitError('');
   };
 
   const buildActivityDetails = () => {
@@ -79,13 +96,21 @@ const Activities = () => {
       return {
         type: feedingType,
         amount: feedingAmount ? Number(feedingAmount) : undefined,
-        side: feedingSide || 'N/A',
+        side: feedingType === 'Breast' && feedingSide ? feedingSide : 'N/A',
       };
     }
     if (type === 'diaper') {
       return { type: diaperType };
     }
-    return { value };
+    return { value: currentValue() };
+  };
+
+  const currentValue = () => {
+    if (type === 'mood') {
+      if (moodChoice === 'other') return moodNote.trim() ? `other: ${moodNote.trim()}` : 'other';
+      return moodNote.trim() ? `${moodChoice}: ${moodNote.trim()}` : moodChoice;
+    }
+    return value;
   };
 
   //Catches duplicate response
@@ -210,16 +235,28 @@ const Activities = () => {
           childId,
           type: feedingType,
           amount: feedingAmount ? Number(feedingAmount) : undefined,
-          side: feedingSide || 'N/A',
+          side: feedingType === 'Breast' && feedingSide ? feedingSide : 'N/A',
         }, requestConfig);
       } else if (type === 'diaper') {
         saved = await saveActivity('diaper', {
           childId,
           type: diaperType,
         }, requestConfig);
+      } else if (type === 'mood' || type === 'playtime') {
+        const finalValue = currentValue();
+        if (!finalValue) {
+          setSubmitError(type === 'mood' ? 'pick a mood first.' : 'pick complete or not complete.');
+          return;
+        }
+        saved = await saveActivity(type, {
+          childId,
+          value: finalValue,
+          ...(type === 'mood' ? { mood: moodChoice, notes: moodNote.trim() } : {}),
+        }, requestConfig);
       }
 
       if (saved) {
+        window.dispatchEvent(new Event('activity-saved'));
         navigate('/ParentDashboard');
       }
     } catch (err) {
@@ -303,8 +340,21 @@ const Activities = () => {
           {step === 2 && (
             <>
               <div className="glass-card activities-glass-card">
-                <div className="log-form-title">
-                  <span>how would you like to log this?</span>
+                <div
+                  className="activity-menu-btn"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    boxShadow: 'none',
+                    padding: 0,
+                    width: '100%',
+                    textAlign: 'center',
+                    cursor: 'default',
+                    fontSize: '1.25rem',
+                    marginBottom: 4,
+                  }}
+                >
+                  how would you like to log this?
                 </div>
                 <p className="log-form-subtitle">
                   you can log this {typeLabel} now, or set it up as a recurring schedule.
@@ -421,7 +471,10 @@ const Activities = () => {
                             key={option}
                             type="button"
                             className={`log-option-btn ${feedingType === option ? 'selected' : ''}`}
-                            onClick={() => setFeedingType(option)}
+                            onClick={() => {
+                              setFeedingType(option);
+                              if (option !== 'Breast') setFeedingSide('');
+                            }}
                           >
                             {option}
                           </button>
@@ -444,21 +497,23 @@ const Activities = () => {
                       </div>
                     </div>
 
-                    <div className="log-field-group">
-                      <label className="log-label">side</label>
-                      <div className="log-option-row">
-                        {['Left', 'Right', 'N/A'].map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className={`log-option-btn ${feedingSide === option ? 'selected' : ''}`}
-                            onClick={() => setFeedingSide(option)}
-                          >
-                            {option}
-                          </button>
-                        ))}
+                    {feedingType === 'Breast' && (
+                      <div className="log-field-group">
+                        <label className="log-label">side</label>
+                        <div className="log-option-row">
+                          {['Left', 'Right', 'N/A'].map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              className={`log-option-btn ${feedingSide === option ? 'selected' : ''}`}
+                              onClick={() => setFeedingSide(option)}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ) : type === 'diaper' ? (
                   <div className="log-form-container">
@@ -493,14 +548,51 @@ const Activities = () => {
                           : typeLabel}
                       </span>
                     </div>
-                    <input
-                      type="text"
-                      className="empty-msg-light activity-input"
-                      placeholder="Enter details"
-                      value={value}
-                      onChange={(e) => setValue(e.target.value)}
-                      required
-                    />
+                    {mode !== 'schedule' && type === 'playtime' && (
+                      <div className="log-field-group">
+                        <label className="log-label">status</label>
+                        <div className="log-option-row">
+                          {PLAYTIME_OPTIONS.map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              className={`log-option-btn ${value === option ? 'selected' : ''}`}
+                              onClick={() => setValue(option)}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {mode !== 'schedule' && type === 'mood' && (
+                      <div className="log-field-group">
+                        <label className="log-label">how are they feeling?</label>
+                        <div className="log-option-row" style={{ flexWrap: 'wrap' }}>
+                          {MOOD_OPTIONS.map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              className={`log-option-btn ${moodChoice === option ? 'selected' : ''}`}
+                              onClick={() => setMoodChoice(option)}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                        {moodChoice === 'other' && (
+                          <textarea
+                            className="empty-msg-light activity-input"
+                            placeholder="write your own notes"
+                            value={moodNote}
+                            onChange={(e) => setMoodNote(e.target.value)}
+                            rows={3}
+                            style={{ marginTop: 10, resize: 'vertical' }}
+                            required
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 

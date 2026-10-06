@@ -1,4 +1,3 @@
-//mdz0019
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -9,6 +8,30 @@ const Diaper = require('../models/diaper');
 const Child = require('../models/Child');
 const OfflineActivity = require('../models/OfflineActivity');
 const User = require('../models/user');
+const mongoose = require('mongoose');
+
+const Mood = mongoose.models.Mood || mongoose.model('Mood', new mongoose.Schema({
+    childId: { type: mongoose.Schema.Types.ObjectId, ref: 'Child', required: true },
+    loggedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    value: { type: String, default: '' },
+    timestamp: { type: Date, default: Date.now }
+}));
+const Playtime = mongoose.models.Playtime || mongoose.model('Playtime', new mongoose.Schema({
+    childId: { type: mongoose.Schema.Types.ObjectId, ref: 'Child', required: true },
+    loggedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    value: { type: String, default: '' },
+    timestamp: { type: Date, default: Date.now }
+}));
+const Schedule = mongoose.models.Schedule || mongoose.model('Schedule', new mongoose.Schema({
+    childId: { type: mongoose.Schema.Types.ObjectId, ref: 'Child', required: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    activityType: { type: String, required: true },
+    repeat: { type: String, enum: ['once', 'daily', 'weekly'], default: 'once' },
+    time: { type: String, required: true },
+    date: String,
+    daysOfWeek: [String],
+    details: { type: Object, default: {} }
+}, { timestamps: true }));
 const { drawSleepChart, drawFeedingChart, drawDiaperSummary, drawReportHeader, drawChildInformation, drawActivitySummary, drawAtAGlance, drawChartsPanel, drawActivityDetails } = require('../reports/pdfReport');
 
 const authMiddleware = (req, res, next) => {
@@ -54,7 +77,6 @@ const filterByRange = (items, range) => {
         return timestamp >= start && timestamp <= end;
     });
 };
-// Calculates sleep duration statistics for AI report analysis
 const calculateSleepDuration = (sleeps) => {
     if (!sleeps || sleeps.length === 0) {
         return {
@@ -690,7 +712,14 @@ router.get('/activities', authMiddleware, async (req, res) => {
             .populate('loggedBy', 'username role')
             .sort({ timestamp: -1 });
 
-        res.json({ feedings, sleeps, diapers });
+        const moods = await Mood.find(filter)
+            .populate('loggedBy', 'username role')
+            .sort({ timestamp: -1 });
+        const playtimes = await Playtime.find(filter)
+            .populate('loggedBy', 'username role')
+            .sort({ timestamp: -1 });
+
+        res.json({ feedings, sleeps, diapers, moods, playtimes });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -1165,5 +1194,52 @@ router.post(
         }
     }
 );
+
+// --- Added for the animal animations ---
+const makeSimpleLogRoute = (Model) => async (req, res) => {
+    try {
+        const { childId, value } = req.body;
+        const child = await findAuthorizedChild(childId, req.user.id);
+        if (!child) {
+            return res.status(404).json({ error: "Child profile not found or access denied" });
+        }
+        const entry = await Model.create({ childId, loggedBy: req.user.id, value: value || '' });
+        res.status(201).json(entry);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+};
+router.post('/mood', authMiddleware, makeSimpleLogRoute(Mood));
+router.post('/playtime', authMiddleware, makeSimpleLogRoute(Playtime));
+
+router.post('/schedule', authMiddleware, async (req, res) => {
+    try {
+        const { childId, activityType, repeat, time, date, daysOfWeek, details } = req.body;
+        const child = await findAuthorizedChild(childId, req.user.id);
+        if (!child) {
+            return res.status(404).json({ error: "Child profile not found or access denied" });
+        }
+        const schedule = await Schedule.create({
+            childId, createdBy: req.user.id, activityType, repeat, time, date, daysOfWeek, details
+        });
+        res.status(201).json(schedule);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+router.get('/schedule', authMiddleware, async (req, res) => {
+    try {
+        const { childId } = req.query;
+        const child = await findAuthorizedChild(childId, req.user.id);
+        if (!child) {
+            return res.status(404).json({ error: "Child profile not found or access denied" });
+        }
+        const schedules = await Schedule.find({ childId }).sort({ createdAt: -1 });
+        res.json(schedules);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 module.exports = router;
