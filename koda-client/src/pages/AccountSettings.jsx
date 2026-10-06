@@ -27,6 +27,7 @@ const AccountSettings = () => {
   const navigate = useNavigate();
   const email = localStorage.getItem('email') || '';
   const [selectedChild, setSelectedChild] = useState(null);
+  const [isCaregiver, setIsCaregiver] = useState(false);
 
   const [category, setCategory] = useState(null);
 
@@ -47,10 +48,7 @@ const AccountSettings = () => {
     })
       .then((response) => (response.ok ? response.json() : null))
       .then((user) => {
-        if (user?.role === 'caregiver') {
-          navigate('/ParentDashboard', { replace: true });
-          return;
-        }
+        setIsCaregiver(user?.role === 'caregiver');
         setAccessChecked(true);
       })
       .catch(() => setAccessChecked(true));
@@ -215,60 +213,64 @@ const AccountSettings = () => {
               )}
             </CollapseRow>
 
-            <CollapseRow open={category === null || category === 'caretaker'}>
-              {category === 'caretaker' ? (
-                <div className="glass-card account-expanded-card">
-                  <div className="card-header account-card-header--flush">
-                    {panelIcons.caretaker}
-                    <span>{panelTitles.caretaker}</span>
-                  </div>
+            {!isCaregiver && (
+              <>
+                <CollapseRow open={category === null || category === 'caretaker'}>
+                  {category === 'caretaker' ? (
+                    <div className="glass-card account-expanded-card">
+                      <div className="card-header account-card-header--flush">
+                        {panelIcons.caretaker}
+                        <span>{panelTitles.caretaker}</span>
+                      </div>
 
-                  <p className="empty-msg-light account-empty-msg--panel">
-                    caretaker settings are coming soon.
-                  </p>
+                      <p className="empty-msg-light account-empty-msg--panel">
+                        caretaker settings are coming soon.
+                      </p>
 
-                  <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
-                    show less
-                  </button>
-                </div>
-              ) : (
-                <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('caretaker')}>
-                  <Users size={20} />
-                  <span>caretaker settings</span>
-                </button>
-              )}
-            </CollapseRow>
-
-            <CollapseRow open={category === null || category === 'baby'}>
-              {category === 'baby' ? (
-                <div className="glass-card account-expanded-card">
-                  <div className="card-header account-card-header--flush">
-                    {panelIcons.baby}
-                    <span>{panelTitles.baby}</span>
-                  </div>
-
-                  <div className="account-baby-panel-body">
-                    <button
-                      type="button"
-                      className="glass-card save-btn-card"
-                      onClick={() => navigate('/babysettings')}
-                    >
-                      <Baby size={20} />
-                      <span>go to {childName}'s settings</span>
+                      <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
+                        show less
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('caretaker')}>
+                      <Users size={20} />
+                      <span>caretaker settings</span>
                     </button>
-                  </div>
+                  )}
+                </CollapseRow>
 
-                  <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
-                    show less
-                  </button>
-                </div>
-              ) : (
-                <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('baby')}>
-                  <Baby size={20} />
-                  <span>{childName}'s settings</span>
-                </button>
-              )}
-            </CollapseRow>
+                <CollapseRow open={category === null || category === 'baby'}>
+                  {category === 'baby' ? (
+                    <div className="glass-card account-expanded-card">
+                      <div className="card-header account-card-header--flush">
+                        {panelIcons.baby}
+                        <span>{panelTitles.baby}</span>
+                      </div>
+
+                      <div className="account-baby-panel-body">
+                        <button
+                          type="button"
+                          className="glass-card save-btn-card"
+                          onClick={() => navigate('/babysettings')}
+                        >
+                          <Baby size={20} />
+                          <span>go to {childName}'s settings</span>
+                        </button>
+                      </div>
+
+                      <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
+                        show less
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('baby')}>
+                      <Baby size={20} />
+                      <span>{childName}'s settings</span>
+                    </button>
+                  )}
+                </CollapseRow>
+              </>
+            )}
 
           </div>
         </div>

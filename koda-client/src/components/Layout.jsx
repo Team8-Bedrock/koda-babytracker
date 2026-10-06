@@ -18,7 +18,6 @@ import HabitatBackground from "./HabitatBackground";
 import NavIconButton from "./NavIconButton";
 import DarkModeToggle from "./DarkModeToggle";
 import "../styling/global/layout.css";
-import { API_URL } from "../config";
 
 const Layout = ({ children }) => {
   const navigate = useNavigate();
@@ -26,24 +25,11 @@ const Layout = ({ children }) => {
   const [selectedChild, setSelectedChild] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
-  const [isCaregiver, setIsCaregiver] = useState(false);
   const isActivityLogPage = location.pathname.toLowerCase() === "/add-activity";
 
   useEffect(() => {
     const savedChild = getSelectedChildForUser();
     if (savedChild) setSelectedChild(savedChild);
-  }, []);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    fetch(`${API_URL}/api/auth/me`, {
-      headers: { "x-auth-token": token },
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((user) => setIsCaregiver(user?.role === "caregiver"))
-      .catch(() => setIsCaregiver(false));
   }, []);
 
   const pageLabel = getPageLabel(location.pathname, selectedChild?.name || "Gracie");
@@ -107,9 +93,7 @@ const Layout = ({ children }) => {
         <NavIconButton icon={PlusSquare} onClick={() => navigate("/add-activity")} />
         <NavIconButton icon={BarChart2} strokeWidth={2} onClick={() => navigate("/analytics")} />
         <NavIconButton icon={MessageCircle} onClick={() => navigate("/chat")} />
-        {!isCaregiver && (
-          <NavIconButton icon={SettingsIcon} onClick={() => navigate("/account")} />
-        )}
+        <NavIconButton icon={SettingsIcon} onClick={() => navigate("/account")} />
       </nav>
     </div>
   );
