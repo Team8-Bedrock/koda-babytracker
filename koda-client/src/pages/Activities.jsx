@@ -256,7 +256,9 @@ const Activities = () => {
       }
 
       if (saved) {
-        window.dispatchEvent(new Event('activity-saved'));
+        const kind = mode === 'schedule' ? 'scheduled' : 'logged';
+        sessionStorage.setItem('koda-celebrate', kind + ':' + Date.now());
+        window.dispatchEvent(new CustomEvent('activity-saved', { detail: { kind } }));
         navigate('/ParentDashboard');
       }
     } catch (err) {
@@ -290,6 +292,8 @@ const Activities = () => {
 
       setDuplicateEntry(null);
       setPendingActivity(null);
+      sessionStorage.setItem('koda-celebrate', 'logged:' + Date.now());
+      window.dispatchEvent(new CustomEvent('activity-saved', { detail: { kind: 'logged' } }));
       navigate('/ParentDashboard');
     } catch (err) {
       setSubmitError(
@@ -341,16 +345,14 @@ const Activities = () => {
             <>
               <div className="glass-card activities-glass-card">
                 <div
-                  className="activity-menu-btn"
+                  className="hm-title"
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    boxShadow: 'none',
-                    padding: 0,
+                    fontWeight: 700,
+                    color: '#2f5a3a',
                     width: '100%',
                     textAlign: 'center',
                     cursor: 'default',
-                    fontSize: '1.25rem',
+                    fontSize: '1.6rem',
                     marginBottom: 4,
                   }}
                 >
@@ -396,7 +398,7 @@ const Activities = () => {
 
                 {type === 'sleep' ? (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Moon size={28} color="#4a3a26" />
                       <span>{mode === 'schedule' ? 'schedule sleep' : 'sleep'}</span>
                     </div>
@@ -413,6 +415,7 @@ const Activities = () => {
                             setSleepError('');
                           }}
                           className="log-input"
+                          style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                           required
                         />
                       </div>
@@ -429,6 +432,7 @@ const Activities = () => {
                             setSleepError('');
                           }}
                           className="log-input"
+                          style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                           required
                         />
                       </div>
@@ -457,7 +461,7 @@ const Activities = () => {
                   </div>
                 ) : type === 'feeding' ? (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Milk size={28} color="#4a3a26" />
                       <span>{mode === 'schedule' ? 'schedule feeding' : 'feeding'}</span>
                     </div>
@@ -491,6 +495,7 @@ const Activities = () => {
                           value={feedingAmount}
                           onChange={(e) => setFeedingAmount(e.target.value)}
                           className="log-input"
+                          style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                           placeholder="e.g. 4"
                           min="0"
                         />
@@ -517,7 +522,7 @@ const Activities = () => {
                   </div>
                 ) : type === 'diaper' ? (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Baby size={28} color="#4a3a26" />
                       <span>{mode === 'schedule' ? 'schedule diaper change' : 'diaper change'}</span>
                     </div>
@@ -541,7 +546,7 @@ const Activities = () => {
                   </div>
                 ) : (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <span>
                         {mode === 'schedule'
                           ? (type === 'mood' ? 'schedule mood logging' : `schedule ${typeLabel}`)
@@ -550,12 +555,13 @@ const Activities = () => {
                     </div>
                     {mode !== 'schedule' && type === 'playtime' && (
                       <div className="log-field-group">
-                        <label className="log-label">status</label>
-                        <div className="log-option-row">
+                        <p className="log-form-subtitle" style={{ textAlign: "center", margin: "0 0 12px" }}>did playtime happen today?</p>
+                        <div className="log-option-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%" }}>
                           {PLAYTIME_OPTIONS.map((option) => (
                             <button
                               key={option}
                               type="button"
+                              style={{ width: "100%", padding: "14px 8px", whiteSpace: "nowrap", fontSize: "0.95rem" }}
                               className={`log-option-btn ${value === option ? 'selected' : ''}`}
                               onClick={() => setValue(option)}
                             >
@@ -598,7 +604,7 @@ const Activities = () => {
 
                 {mode === 'schedule' && (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Calendar size={26} color="#4a3a26" />
                       <span>schedule</span>
                     </div>
@@ -633,6 +639,7 @@ const Activities = () => {
                             value={scheduleDate}
                             onChange={(e) => setScheduleDate(e.target.value)}
                             className="log-input"
+                            style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                             required
                           />
                         </div>
@@ -666,6 +673,7 @@ const Activities = () => {
                           value={scheduleTime}
                           onChange={(e) => setScheduleTime(e.target.value)}
                           className="log-input"
+                          style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                           required
                         />
                       </div>

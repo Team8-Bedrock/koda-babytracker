@@ -8,7 +8,6 @@ import ActivitiesModal from "../components/modals/ActivitiesModal";
 import NavIconButton from "../components/NavIconButton";
 import OfflineDuplicateReview from "../components/OfflineDuplicateReview";
 import { getQueuedActivities } from "../utils/offlineStorage";
-import MoodBuddy from "../components/MoodBuddy";
 
 const ParentDashboard = () => {
   const [activities, setActivities] = useState([]);
@@ -235,7 +234,6 @@ const ParentDashboard = () => {
           </button>
         </div>
       )}
-      <MoodBuddy child={selectedChild} refreshKey={reviewVersion} />
 
       <div className="hm-sticker-stack">
         {isActivitiesOpen && (

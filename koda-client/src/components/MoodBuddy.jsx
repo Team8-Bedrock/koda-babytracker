@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 
 import React, { Suspense, lazy, useEffect, useState } from "react";
 import axios from "axios";
@@ -139,13 +140,13 @@ const MOOD_INFO = {
     feeding: {
         dots: true,
         short: "nom nom",
-        sentence: (n) => `${n} was just fed, so her animated self is happily munching.`,
-        cause: () => "straight from a feeding log",
+        sentence: (n) => `${n} is enjoying a good meal!`,
+        cause: () => "feeding has been logged",
     },
     sleeping: {
         short: "zzz...",
-        sentence: (n) => `${n} is resting right now, so her animated self is snoozing.`,
-        cause: () => "straight from a sleep log",
+        sentence: (n) => `${n} is napping now, sweet dreams!`,
+        cause: () => "sleep has been logged",
     },
     sleepy: {
         short: "so sleepy",
@@ -178,6 +179,9 @@ const KEYFRAMES = `
 @keyframes mbBob { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -6px); } }
 @keyframes mbBobCute { 0%,100% { transform: translate(-50%, 0) scale(1, 1); } 50% { transform: translate(-50%, -7px) scale(1.04, 0.96); } }
 @keyframes mbDot { 0%,60%,100% { opacity: 0.2; transform: translateY(0) scale(0.85); } 30% { opacity: 1; transform: translateY(-3px) scale(1); } }
+@keyframes mbGlow { 0%,100% { box-shadow: 0 4px 12px rgba(30,60,40,0.14), 0 0 6px 2px rgba(255,170,40,0.5); } 50% { box-shadow: 0 4px 12px rgba(30,60,40,0.14), 0 0 22px 9px rgba(255,170,40,0.85); } }
+@keyframes mbGlowPill { 0%,100% { box-shadow: 0 4px 12px rgba(30,60,40,0.16), 0 0 6px 2px rgba(255,170,40,0.5); } 50% { box-shadow: 0 4px 12px rgba(30,60,40,0.16), 0 0 22px 9px rgba(255,170,40,0.85); } }
+@keyframes mbSpark { 0%,100% { opacity: 0.3; transform: scale(0.7) rotate(0deg); } 50% { opacity: 1; transform: scale(1.5) rotate(45deg); } }
 @keyframes mbZoom { from { opacity: 0; transform: scale(0.35) translateY(40%); } to { opacity: 1; transform: scale(1) translateY(0); } }
 @keyframes mbFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mbPop { from { opacity: 0; transform: translateY(12px) scale(0.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -205,9 +209,21 @@ function AnimationView({ anim, front }) {
     );
 }
 
+const CELEBRATE_KEYFRAMES = `@keyframes mbCelPop{0%{transform:scale(0.3) rotate(-8deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}@keyframes mbCelFade{from{opacity:0}to{opacity:1}}@keyframes mbCelOut{to{opacity:0;transform:translateY(-20px) scale(0.92)}}@keyframes mbCelDraw{to{stroke-dashoffset:0}}@keyframes mbCelHop{0%,100%{transform:translateY(0) scale(1)}30%{transform:translateY(0) scale(1.1,0.9)}55%{transform:translateY(-10px) scale(0.95,1.06)}}@keyframes mbCelSwing{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}@keyframes mbCelBell{0%,100%{transform:rotate(0)}25%{transform:rotate(-18deg)}75%{transform:rotate(18deg)}}@keyframes mbCelFloat{0%{transform:translate(0,0) scale(0.4);opacity:0}20%{opacity:1}100%{transform:translate(var(--dx),-70px) scale(1.1);opacity:0}}`;
+
 export default function MoodBuddy({ child, refreshKey = 0, size = 130, bottom = "21%", left = "51%" }) {
     const [state, setState] = useState(null);
     const [view, setView] = useState(null);
+    const [celebrate, setCelebrate] = useState(0);
+    const [celebrateKind, setCelebrateKind] = useState("logged");
+    useEffect(() => {
+        let t;
+        const on = (kind) => { setCelebrateKind(kind === "scheduled" ? "scheduled" : "logged"); setCelebrate(Date.now()); clearTimeout(t); t = setTimeout(() => setCelebrate(0), 2600); };
+        const raw = sessionStorage.getItem("koda-celebrate") || "";
+        const [pk, pt] = raw.includes(":") ? raw.split(":") : ["logged", raw];
+        if (Number(pt) && Date.now() - Number(pt) < 8000 && window.__kodaCelebrated !== raw) { window.__kodaCelebrated = raw; sessionStorage.removeItem("koda-celebrate"); on(pk); }
+        return () => clearTimeout(t);
+    }, []);
     const animal = child?.avatar || child?.character || child?.animal || "bear";
 
     useEffect(() => {
@@ -251,7 +267,42 @@ export default function MoodBuddy({ child, refreshKey = 0, size = 130, bottom = 
         window.dispatchEvent(new CustomEvent("mood-animation", { detail: { active: false } }));
     }, []);
 
-    if (!anim) return null;
+    const celebrationEl = (
+        <>
+            <style>{KEYFRAMES}</style>
+            <style>{CELEBRATE_KEYFRAMES}</style>
+            {celebrate && typeof document !== "undefined" ? createPortal(
+                <div key={celebrate} style={{ position: "fixed", inset: 0, zIndex: 2147483000, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center", animation: "mbCelOut 0.45s ease-in 2.1s forwards" }}>
+                    <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 50% 50%, rgba(255,246,225,0.7), rgba(255,246,225,0) 55%)", animation: "mbCelFade 0.3s ease-out both" }} />
+                    <div style={{ position: "relative", width: 170, padding: "22px 16px 16px", background: "#fff8ee", border: "2px solid rgba(47,90,58,0.14)", borderRadius: 26, boxShadow: "0 14px 34px rgba(30,60,40,0.22)", textAlign: "center", animation: "mbCelPop 0.55s cubic-bezier(.34,1.7,.5,1) both" }}>
+                        {celebrateKind === "scheduled" ? (
+                            <div style={{ position: "relative", width: 64, height: 64, margin: "0 auto", animation: "mbCelSwing 0.9s ease-in-out 0.4s 1" }}>
+                                <div style={{ position: "absolute", inset: 0, background: "#fff", borderRadius: 14, border: "2px solid #2f5a3a", overflow: "hidden" }}>
+                                    <div style={{ height: 18, background: "#f6a7b8" }} />
+                                    <div style={{ fontSize: 26, fontWeight: 800, color: "#2f5a3a", lineHeight: "40px" }}>{new Date().getDate()}</div>
+                                </div>
+                                <span style={{ position: "absolute", top: -6, left: 14, width: 6, height: 12, borderRadius: 3, background: "#2f5a3a" }} />
+                                <span style={{ position: "absolute", top: -6, right: 14, width: 6, height: 12, borderRadius: 3, background: "#2f5a3a" }} />
+                                <span style={{ position: "absolute", right: -12, bottom: -8, width: 28, height: 28, borderRadius: "50%", background: "#ffd66b", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#2f5a3a", animation: "mbCelBell 0.5s ease-in-out 0.6s 1" }}>&#10003;</span>
+                            </div>
+                        ) : (
+                            <div style={{ width: 64, height: 64, margin: "0 auto", borderRadius: "50%", background: "#8fd18a", border: "3px solid #fff", boxShadow: "0 0 0 3px #2f5a3a22", display: "flex", alignItems: "center", justifyContent: "center", animation: "mbCelHop 0.7s ease-in-out 0.35s 1" }}>
+                                <svg width="34" height="34" viewBox="0 0 34 34"><path d="M8 18 L15 25 L27 10" fill="none" stroke="#fff" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: 40, strokeDashoffset: 40, animation: "mbCelDraw 0.4s ease-out 0.35s forwards" }} /></svg>
+                            </div>
+                        )}
+                        <div className="hm-title" style={{ marginTop: 12, fontSize: 22, fontWeight: 800, color: "#2f5a3a" }}>{celebrateKind === "scheduled" ? "scheduled!" : "logged!"}</div>
+                        <div style={{ marginTop: 2, fontSize: 12, color: "#2f5a3a", opacity: 0.7 }}>{celebrateKind === "scheduled" ? "we'll remind you" : "nice job!"}</div>
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                            <span key={i} style={{ position: "absolute", left: 18 + i * 26, top: 10, fontSize: i % 2 ? 14 : 18, color: ["#f6a7b8", "#ffd66b", "#8fd18a"][i % 3], opacity: 0, "--dx": ((i % 2 ? 1 : -1) * (6 + i * 3)) + "px", animation: `mbCelFloat 1.5s ease-out ${0.3 + i * 0.12}s forwards` }}>{celebrateKind === "scheduled" ? "\u2726" : "\u2665"}</span>
+                        ))}
+                    </div>
+                </div>,
+                document.body
+            ) : null}
+        </>
+    );
+
+    if (!anim) return celebrationEl;
 
     const info = MOOD_INFO[mood] || { short: "hi!", sentence: () => "", cause: () => "" };
     const name = child?.name || child?.firstName || "your little one";
@@ -271,7 +322,8 @@ export default function MoodBuddy({ child, refreshKey = 0, size = 130, bottom = 
 
     return (
         <>
-            <style>{KEYFRAMES}</style>
+            {celebrationEl}
+
             {view !== "explain" && (
                 <div
                     style={{
@@ -287,14 +339,14 @@ export default function MoodBuddy({ child, refreshKey = 0, size = 130, bottom = 
                 >
                     <button
                         type="button"
-                        onClick={() => setView("choose")}
+                        onClick={openProfile}
                         aria-label={`see why ${name} feels this way`}
                         style={{
                             position: "absolute",
                             left: "50%",
                             top: -12,
                             transform: "translateX(-50%)",
-                            animation: `${info.dots ? "mbBobCute" : "mbBob"} 2.4s ease-in-out infinite`,
+                            animation: `${info.dots ? "mbBobCute" : "mbBob"} 2.4s ease-in-out infinite, ${info.dots ? "mbGlow" : "mbGlowPill"} 1.4s ease-in-out infinite`,
                             pointerEvents: "auto",
                             visibility: view ? "hidden" : "visible",
                             cursor: "pointer",
@@ -315,6 +367,20 @@ export default function MoodBuddy({ child, refreshKey = 0, size = 130, bottom = 
                         }}
                     >
                         {info.short}
+                        <span
+                            style={{
+                                position: "absolute",
+                                top: -8,
+                                right: -9,
+                                fontSize: 12,
+                                color: "#f2a93b",
+                                textShadow: "0 0 8px rgba(255,186,80,0.95)",
+                                animation: "mbSpark 2.4s ease-in-out infinite",
+                                pointerEvents: "none",
+                            }}
+                        >
+                            ✦
+                        </span>
                         {info.dots && (
                             <span style={{ display: "inline-flex", gap: 2, marginLeft: 5, verticalAlign: "baseline" }}>
                                 {[0, 1, 2].map((i) => (
