@@ -15,14 +15,13 @@ import { getPageLabel, getPillFontSize } from "../constants/pageLabels";
 import { API_URL } from "../config";
 import HabitatBackground from "./HabitatBackground";
 import NavIconButton from "./NavIconButton";
-import DarkModeToggle from "./DarkModeToggle";
+import MoodBuddy from "./MoodBuddy";
 import "../styling/global/layout.css";
 
 const Layout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [selectedChild, setSelectedChild] = useState(null);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [childOptions, setChildOptions] = useState([]);
@@ -72,6 +71,7 @@ const Layout = ({ children }) => {
   return (
     <div className="layout-mobile-frame">
       <HabitatBackground />
+      {selectedChild ? <MoodBuddy child={selectedChild} /> : null}
 
       <header className="layout-header">
         <button
@@ -141,10 +141,6 @@ const Layout = ({ children }) => {
 
       {children}
 
-      <DarkModeToggle
-        isDarkMode={isDarkMode}
-        onToggle={() => setIsDarkMode((prev) => !prev)}
-      />
 
       <nav className="layout-bottom-nav">
         <NavIconButton icon={Home} onClick={() => navigate("/ParentDashboard")} />

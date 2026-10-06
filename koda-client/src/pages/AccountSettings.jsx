@@ -1,8 +1,3 @@
-// Account settings page
-// what needs to be done:
-// 1. needs to be functional (have the email that was registered show up and actually save on the backend, reset password, etc.)
-// 2. ui/ux clean up 
-// 3. habitat isnt showing on the page for some reason
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +10,7 @@ import { getSelectedChildForUser } from '../utils/authStorage';
 import CaregiverLinkPanel from '../components/settings/CaregiverLinkPanel';
 import CaregiverManagementPanel from '../components/settings/CaregiverManagementPanel';
 import ChildProfilePicker from '../components/settings/ChildProfilePicker';
+import DarkModeToggle from '../components/DarkModeToggle';
 
 const CollapseRow = ({ open, children, topGap = false }) => (
   <div
@@ -33,6 +29,16 @@ const AccountSettings = () => {
   const [role, setRole] = useState(null);
 
   const [category, setCategory] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('koda-dark-mode') === 'true');
+
+  const toggleDarkMode = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('koda-dark-mode', String(next));
+      window.dispatchEvent(new CustomEvent('koda-dark-mode', { detail: { isDarkMode: next } }));
+      return next;
+    });
+  };
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -265,6 +271,39 @@ const AccountSettings = () => {
                 )}
               </CollapseRow>
             )}
+
+            <CollapseRow open={category === null}>
+              <style>{`.koda-sky-card .dm-toggle{position:relative!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;margin:0!important;transform:none!important}@keyframes kodaTwinkle{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.15)}}@keyframes kodaCloud{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}`}</style>
+              <div
+                className="koda-sky-card"
+                style={{
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: '14px 18px',
+                  borderRadius: 22,
+                  background: isDarkMode ? 'linear-gradient(135deg, #2b3a5c, #4b4f86)' : 'linear-gradient(135deg, #cfeaff, #fff1c9)',
+                  color: isDarkMode ? '#f3efff' : '#315b3d',
+                  boxShadow: '0 8px 20px rgba(20,45,30,0.15)',
+                  transition: 'background 0.5s ease, color 0.5s ease',
+                }}
+              >
+                {(isDarkMode ? [[14, 10], [70, 70], [140, 18], [200, 62], [46, 48]] : []).map(([x, y], i) => (
+                  <span key={i} style={{ position: 'absolute', left: x, top: y, width: 4, height: 4, borderRadius: 999, background: '#fffbe0', animation: `kodaTwinkle 1.8s ease-in-out ${i * 0.3}s infinite`, pointerEvents: 'none' }} />
+                ))}
+                {!isDarkMode && (
+                  <span style={{ position: 'absolute', left: 120, top: 8, width: 40, height: 14, borderRadius: 999, background: 'rgba(255,255,255,0.8)', animation: 'kodaCloud 4s ease-in-out infinite', pointerEvents: 'none' }} />
+                )}
+                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontWeight: 800, fontSize: 17 }}>{isDarkMode ? 'good night' : 'good morning'}</span>
+                  <span style={{ fontSize: 12, opacity: 0.75 }}>{isDarkMode ? 'night habitat is on' : 'day habitat is on'}</span>
+                </div>
+                <DarkModeToggle isDarkMode={isDarkMode} onToggle={toggleDarkMode} />
+              </div>
+            </CollapseRow>
 
           </div>
         </div>
