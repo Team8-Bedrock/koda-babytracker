@@ -33,7 +33,7 @@ const Welcome = () => {
         </button>
         <button
           className="setup-btn-brown"
-          onClick={() => navigate("/caregiver")}
+          onClick={() => navigate("/registering?role=caregiver")}
         >
           Caretaker
         </button>
