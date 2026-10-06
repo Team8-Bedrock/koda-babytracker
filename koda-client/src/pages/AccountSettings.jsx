@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, Users, Baby, ChevronRight, Lock, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import '../styling/global/App.css';
 import '../styling/pages/accountSettings.css';
+import '../styling/pages/setUp.css';
 import { API_URL } from '../config';
 import Layout from '../components/Layout';
 import { getSelectedChildForUser } from '../utils/authStorage';
@@ -24,7 +25,7 @@ const CollapseRow = ({ open, children, topGap = false }) => (
 
 const AccountSettings = () => {
   const navigate = useNavigate();
-  const email = localStorage.getItem('email') || '';
+  const [email, setEmail] = useState('');
   const [selectedChild, setSelectedChild] = useState(null);
   const [role, setRole] = useState(null);
 
@@ -58,6 +59,7 @@ const AccountSettings = () => {
       .then((response) => (response.ok ? response.json() : null))
       .then((user) => {
         setRole(user?.role || 'parent');
+        setEmail(user?.email || '');
         setAccessChecked(true);
       })
       .catch(() => setAccessChecked(true));
@@ -152,6 +154,7 @@ const AccountSettings = () => {
 
                   <div className="account-panel-body">
                     <div>
+                      <label className="account-field-label">email</label>
                       <p className="empty-msg-light account-empty-msg">
                         {email || 'no email on file'}
                       </p>
@@ -205,10 +208,6 @@ const AccountSettings = () => {
                       </form>
                     </div>
 
-                    <button type="button" className="glass-card save-btn-card" onClick={handleLogout}>
-                      <LogOut size={20} />
-                      <span>log out</span>
-                    </button>
                   </div>
 
                   <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
@@ -307,6 +306,13 @@ const AccountSettings = () => {
 
           </div>
         </div>
+
+        {category === null && (
+          <button type="button" className="setup-btn-primary account-logout-btn" onClick={handleLogout}>
+            <LogOut size={20} />
+            <span>log out</span>
+          </button>
+        )}
 
       </div>
     </Layout>

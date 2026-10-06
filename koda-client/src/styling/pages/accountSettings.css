@@ -150,6 +150,11 @@
   background: #6cbf4f;
 }
 
+.account-content .account-logout-btn {
+  max-width: 380px;
+  margin-top: 14px;
+}
+
 .account-toggle-link--bottom {
   align-self: center;
   margin-top: 2px;
