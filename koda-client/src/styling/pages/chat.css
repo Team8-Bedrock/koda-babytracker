@@ -277,3 +277,75 @@
     background: #9a4d18;
     color: #fff;
 }
+
+/* ---------- shared Koda look (soft sage, matching every page) ---------- */
+
+.chat-panel {
+  background: var(--k-card-bg);
+  backdrop-filter: var(--k-blur);
+  border: 1.5px solid var(--k-sage);
+  border-radius: var(--k-radius-card);
+  box-shadow: var(--k-card-shadow);
+  color: var(--k-ink);
+  padding: var(--k-pad);
+}
+
+.chat-panel {
+  background: var(--k-panel-bg);
+  border-color: rgba(245, 240, 232, 0.95);
+  border-radius: var(--k-radius-panel);
+  clip-path: inset(0 round var(--k-radius-panel));
+}
+
+.chat-panel {
+  padding: 0;
+  background: var(--k-card-bg);
+}
+
+.chat-panel-header h1 {
+  font-family: var(--k-font-title);
+  font-size: var(--k-size-page-title);
+  font-weight: 400;
+  color: var(--k-ink);
+  letter-spacing: 0.2px;
+}
+
+.chat-empty {
+  font-family: var(--k-font-body);
+  font-size: var(--k-size-body);
+  font-weight: 600;
+  color: var(--k-ink-soft);
+}
+
+.chat-text-input {
+  font-family: var(--k-font-body);
+  font-size: var(--k-size-body);
+  background: var(--k-cream-soft);
+  border: 1.5px solid var(--k-sage-line);
+  border-radius: var(--k-radius-field);
+  color: var(--k-ink);
+}
+
+.chat-panel-header {
+  border-bottom: 1.5px solid var(--k-sage-line);
+}
+
+.chat-message {
+  background: var(--k-mist);
+  color: var(--k-ink);
+}
+
+.chat-message--mine {
+  background: var(--k-cream-soft);
+  border: 1.5px solid var(--k-sage-line);
+}
+
+.chat-composer {
+  background: var(--k-cream-soft);
+  border: 1.5px solid var(--k-sage-line);
+}
+
+.chat-send-button {
+  background: var(--k-deep);
+  color: var(--k-cream);
+}

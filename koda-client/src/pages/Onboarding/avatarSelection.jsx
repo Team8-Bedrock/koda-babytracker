@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import "../../styling/pages/setUp.css";
 import { AVATARS } from "../../constants/avatars";
-import { ChevronLeft, MapPin, Pointer } from "lucide-react";
+import { ChevronLeft, MapPin, Pointer, Leaf } from "lucide-react";
 import AvatarHabitatBackdrop from "../../components/AvatarHabitatBackdrop";
 
 
@@ -229,7 +229,7 @@ const AvatarSelection = () => {
           <div className="setup-dot" />
         </div>
         <div className="avatar-select-header">
-          <h1 className="setup-title avatar-select-heading">Who will represent your little one? 🍃</h1>
+          <h1 className="setup-title avatar-select-heading">Who will represent your little one? <Leaf className="btn-leaf" /></h1>
           <p key={selected.id} className="avatar-habitat-label">
             <MapPin size={13} strokeWidth={2.5} />
             <span>{selected.habitat}</span>

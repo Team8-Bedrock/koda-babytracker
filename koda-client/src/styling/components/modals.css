@@ -1,4 +1,3 @@
-/* Styling for the cards/panels (Today's Activities, Caregivers) and their reopen buttons. */
 @import url("https://fonts.googleapis.com/css2?family=Londrina+Solid:wght@100;300;400;900&display=swap");
 
 .hm-overlay {
@@ -348,4 +347,107 @@
   border: 1px solid #315b3d;
   background: #315b3d;
   color: #fff;
+}
+
+/* ---------- shared Koda look (soft sage, matching every page) ---------- */
+
+.hm-panel.hm-todays-activities,
+.hm-panel.hm-caregivers {
+  background: var(--k-card-bg);
+  backdrop-filter: var(--k-blur);
+  border: 1.5px solid var(--k-sage);
+  border-radius: var(--k-radius-card);
+  box-shadow: var(--k-card-shadow);
+  color: var(--k-ink);
+  padding: var(--k-pad);
+}
+
+.hm-panel.hm-todays-activities,
+.hm-panel.hm-caregivers {
+  background: var(--k-panel-bg);
+  border-color: rgba(245, 240, 232, 0.95);
+  border-radius: var(--k-radius-panel);
+  clip-path: inset(0 round var(--k-radius-panel));
+}
+
+.hm-title {
+  font-family: var(--k-font-title);
+  font-size: var(--k-size-page-title);
+  font-weight: 400;
+  color: var(--k-ink);
+  letter-spacing: 0.2px;
+}
+
+.hm-title-group svg {
+  color: var(--k-deep);
+  stroke: var(--k-deep);
+}
+
+.hm-empty {
+  font-family: var(--k-font-body);
+  font-size: var(--k-size-body);
+  font-weight: 600;
+  color: var(--k-ink-soft);
+}
+
+.hm-inline-link {
+  font-family: var(--k-font-body);
+  font-size: var(--k-size-small);
+  font-weight: 700;
+  color: var(--k-ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.hm-inline-link:hover {
+  color: var(--k-deep);
+}
+
+.hm-action-btn,
+.hm-submit-btn {
+  width: 100%;
+  max-width: none;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--k-deep);
+  border: 1.5px solid #436e4a;
+  box-shadow: 0 4px 0 var(--k-deep-shadow);
+  color: var(--k-cream);
+  font-family: var(--k-font-title);
+  font-size: var(--k-size-button);
+  font-weight: 400;
+}
+
+.hm-action-btn:hover,
+.hm-submit-btn:hover {
+  background: var(--k-deep-hover);
+}
+
+.hm-action-btn:active,
+.hm-submit-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-deep-shadow);
+}
+
+.hm-action-btn.secondary,
+.hm-secondary-btn {
+  background: var(--k-mist);
+  border-color: var(--k-sage);
+  box-shadow: 0 4px 0 rgba(79, 127, 87, 0.3);
+  color: var(--k-ink);
+}
+
+.hm-caregiver-form input {
+  font-family: var(--k-font-body);
+  font-size: var(--k-size-body);
+  background: var(--k-cream-soft);
+  border: 1.5px solid var(--k-sage-line);
+  border-radius: var(--k-radius-field);
+  color: var(--k-ink);
+}
+
+.hm-caregiver-form input:focus {
+  outline: none;
+  border-color: var(--k-deep);
+  box-shadow: 0 0 0 3px rgba(79, 127, 87, 0.18);
 }

@@ -1,6 +1,3 @@
-// universal header (logo/child-name pill/bell), page content, and the bottom nav bar. 
-// what needs to be fixed:
-// 1. headers for some reason are weirdly different on account settings, the log history page and the analytics page 
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -29,6 +26,7 @@ const Layout = ({ children }) => {
   const [logoFailed, setLogoFailed] = useState(false);
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [childOptions, setChildOptions] = useState([]);
+  const [headerLabel, setHeaderLabel] = useState("");
   const switcherRef = useRef(null);
   const isActivityLogPage = location.pathname.toLowerCase() === "/add-activity";
 
@@ -57,7 +55,13 @@ const Layout = ({ children }) => {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [isSwitcherOpen]);
 
-  const pageLabel = getPageLabel(location.pathname, selectedChild?.name || "Gracie");
+  useEffect(() => {
+    const updateHeader = (event) => setHeaderLabel(event.detail?.label || "");
+    window.addEventListener("koda-header-label", updateHeader);
+    return () => window.removeEventListener("koda-header-label", updateHeader);
+  }, []);
+
+  const pageLabel = headerLabel || getPageLabel(location.pathname, selectedChild?.name || "Gracie");
 
   const handleSelectChild = (child) => {
     setSelectedChildForUser(child);

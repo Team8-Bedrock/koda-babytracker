@@ -35,7 +35,7 @@ const Welcome = () => {
           className="setup-btn-brown"
           onClick={() => navigate("/caregiver")}
         >
-          Caregiver
+          Caretaker
         </button>
 
         <p className="setup-footer">

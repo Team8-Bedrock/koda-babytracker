@@ -8,6 +8,7 @@ import ActivitiesModal from "../components/modals/ActivitiesModal";
 import NavIconButton from "../components/NavIconButton";
 import OfflineDuplicateReview from "../components/OfflineDuplicateReview";
 import { getQueuedActivities } from "../utils/offlineStorage";
+import MoodBuddy from "../components/MoodBuddy";
 
 const ParentDashboard = () => {
   const [activities, setActivities] = useState([]);
@@ -66,7 +67,6 @@ const ParentDashboard = () => {
       try {
         const queue = await getQueuedActivities();
 
-        // Only show this user's queued entries for the selected child.
         const pendingEntries = queue
           .filter((entry) => {
             const entryChildId = entry.data?.childId || entry.data?.babyId;
@@ -132,7 +132,6 @@ const ParentDashboard = () => {
               new Date(getEntryTime(b)) - new Date(getEntryTime(a))
           );
 
-        // Keep the dashboard's latest-entry-per-category layout.
         const recentActivities = ["feeding", "sleep", "diaper"]
           .map((activityType) => {
             const entry = todaysEntries.find(
@@ -212,6 +211,12 @@ const ParentDashboard = () => {
     return () => clearTimeout(timer);
   }, [offlineSaveNotice]);
 
+  useEffect(() => {
+    const closeActivities = () => setIsActivitiesOpen(false);
+    window.addEventListener("close-todays-activities", closeActivities);
+    return () => window.removeEventListener("close-todays-activities", closeActivities);
+  }, []);
+
   return (
     <div className="dashboard-container">
       {offlineSaveNotice && (
@@ -230,6 +235,8 @@ const ParentDashboard = () => {
           </button>
         </div>
       )}
+      <MoodBuddy child={selectedChild} refreshKey={reviewVersion} />
+
       <div className="hm-sticker-stack">
         {isActivitiesOpen && (
           <ActivitiesModal
