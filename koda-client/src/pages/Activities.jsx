@@ -6,7 +6,8 @@ import { Save, Milk, Moon, Baby, Clock, Calendar, AlertTriangle } from 'lucide-r
 import '../styling/global/App.css';
 import '../styling/pages/activities.css';
 
-import { getSelectedChildForUser } from '../utils/authStorage';
+import { getSelectedChildForUser, getCurrentUserId } from '../utils/authStorage';
+import { queueActivityOffline } from '../utils/offlineStorage';
 import { API_URL } from "../config";
 import Layout from '../components/Layout';
 
@@ -17,6 +18,9 @@ const ACTIVITY_OPTIONS = [
   { type: 'playtime', label: 'playtime' },
   { type: 'mood', label: 'mood' },
 ];
+
+const MOOD_OPTIONS = ['tired', 'upset', 'sad', 'mad', 'happy', 'energetic', 'angry', 'quiet', 'other'];
+const PLAYTIME_OPTIONS = ['complete', 'not complete'];
 
 const DAYS_OF_WEEK = [
   { key: 'Sunday', short: 'Su' },
@@ -42,6 +46,8 @@ const Activities = () => {
   const [endTime, setEndTime] = useState('');
   const [quality, setQuality] = useState('');
   const [diaperType, setDiaperType] = useState('');
+  const [moodChoice, setMoodChoice] = useState('');
+  const [moodNote, setMoodNote] = useState('');
 
   const [repeat, setRepeat] = useState('once');
   const [scheduleDate, setScheduleDate] = useState('');
@@ -49,6 +55,10 @@ const Activities = () => {
   const [repeatDays, setRepeatDays] = useState([]);
 
   const [sleepError, setSleepError] = useState('');
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [duplicateEntry, setDuplicateEntry] = useState(null);
+  const [pendingActivity, setPendingActivity] = useState(null);
 
   const toggleRepeatDay = (day) => {
     setRepeatDays((prev) =>
@@ -57,13 +67,25 @@ const Activities = () => {
   };
 
   const handleBack = () => {
-    if (step === 3) {
-      setStep(2);
-    } else if (step === 2) {
-      setStep(1);
-      setType('');
-      setMode('');
-    }
+    setStep(1);
+    setType('');
+    setMode('');
+    setValue('');
+    setMoodChoice('');
+    setMoodNote('');
+    setFeedingAmount('');
+    setFeedingType('');
+    setFeedingSide('');
+    setStartTime('');
+    setEndTime('');
+    setQuality('');
+    setDiaperType('');
+    setRepeat('once');
+    setScheduleDate('');
+    setScheduleTime('');
+    setRepeatDays([]);
+    setSleepError('');
+    setSubmitError('');
   };
 
   const buildActivityDetails = () => {
@@ -74,17 +96,95 @@ const Activities = () => {
       return {
         type: feedingType,
         amount: feedingAmount ? Number(feedingAmount) : undefined,
-        side: feedingSide || 'N/A',
+        side: feedingType === 'Breast' && feedingSide ? feedingSide : 'N/A',
       };
     }
     if (type === 'diaper') {
       return { type: diaperType };
     }
-    return { value };
+    return { value: currentValue() };
+  };
+
+  const currentValue = () => {
+    if (type === 'mood') {
+      if (moodChoice === 'other') return moodNote.trim() ? `other: ${moodNote.trim()}` : 'other';
+      return moodNote.trim() ? `${moodChoice}: ${moodNote.trim()}` : moodChoice;
+    }
+    return value;
+  };
+
+  //Catches duplicate response
+  const saveActivity = async (activityType, activityData, requestConfig) => {
+    const storeOffline = async () => {
+      const userId = getCurrentUserId();
+
+      if (!userId) {
+        throw new Error('Please log in before saving an activity.');
+      }
+
+      await queueActivityOffline(activityType, {
+        ...activityData,
+        loggedBy: userId
+      });
+
+      sessionStorage.setItem(
+        'showOfflineSaveNotice',
+        JSON.stringify({
+          title: navigator.onLine
+            ? 'Entry saved on this device'
+            : 'You’re offline. Entry saved on this device.',
+          message: 'It will sync automatically when the connection is restored.'
+        })
+      );
+
+      return true;
+    };
+
+    if (!navigator.onLine) {
+      return storeOffline();
+    }
+
+    try {
+      await axios.post(
+        `${API_URL}/api/${activityType}`,
+        activityData,
+        {
+          ...requestConfig,
+          timeout: 15000
+        }
+      );
+
+      return true;
+    } catch (err) {
+      if (
+        err.response?.status === 409 &&
+        err.response?.data?.code === 'DUPLICATE_ACTIVITY'
+      ) {
+        setDuplicateEntry(err.response.data.existingEntry);
+        setPendingActivity({
+          activityType,
+          activityData
+        });
+
+        return false;
+      }
+
+      // Queue the entry if the server cannot be reached.
+      // HTTP errors will show normally
+      if (
+        !err.response &&
+        ['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT'].includes(err.code)
+      ) {
+        return storeOffline();
+      }
+
+      throw err;
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError('');
 
     try {
       const selectedChild = getSelectedChildForUser();
@@ -92,10 +192,13 @@ const Activities = () => {
       const token = localStorage.getItem('token');
 
       if (!childId || !token) {
-        throw new Error('A selected child and authenticated user are required.');
+        setSubmitError('no child profile is selected. pick one in settings before logging.');
+        return;
       }
 
+      setSubmitting(true);
       const requestConfig = { headers: { 'x-auth-token': token } };
+      let saved = true;
 
       if (mode === 'schedule') {
         await axios.post(`${API_URL}/api/schedule`, {
@@ -120,7 +223,7 @@ const Activities = () => {
 
         const duration = Math.round((sleepEnd - sleepStart) / (1000 * 60));
 
-        await axios.post(`${API_URL}/api/sleep`, {
+        saved = await saveActivity('sleep', {
           childId,
           startTime: sleepStart,
           endTime: sleepEnd,
@@ -128,23 +231,88 @@ const Activities = () => {
           quality,
         }, requestConfig);
       } else if (type === 'feeding') {
-        await axios.post(`${API_URL}/api/feeding`, {
+        saved = await saveActivity('feeding', {
           childId,
           type: feedingType,
           amount: feedingAmount ? Number(feedingAmount) : undefined,
-          side: feedingSide || 'N/A',
+          side: feedingType === 'Breast' && feedingSide ? feedingSide : 'N/A',
         }, requestConfig);
       } else if (type === 'diaper') {
-        await axios.post(`${API_URL}/api/diaper`, {
+        saved = await saveActivity('diaper', {
           childId,
           type: diaperType,
         }, requestConfig);
+      } else if (type === 'mood' || type === 'playtime') {
+        const finalValue = currentValue();
+        if (!finalValue) {
+          setSubmitError(type === 'mood' ? 'pick a mood first.' : 'pick complete or not complete.');
+          return;
+        }
+        saved = await saveActivity(type, {
+          childId,
+          value: finalValue,
+          ...(type === 'mood' ? { mood: moodChoice, notes: moodNote.trim() } : {}),
+        }, requestConfig);
       }
 
-      navigate('/ParentDashboard');
+      if (saved) {
+        const kind = mode === 'schedule' ? 'scheduled' : 'logged';
+        sessionStorage.setItem('koda-celebrate', kind + ':' + Date.now());
+        window.dispatchEvent(new CustomEvent('activity-saved', { detail: { kind } }));
+        navigate('/ParentDashboard');
+      }
     } catch (err) {
       console.error("Error saving activity:", err);
+      setSubmitError(err.response?.data?.error || err.response?.data?.msg || err.message || 'could not save that activity. please try again.');
+    } finally {
+      setSubmitting(false);
     }
+  };
+
+  //Duplicate detection keep and discard
+  const handleKeepDuplicate = async () => {
+    if (!pendingActivity || submitting) return;
+
+    setSubmitting(true);
+    setSubmitError('');
+
+    try {
+      const token = localStorage.getItem('token');
+
+      await axios.post(
+        `${API_URL}/api/${pendingActivity.activityType}`,
+        {
+          ...pendingActivity.activityData,
+          allowDuplicate: true
+        },
+        {
+          headers: { 'x-auth-token': token }
+        }
+      );
+
+      setDuplicateEntry(null);
+      setPendingActivity(null);
+      sessionStorage.setItem('koda-celebrate', 'logged:' + Date.now());
+      window.dispatchEvent(new CustomEvent('activity-saved', { detail: { kind: 'logged' } }));
+      navigate('/ParentDashboard');
+    } catch (err) {
+      setSubmitError(
+        err.response?.data?.error ||
+        err.response?.data?.msg ||
+        'Could not save the entry. Please try again.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelDuplicate = () => {
+    if (submitting) return;
+
+    setDuplicateEntry(null);
+    setPendingActivity(null);
+    setSubmitError('');
+    navigate('/ParentDashboard');
   };
 
   const typeLabel = ACTIVITY_OPTIONS.find((o) => o.type === type)?.label || '';
@@ -176,8 +344,19 @@ const Activities = () => {
           {step === 2 && (
             <>
               <div className="glass-card activities-glass-card">
-                <div className="log-form-title">
-                  <span>how would you like to log this?</span>
+                <div
+                  className="hm-title"
+                  style={{
+                    fontWeight: 700,
+                    color: '#2f5a3a',
+                    width: '100%',
+                    textAlign: 'center',
+                    cursor: 'default',
+                    fontSize: '1.6rem',
+                    marginBottom: 4,
+                  }}
+                >
+                  how would you like to log this?
                 </div>
                 <p className="log-form-subtitle">
                   you can log this {typeLabel} now, or set it up as a recurring schedule.
@@ -219,7 +398,7 @@ const Activities = () => {
 
                 {type === 'sleep' ? (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Moon size={28} color="#4a3a26" />
                       <span>{mode === 'schedule' ? 'schedule sleep' : 'sleep'}</span>
                     </div>
@@ -236,6 +415,7 @@ const Activities = () => {
                             setSleepError('');
                           }}
                           className="log-input"
+                          style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                           required
                         />
                       </div>
@@ -252,6 +432,7 @@ const Activities = () => {
                             setSleepError('');
                           }}
                           className="log-input"
+                          style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                           required
                         />
                       </div>
@@ -280,7 +461,7 @@ const Activities = () => {
                   </div>
                 ) : type === 'feeding' ? (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Milk size={28} color="#4a3a26" />
                       <span>{mode === 'schedule' ? 'schedule feeding' : 'feeding'}</span>
                     </div>
@@ -294,7 +475,10 @@ const Activities = () => {
                             key={option}
                             type="button"
                             className={`log-option-btn ${feedingType === option ? 'selected' : ''}`}
-                            onClick={() => setFeedingType(option)}
+                            onClick={() => {
+                              setFeedingType(option);
+                              if (option !== 'Breast') setFeedingSide('');
+                            }}
                           >
                             {option}
                           </button>
@@ -311,31 +495,34 @@ const Activities = () => {
                           value={feedingAmount}
                           onChange={(e) => setFeedingAmount(e.target.value)}
                           className="log-input"
+                          style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                           placeholder="e.g. 4"
                           min="0"
                         />
                       </div>
                     </div>
 
-                    <div className="log-field-group">
-                      <label className="log-label">side</label>
-                      <div className="log-option-row">
-                        {['Left', 'Right', 'N/A'].map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className={`log-option-btn ${feedingSide === option ? 'selected' : ''}`}
-                            onClick={() => setFeedingSide(option)}
-                          >
-                            {option}
-                          </button>
-                        ))}
+                    {feedingType === 'Breast' && (
+                      <div className="log-field-group">
+                        <label className="log-label">side</label>
+                        <div className="log-option-row">
+                          {['Left', 'Right', 'N/A'].map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              className={`log-option-btn ${feedingSide === option ? 'selected' : ''}`}
+                              onClick={() => setFeedingSide(option)}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ) : type === 'diaper' ? (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Baby size={28} color="#4a3a26" />
                       <span>{mode === 'schedule' ? 'schedule diaper change' : 'diaper change'}</span>
                     </div>
@@ -359,27 +546,65 @@ const Activities = () => {
                   </div>
                 ) : (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <span>
                         {mode === 'schedule'
                           ? (type === 'mood' ? 'schedule mood logging' : `schedule ${typeLabel}`)
                           : typeLabel}
                       </span>
                     </div>
-                    <input
-                      type="text"
-                      className="empty-msg-light activity-input"
-                      placeholder="Enter details"
-                      value={value}
-                      onChange={(e) => setValue(e.target.value)}
-                      required
-                    />
+                    {mode !== 'schedule' && type === 'playtime' && (
+                      <div className="log-field-group">
+                        <p className="log-form-subtitle" style={{ textAlign: "center", margin: "0 0 12px" }}>did playtime happen today?</p>
+                        <div className="log-option-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, width: "100%" }}>
+                          {PLAYTIME_OPTIONS.map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              style={{ width: "100%", padding: "14px 8px", whiteSpace: "nowrap", fontSize: "0.95rem" }}
+                              className={`log-option-btn ${value === option ? 'selected' : ''}`}
+                              onClick={() => setValue(option)}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {mode !== 'schedule' && type === 'mood' && (
+                      <div className="log-field-group">
+                        <label className="log-label">how are they feeling?</label>
+                        <div className="log-option-row" style={{ flexWrap: 'wrap' }}>
+                          {MOOD_OPTIONS.map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              className={`log-option-btn ${moodChoice === option ? 'selected' : ''}`}
+                              onClick={() => setMoodChoice(option)}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                        {moodChoice === 'other' && (
+                          <textarea
+                            className="empty-msg-light activity-input"
+                            placeholder="write your own notes"
+                            value={moodNote}
+                            onChange={(e) => setMoodNote(e.target.value)}
+                            rows={3}
+                            style={{ marginTop: 10, resize: 'vertical' }}
+                            required
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {mode === 'schedule' && (
                   <div className="log-form-container">
-                    <div className="log-form-title">
+                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Calendar size={26} color="#4a3a26" />
                       <span>schedule</span>
                     </div>
@@ -414,6 +639,7 @@ const Activities = () => {
                             value={scheduleDate}
                             onChange={(e) => setScheduleDate(e.target.value)}
                             className="log-input"
+                            style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                             required
                           />
                         </div>
@@ -447,6 +673,7 @@ const Activities = () => {
                           value={scheduleTime}
                           onChange={(e) => setScheduleTime(e.target.value)}
                           className="log-input"
+                          style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
                           required
                         />
                       </div>
@@ -455,9 +682,16 @@ const Activities = () => {
                 )}
               </div>
 
-              <button type="submit" className="glass-card save-btn-card save-btn-card--activities">
+              {submitError && (
+                <div className="sleep-warning" role="alert">
+                  <AlertTriangle size={18} />
+                  <span>{submitError}</span>
+                </div>
+              )}
+
+              <button type="submit" className="glass-card save-btn-card save-btn-card--activities" disabled={submitting}>
                 <Save size={20} />
-                <span>{mode === 'schedule' ? 'save schedule' : 'save entry'}</span>
+                <span>{submitting ? 'saving…' : (mode === 'schedule' ? 'save schedule' : 'save entry')}</span>
               </button>
 
               <button type="button" className="activities-cancel-btn" onClick={handleBack}>
@@ -468,6 +702,66 @@ const Activities = () => {
 
         </form>
       </div>
+
+      {duplicateEntry && (
+        <div className="duplicate-overlay">
+          <div
+            className="duplicate-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="duplicate-title"
+            aria-describedby="duplicate-description"
+          >
+            <h2 id="duplicate-title">Duplicate Entry Detected</h2>
+
+            <p id="duplicate-description">
+              Was this activity already logged? A similar entry for this
+              child was recorded within the past 15 minutes.
+            </p>
+
+            <div className="duplicate-details">
+              <p>
+                <strong>Activity:</strong> {duplicateEntry.activityType}
+              </p>
+              <p>
+                <strong>User:</strong> {duplicateEntry.username}
+                {duplicateEntry.role ? ` (${duplicateEntry.role})` : ''}
+              </p>
+              <p>
+                <strong>Time:</strong>{' '}
+                {new Date(duplicateEntry.timestamp).toLocaleString()}
+              </p>
+            </div>
+
+            <p><strong>Are you sure you want to keep this record?</strong></p>
+
+            {submitError && (
+              <p className="duplicate-error" role="alert">
+                {submitError}
+              </p>
+            )}
+
+            <div className="duplicate-actions">
+              <button
+                type="button"
+                onClick={handleKeepDuplicate}
+                disabled={submitting}
+              >
+                {submitting ? 'Saving…' : 'Keep'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCancelDuplicate}
+                disabled={submitting}
+                autoFocus
+              >
+                Cancel Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };

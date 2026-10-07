@@ -6,6 +6,17 @@ import "../../styling/components/habitats.css";
 import { DEFAULT_MODEL } from "../../constants/avatars";
 import { useGroundedOffset, seededRand } from "./habitatUtils";
 
+function HideWhenAnimated({ children }) {
+  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+  React.useEffect(() => {
+    const onChange = (e) => setHidden(!!e.detail?.active);
+    window.addEventListener("mood-animation", onChange);
+    return () => window.removeEventListener("mood-animation", onChange);
+  }, []);
+  return hidden ? null : children;
+}
+
+
 function ContactShadow({ position = [0, 0], radius = 0.4, opacity = 0.18 }) {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[position[0], 0.018, position[1]]}>
@@ -1309,9 +1320,9 @@ const BunnyHabitat3D = ({ characterModel, showCharacter = true }) => {
           <Flowers />
           <Mushrooms />
           {showCharacter && (
-            <BunnyErrorBoundary position={BUNNY_HOME_POSITION}>
+            <HideWhenAnimated><BunnyErrorBoundary position={BUNNY_HOME_POSITION}>
               <IdleBunny modelPath={characterModel} homePosition={BUNNY_HOME_POSITION} onHop={addPoof} scale={BUNNY_SCALE} />
-            </BunnyErrorBoundary>
+            </BunnyErrorBoundary></HideWhenAnimated>
           )}
         </React.Suspense>
       </Canvas>

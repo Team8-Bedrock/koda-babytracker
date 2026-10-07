@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import "../../styling/pages/setUp.css";
 import { AVATARS } from "../../constants/avatars";
-import { ChevronLeft, MapPin, Pointer } from "lucide-react";
+import { ChevronLeft, MapPin, Pointer, Leaf } from "lucide-react";
 import AvatarHabitatBackdrop from "../../components/AvatarHabitatBackdrop";
 
 
 const AvatarSelection = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAddChildMode = location.state?.mode === "addChild";
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [modelLoading, setModelLoading] = useState(true);
   const mountRef = useRef(null);
@@ -185,7 +187,7 @@ const AvatarSelection = () => {
   const handleConfirm = () => {
     bounceStart.current = Date.now();
     setTimeout(() => {
-      navigate("/childRegistration", { state: { avatar: selected.id } });
+      navigate("/childRegistration", { state: { avatar: selected.id, mode: location.state?.mode } });
     }, 420);
   };
 
@@ -193,7 +195,10 @@ const AvatarSelection = () => {
     <div className="setup-container setup-container--habitat">
       <AvatarHabitatBackdrop avatarId={selected.id} />
 
-      <button className="setup-back setup-back--on-habitat" onClick={() => navigate("/registering")}>
+      <button
+        className="setup-back setup-back--on-habitat"
+        onClick={() => navigate(isAddChildMode ? "/account" : "/registering")}
+      >
 
         <ChevronLeft size={18} /> back
       </button>
@@ -223,11 +228,13 @@ const AvatarSelection = () => {
           <div className="setup-dot active" />
           <div className="setup-dot" />
         </div>
-        <h1 className="setup-title avatar-select-heading">Who will represent your little one? 🍃</h1>
-        <p key={selected.id} className="avatar-habitat-label">
-          <MapPin size={13} strokeWidth={2.5} />
-          <span>{selected.habitat}</span>
-        </p>
+        <div className="avatar-select-header">
+          <h1 className="setup-title avatar-select-heading">Who will represent your little one? <Leaf className="btn-leaf" /></h1>
+          <p key={selected.id} className="avatar-habitat-label">
+            <MapPin size={13} strokeWidth={2.5} />
+            <span>{selected.habitat}</span>
+          </p>
+        </div>
 
 
         {/* 3D character stage */}
@@ -271,14 +278,18 @@ const AvatarSelection = () => {
           ))}
         </div>
 
-        <button className="setup-btn-primary" onClick={handleConfirm}>
-          Confirm
-        </button>
+        <div className="avatar-select-actions">
+          <button className="setup-btn-primary" onClick={handleConfirm}>
+            Confirm
+          </button>
 
-        <p className="setup-footer">
-          Already have a child profile?{" "}
-          <a onClick={() => navigate("/login")}>Join here</a>
-        </p>
+          {!isAddChildMode && (
+            <p className="setup-footer">
+              Already have an account?{" "}
+              <a onClick={() => navigate("/login")}>Log in</a>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

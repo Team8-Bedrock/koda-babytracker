@@ -4,6 +4,17 @@ import { useGLTF } from "@react-three/drei";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
+function HideWhenAnimated({ children }) {
+  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+  React.useEffect(() => {
+    const onChange = (e) => setHidden(!!e.detail?.active);
+    window.addEventListener("mood-animation", onChange);
+    return () => window.removeEventListener("mood-animation", onChange);
+  }, []);
+  return hidden ? null : children;
+}
+
+
 const PANDA_HEIGHT = 0.3;
 const PANDA_POSITION = [0.02, 0.74];
 const PANDA_MODEL_URL = "/models/characters/panda/panda.glb";
@@ -827,9 +838,9 @@ export function PandaHabitat3D() {
           {puffs.map((p) => (
             <LeafPuff key={p.id} position={p.position} onDone={() => removePuff(p.id)} />
           ))}
-          <PandaErrorBoundary position={PANDA_POSITION} onMunch={addPuff}>
+          <HideWhenAnimated><PandaErrorBoundary position={PANDA_POSITION} onMunch={addPuff}>
             <Panda modelUrl={PANDA_MODEL_URL} position={PANDA_POSITION} onMunch={addPuff} />
-          </PandaErrorBoundary>
+          </PandaErrorBoundary></HideWhenAnimated>
         </group>
       </Suspense>
     </Canvas>

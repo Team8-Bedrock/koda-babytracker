@@ -1,17 +1,17 @@
-// Account settings page
-// what needs to be done:
-// 1. needs to be functional (have the email that was registered show up and actually save on the backend, reset password, etc.)
-// 2. ui/ux clean up 
-// 3. habitat isnt showing on the page for some reason
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { User, Users, Baby, Lock, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { User, Users, Baby, ChevronRight, Lock, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import '../styling/global/App.css';
 import '../styling/pages/accountSettings.css';
+import '../styling/pages/setUp.css';
 import { API_URL } from '../config';
 import Layout from '../components/Layout';
 import { getSelectedChildForUser } from '../utils/authStorage';
+import CaregiverLinkPanel from '../components/settings/CaregiverLinkPanel';
+import CaregiverManagementPanel from '../components/settings/CaregiverManagementPanel';
+import ChildProfilePicker from '../components/settings/ChildProfilePicker';
+import DarkModeToggle from '../components/DarkModeToggle';
 
 const CollapseRow = ({ open, children, topGap = false }) => (
   <div
@@ -25,11 +25,21 @@ const CollapseRow = ({ open, children, topGap = false }) => (
 
 const AccountSettings = () => {
   const navigate = useNavigate();
-  const email = localStorage.getItem('email') || '';
+  const [email, setEmail] = useState('');
   const [selectedChild, setSelectedChild] = useState(null);
-  const [isCaregiver, setIsCaregiver] = useState(false);
+  const [role, setRole] = useState(null);
 
   const [category, setCategory] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('koda-dark-mode') === 'true');
+
+  const toggleDarkMode = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('koda-dark-mode', String(next));
+      window.dispatchEvent(new CustomEvent('koda-dark-mode', { detail: { isDarkMode: next } }));
+      return next;
+    });
+  };
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -48,7 +58,8 @@ const AccountSettings = () => {
     })
       .then((response) => (response.ok ? response.json() : null))
       .then((user) => {
-        setIsCaregiver(user?.role === 'caregiver');
+        setRole(user?.role || 'parent');
+        setEmail(user?.email || '');
         setAccessChecked(true);
       })
       .catch(() => setAccessChecked(true));
@@ -56,11 +67,12 @@ const AccountSettings = () => {
 
   if (!accessChecked) return null;
 
+  const isCaregiver = role === 'caregiver';
   const childName = selectedChild?.name || 'Gracie';
 
   const panelTitles = {
     account: 'account settings',
-    caretaker: 'caretaker settings',
+    caretaker: isCaregiver ? 'link to a parent' : 'caregiver settings',
     baby: `${childName}'s settings`,
   };
 
@@ -142,6 +154,7 @@ const AccountSettings = () => {
 
                   <div className="account-panel-body">
                     <div>
+                      <label className="account-field-label">email</label>
                       <p className="empty-msg-light account-empty-msg">
                         {email || 'no email on file'}
                       </p>
@@ -195,10 +208,6 @@ const AccountSettings = () => {
                       </form>
                     </div>
 
-                    <button type="button" className="glass-card save-btn-card" onClick={handleLogout}>
-                      <LogOut size={20} />
-                      <span>log out</span>
-                    </button>
                   </div>
 
                   <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
@@ -206,74 +215,104 @@ const AccountSettings = () => {
                   </button>
                 </div>
               ) : (
-                <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('account')}>
-                  <User size={20} />
-                  <span>account settings</span>
+                <button type="button" className="account-menu-btn" onClick={() => openCategory('account')}>
+                  <span className="account-menu-icon"><User size={20} /></span>
+                  <span className="account-menu-label">account settings</span>
+                  <ChevronRight size={20} className="account-menu-chevron" />
+                </button>
+              )}
+            </CollapseRow>
+
+            <CollapseRow open={category === null || category === 'caretaker'}>
+              {category === 'caretaker' ? (
+                <div className="glass-card account-expanded-card">
+                  <div className="card-header account-card-header--flush">
+                    {panelIcons.caretaker}
+                    <span>{panelTitles.caretaker}</span>
+                  </div>
+
+                  {isCaregiver ? <CaregiverLinkPanel /> : <CaregiverManagementPanel />}
+
+                  <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
+                    show less
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="account-menu-btn" onClick={() => openCategory('caretaker')}>
+                  <span className="account-menu-icon"><Users size={20} /></span>
+                  <span className="account-menu-label">{panelTitles.caretaker}</span>
+                  <ChevronRight size={20} className="account-menu-chevron" />
                 </button>
               )}
             </CollapseRow>
 
             {!isCaregiver && (
-              <>
-                <CollapseRow open={category === null || category === 'caretaker'}>
-                  {category === 'caretaker' ? (
-                    <div className="glass-card account-expanded-card">
-                      <div className="card-header account-card-header--flush">
-                        {panelIcons.caretaker}
-                        <span>{panelTitles.caretaker}</span>
-                      </div>
-
-                      <p className="empty-msg-light account-empty-msg--panel">
-                        caretaker settings are coming soon.
-                      </p>
-
-                      <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
-                        show less
-                      </button>
+              <CollapseRow open={category === null || category === 'baby'}>
+                {category === 'baby' ? (
+                  <div className="glass-card account-expanded-card">
+                    <div className="card-header account-card-header--flush">
+                      {panelIcons.baby}
+                      <span>{panelTitles.baby}</span>
                     </div>
-                  ) : (
-                    <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('caretaker')}>
-                      <Users size={20} />
-                      <span>caretaker settings</span>
+
+                    <ChildProfilePicker />
+
+                    <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
+                      show less
                     </button>
-                  )}
-                </CollapseRow>
-
-                <CollapseRow open={category === null || category === 'baby'}>
-                  {category === 'baby' ? (
-                    <div className="glass-card account-expanded-card">
-                      <div className="card-header account-card-header--flush">
-                        {panelIcons.baby}
-                        <span>{panelTitles.baby}</span>
-                      </div>
-
-                      <div className="account-baby-panel-body">
-                        <button
-                          type="button"
-                          className="glass-card save-btn-card"
-                          onClick={() => navigate('/babysettings')}
-                        >
-                          <Baby size={20} />
-                          <span>go to {childName}'s settings</span>
-                        </button>
-                      </div>
-
-                      <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
-                        show less
-                      </button>
-                    </div>
-                  ) : (
-                    <button type="button" className="glass-card save-btn-card" onClick={() => openCategory('baby')}>
-                      <Baby size={20} />
-                      <span>{childName}'s settings</span>
-                    </button>
-                  )}
-                </CollapseRow>
-              </>
+                  </div>
+                ) : (
+                  <button type="button" className="account-menu-btn" onClick={() => openCategory('baby')}>
+                    <span className="account-menu-icon"><Baby size={20} /></span>
+                    <span className="account-menu-label">{childName}'s settings</span>
+                    <ChevronRight size={20} className="account-menu-chevron" />
+                  </button>
+                )}
+              </CollapseRow>
             )}
+
+            <CollapseRow open={category === null}>
+              <style>{`.koda-sky-card .dm-toggle{position:relative!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;margin:0!important;transform:none!important}@keyframes kodaTwinkle{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.15)}}@keyframes kodaCloud{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}`}</style>
+              <div
+                className="koda-sky-card"
+                style={{
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: '14px 18px',
+                  borderRadius: 22,
+                  background: isDarkMode ? 'linear-gradient(135deg, #2b3a5c, #4b4f86)' : 'linear-gradient(135deg, #cfeaff, #fff1c9)',
+                  color: isDarkMode ? '#f3efff' : '#315b3d',
+                  boxShadow: '0 8px 20px rgba(20,45,30,0.15)',
+                  transition: 'background 0.5s ease, color 0.5s ease',
+                }}
+              >
+                {(isDarkMode ? [[14, 10], [70, 70], [140, 18], [200, 62], [46, 48]] : []).map(([x, y], i) => (
+                  <span key={i} style={{ position: 'absolute', left: x, top: y, width: 4, height: 4, borderRadius: 999, background: '#fffbe0', animation: `kodaTwinkle 1.8s ease-in-out ${i * 0.3}s infinite`, pointerEvents: 'none' }} />
+                ))}
+                {!isDarkMode && (
+                  <span style={{ position: 'absolute', left: 120, top: 8, width: 40, height: 14, borderRadius: 999, background: 'rgba(255,255,255,0.8)', animation: 'kodaCloud 4s ease-in-out infinite', pointerEvents: 'none' }} />
+                )}
+                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontWeight: 800, fontSize: 17 }}>{isDarkMode ? 'good night' : 'good morning'}</span>
+                  <span style={{ fontSize: 12, opacity: 0.75 }}>{isDarkMode ? 'night habitat is on' : 'day habitat is on'}</span>
+                </div>
+                <DarkModeToggle isDarkMode={isDarkMode} onToggle={toggleDarkMode} />
+              </div>
+            </CollapseRow>
 
           </div>
         </div>
+
+        {category === null && (
+          <button type="button" className="setup-btn-primary account-logout-btn" onClick={handleLogout}>
+            <LogOut size={20} />
+            <span>log out</span>
+          </button>
+        )}
 
       </div>
     </Layout>

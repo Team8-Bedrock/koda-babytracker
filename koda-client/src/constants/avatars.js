@@ -5,6 +5,14 @@ export const DEFAULT_MODEL = "/models/characters/bear.glb";
 
 export const AVATARS = [
   {
+    id: "bear",
+    habitat: "Hollow Woods",
+    habitatClass: "habitat-bear",
+    model: "/models/characters/bear/bear.glb",
+    bg: "linear-gradient(180deg, #a8845a 0%, #7a9b5c 100%)",
+    customHabitat: "bear",
+  },
+  {
     id: "frog",
     habitat: "Frog Land",
     habitatClass: "habitat-frog",
@@ -35,14 +43,6 @@ export const AVATARS = [
     model: "/models/characters/koala/koala.glb",
     bg: "linear-gradient(180deg, #8fa8b0 0%, #d9cfc0 100%)",
     customHabitat: "koala",
-  },
-  {
-    id: "bear",
-    habitat: "Hollow Woods",
-    habitatClass: "habitat-bear",
-    model: "/models/characters/bear/bear.glb",
-    bg: "linear-gradient(180deg, #a8845a 0%, #7a9b5c 100%)",
-    customHabitat: "bear",
   },
   {
     id: "fox",

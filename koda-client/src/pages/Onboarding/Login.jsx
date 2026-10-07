@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import "../../styling/pages/setUp.css";
 import { getCurrentUserId, selectedChildStorageKey } from "../../utils/authStorage";
 import { API_URL } from "../../config";
+import PasswordInput from "../../components/PasswordInput";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -64,7 +65,7 @@ const Login = () => {
   };
 
   return (
-    <div className="setup-container">
+    <div className="setup-container setup-container--form">
       <button className="setup-back" onClick={() => navigate("/")}>
         <ChevronLeft size={18} /> back
       </button>
@@ -74,7 +75,14 @@ const Login = () => {
         {[...Array(6)].map((_, i) => <div key={i} className="firefly" />)}
       </div>
 
-      <img src="/koda-logo.png" alt="Koda" className="setup-logo" onError={(e) => { e.target.style.visibility = "hidden"; }} />
+      <div className="logo-nest">
+        <img
+          src="/koda-logo.png"
+          alt="Koda"
+          className="setup-logo"
+          onError={(e) => { e.target.style.visibility = "hidden"; }}
+        />
+      </div>
 
       <div className="setup-card">
         <h1 className="setup-title">Welcome Back</h1>
@@ -92,8 +100,7 @@ const Login = () => {
 
         <div className="setup-field">
           <label>Password</label>
-          <input
-            type="password"
+          <PasswordInput
             placeholder="enter your password"
             value={form.password}
             onChange={set("password")}
@@ -105,18 +112,7 @@ const Login = () => {
         <button className="setup-btn-primary" onClick={handleLogin} disabled={loading}>
           {loading ? "logging in..." : "Login"}
         </button>
-        <button 
-          type="button"
-          style={{ 
-            background: "none", 
-            border: "none", 
-            textDecoration: "underline", 
-            cursor: "pointer", 
-            marginTop: "10px",
-            fontSize: "14px"
-          }}
-          onClick={() => navigate("/forgot-password")}
-        >
+        <button type="button" className="setup-forgot" onClick={() => navigate("/forgot-password")}>
           Forgot Password?
         </button>
 

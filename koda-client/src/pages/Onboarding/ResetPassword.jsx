@@ -33,8 +33,13 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="setup-container">
-      <img src="/assets/koda-logo.png" alt="Koda" className="setup-logo" onError={(e) => { e.target.style.visibility = "hidden"; }} />
+    <div className="setup-container setup-container--form">
+      <img
+        src="/assets/koda-logo.png"
+        alt="Koda"
+        className="setup-logo setup-logo--right"
+        onError={(e) => { e.target.style.visibility = "hidden"; }}
+      />
       <div className="setup-card">
         <h1 className="setup-title">New Password</h1>
         <div className="setup-field">

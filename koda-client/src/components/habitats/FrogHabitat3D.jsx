@@ -6,6 +6,17 @@ import "../../styling/components/habitats.css";
 import { DEFAULT_MODEL } from "../../constants/avatars";
 import { useGroundedOffset, seededRand, drawWrapped } from "./habitatUtils";
 
+function HideWhenAnimated({ children }) {
+  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+  React.useEffect(() => {
+    const onChange = (e) => setHidden(!!e.detail?.active);
+    window.addEventListener("mood-animation", onChange);
+    return () => window.removeEventListener("mood-animation", onChange);
+  }, []);
+  return hidden ? null : children;
+}
+
+
 const GRASS_TEX_SIZE = 512;
 function buildShoreTexture() {
   const canvas = document.createElement("canvas");
@@ -1362,9 +1373,9 @@ const FrogHabitat3D = ({ characterModel, showCharacter = true }) => {
             <Flowers />
             <GrassTufts />
             {showCharacter && (
-              <CharacterErrorBoundary position={HOME_PAD_POSITION}>
+              <HideWhenAnimated><CharacterErrorBoundary position={HOME_PAD_POSITION}>
                 <IdleCharacter modelPath={characterModel} homePosition={HOME_PAD_POSITION} onRipple={addRipple} scale={2.75} />
-              </CharacterErrorBoundary>
+              </CharacterErrorBoundary></HideWhenAnimated>
             )}
           </group>
         </React.Suspense>

@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 const Child = require("../models/Child");
-const User = require("../models/user");
 
 const authMiddleware = (req, res, next) => {
   const token = req.header("x-auth-token");
@@ -55,38 +54,6 @@ router.get("/", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
-  }
-});
-
-// Link an existing caregiver account to a child owned by the logged-in parent.
-router.post("/:id/caregivers", authMiddleware, async (req, res) => {
-  try {
-    const email = String(req.body.email || "").trim().toLowerCase();
-    if (!email) {
-      return res.status(400).json({ msg: "Caregiver email is required." });
-    }
-
-    const child = await Child.findOne({ _id: req.params.id, userId: req.user.id });
-    if (!child) {
-      return res.status(404).json({ msg: "Child profile not found." });
-    }
-
-    const caregiver = await User.findOne({ email, role: "caregiver" });
-    if (!caregiver) {
-      return res.status(404).json({ msg: "No caregiver account was found for that email." });
-    }
-
-    const alreadyLinked = child.caregiverIds.some((id) => id.toString() === caregiver._id.toString());
-    if (!alreadyLinked) {
-      child.caregiverIds.push(caregiver._id);
-      await child.save();
-    }
-
-    const updatedChild = await Child.findById(child._id).populate("caregiverIds", "username email role");
-    res.json(updatedChild);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Could not link caregiver." });
   }
 });
 

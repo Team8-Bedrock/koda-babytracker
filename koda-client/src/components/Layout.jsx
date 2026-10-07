@@ -1,7 +1,4 @@
-// universal header (logo/child-name pill/bell), page content, and the bottom nav bar. 
-// what needs to be fixed:
-// 1. headers for some reason are weirdly different on account settings, the log history page and the analytics page 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Bell,
@@ -11,32 +8,70 @@ import {
   MessageCircle,
   Settings as SettingsIcon,
   ChevronDown,
+  CheckCircle2,
 } from "lucide-react";
-import { getSelectedChildForUser } from "../utils/authStorage";
+import { getSelectedChildForUser, setSelectedChildForUser } from "../utils/authStorage";
 import { getPageLabel, getPillFontSize } from "../constants/pageLabels";
+import { API_URL } from "../config";
 import HabitatBackground from "./HabitatBackground";
 import NavIconButton from "./NavIconButton";
-import DarkModeToggle from "./DarkModeToggle";
+import MoodBuddy from "./MoodBuddy";
 import "../styling/global/layout.css";
 
 const Layout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [selectedChild, setSelectedChild] = useState(null);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
+  const [childOptions, setChildOptions] = useState([]);
+  const [headerLabel, setHeaderLabel] = useState("");
+  const switcherRef = useRef(null);
   const isActivityLogPage = location.pathname.toLowerCase() === "/add-activity";
 
   useEffect(() => {
     const savedChild = getSelectedChildForUser();
     if (savedChild) setSelectedChild(savedChild);
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    fetch(`${API_URL}/api/children`, { headers: { "x-auth-token": token } })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setChildOptions(Array.isArray(data) ? data : []))
+      .catch(() => setChildOptions([]));
   }, []);
 
-  const pageLabel = getPageLabel(location.pathname, selectedChild?.name || "Gracie");
+  useEffect(() => {
+    if (!isSwitcherOpen) return;
+
+    const onClickOutside = (event) => {
+      if (switcherRef.current && !switcherRef.current.contains(event.target)) {
+        setIsSwitcherOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [isSwitcherOpen]);
+
+  useEffect(() => {
+    const updateHeader = (event) => setHeaderLabel(event.detail?.label || "");
+    window.addEventListener("koda-header-label", updateHeader);
+    return () => window.removeEventListener("koda-header-label", updateHeader);
+  }, []);
+
+  const pageLabel = headerLabel || getPageLabel(location.pathname, selectedChild?.name || "Gracie");
+
+  const handleSelectChild = (child) => {
+    setSelectedChildForUser(child);
+    setIsSwitcherOpen(false);
+    window.location.reload();
+  };
 
   return (
     <div className="layout-mobile-frame">
       <HabitatBackground />
+      {selectedChild ? <MoodBuddy child={selectedChild} /> : null}
 
       <header className="layout-header">
         <button
@@ -62,14 +97,36 @@ const Layout = ({ children }) => {
             Activity Log
           </div>
         ) : (
-          <button
-            className="name-dropdown-btn"
-            onClick={() => console.log("Open Child Switcher")}
-            style={{ "--pill-font-size": `${getPillFontSize(pageLabel)}px` }}
-          >
-            <span>{pageLabel}</span>
-            <ChevronDown size={14} strokeWidth={2.5} className="layout-name-pill-chevron" />
-          </button>
+          <div className="child-switcher" ref={switcherRef}>
+            <button
+              className="name-dropdown-btn"
+              onClick={() => setIsSwitcherOpen((prev) => !prev)}
+              style={{ "--pill-font-size": `${getPillFontSize(pageLabel)}px` }}
+            >
+              <span>{pageLabel}</span>
+              <ChevronDown size={14} strokeWidth={2.5} className="layout-name-pill-chevron" />
+            </button>
+
+            {isSwitcherOpen && (
+              <div className="child-switcher-menu">
+                {childOptions.length > 0 ? (
+                  childOptions.map((child) => (
+                    <button
+                      key={child._id}
+                      type="button"
+                      className={`child-switcher-item ${selectedChild?._id === child._id ? "child-switcher-item--active" : ""}`}
+                      onClick={() => handleSelectChild(child)}
+                    >
+                      <span>{child.name}</span>
+                      {selectedChild?._id === child._id && <CheckCircle2 size={14} />}
+                    </button>
+                  ))
+                ) : (
+                  <p className="child-switcher-empty">no child profiles yet</p>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         <NavIconButton
@@ -81,17 +138,14 @@ const Layout = ({ children }) => {
         />
       </header>
 
+
       {children}
 
-      <DarkModeToggle
-        isDarkMode={isDarkMode}
-        onToggle={() => setIsDarkMode((prev) => !prev)}
-      />
 
       <nav className="layout-bottom-nav">
         <NavIconButton icon={Home} onClick={() => navigate("/ParentDashboard")} />
         <NavIconButton icon={PlusSquare} onClick={() => navigate("/add-activity")} />
-        <NavIconButton icon={BarChart2} strokeWidth={2} onClick={() => navigate("/analytics")} />
+        <NavIconButton icon={BarChart2} strokeWidth={2} onClick={() => navigate("/history")} />
         <NavIconButton icon={MessageCircle} onClick={() => navigate("/chat")} />
         <NavIconButton icon={SettingsIcon} onClick={() => navigate("/account")} />
       </nav>

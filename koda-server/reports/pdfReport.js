@@ -31,7 +31,7 @@ const drawReportHeader = (doc, range) => {
             fit: [80, 55]
         }
     );
-    
+
     const pageWidth = doc.page.width;
     doc
         .fillColor('#222222')
@@ -82,8 +82,6 @@ const drawChildInformation = (doc, childInfo, reportInfo) => {
         ['Name', childInfo.name],
         ['Date of Birth', childInfo.dob],
         ['Age', childInfo.age],
-        ['Weight', childInfo.weight],
-        ['Allergies', childInfo.allergies]
     ];
 
     let y = startY + 25;
@@ -134,11 +132,11 @@ const drawChildInformation = (doc, childInfo, reportInfo) => {
 
     doc
         .strokeColor('#D9D9D9')
-        .moveTo(48, 245)
-        .lineTo(564, 245)
+        .moveTo(48, 205)
+        .lineTo(564, 205)
         .stroke();
 
-    doc.y = 260;
+    doc.y = 220;
 };
 
 // Draws a short summary of the child's logged activity
@@ -913,6 +911,270 @@ const drawChartsPanel = (
     doc.y = y + totalHeight + 10;
 };
 
+const drawActivityDetails = (doc, { feedings, sleeps, diapers }, range, period) => {
+    const green = '#315B3D';
+    const purple = '#8A7BC2';
+    const orange = '#E67E22';
+    const border = '#D9E2DA';
+
+    const totalSleep = sleeps.reduce(
+        (sum, item) => sum + (Number(item.duration) || 0), 0
+    );
+    const longestSleep = Math.max(
+        0, ...sleeps.map((item) => Number(item.duration) || 0)
+    );
+    const feedingAmount = (type) => feedings
+        .filter((item) => item.type === type)
+        .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+    const rows = [
+        ...feedings.map((item) => ({
+            time: item.timestamp,
+            activity: 'Feeding',
+            color: green,
+            details: [
+                item.type,
+                item.amount != null ? `${item.amount} oz` : null,
+                item.side && item.side !== 'N/A' ? `${item.side} side` : null
+            ].filter(Boolean).join(', ')
+        })),
+        ...sleeps.map((item) => ({
+            time: item.timestamp,
+            activity: 'Sleep',
+            color: purple,
+            details: [
+                item.type || 'Sleep',
+                `${formatMinutesShort(Math.round(Number(item.duration) || 0))}`,
+                item.quality
+            ].filter(Boolean).join(', ')
+        })),
+        ...diapers.map((item) => ({
+            time: item.timestamp,
+            activity: 'Diaper',
+            color: orange,
+            details: item.type || 'Not specified'
+        }))
+    ].sort((a, b) => new Date(b.time) - new Date(a.time));
+
+    const drawFooter = (pageNumber) => {
+        doc.strokeColor(border)
+            .moveTo(48, 678).lineTo(564, 678).stroke();
+
+        doc.fillColor(green).font('Helvetica-Bold').fontSize(8)
+            .text('Thank you for using Koda Baby Tracker.', 48, 691, {
+                width: 240
+            });
+
+        doc.fillColor('#666666').font('Helvetica').fontSize(7)
+            .text(
+                "Your logging helps show your child's routine over time.",
+                48, 706, { width: 240 }
+            );
+
+        doc.fillColor(purple).font('Helvetica-Bold').fontSize(8)
+            .text('Interpretation disclaimer', 315, 691);
+
+        doc.fillColor('#666666').font('Helvetica').fontSize(7)
+            .text(
+                'This report summarizes logged data and is not a medical diagnosis. Consult your pediatrician for medical concerns.',
+                315, 706, { width: 245 }
+            );
+
+        doc.text(`Page ${pageNumber}`, 505, 740, {
+            width: 59,
+            align: 'right',
+            lineBreak: false
+        });
+    };
+
+    const drawTableHeader = (y, continued = false) => {
+        const tableWidth = 516;
+
+        doc.fillColor(green).font('Helvetica-Bold').fontSize(10)
+            .text(
+                continued
+                    ? 'DETAILED ACTIVITY LOG (CONTINUED)'
+                    : 'DETAILED ACTIVITY LOG',
+                48, y
+            );
+
+        const headerY = y + 24;
+        doc.roundedRect(48, headerY, tableWidth, 24, 3)
+            .fill('#F7F9F7');
+
+        doc.fillColor(green).font('Helvetica-Bold').fontSize(7);
+
+        if (range === 'week') {
+            doc.text('TIME', 55, headerY + 8)
+                .text('ACTIVITY', 155, headerY + 8)
+                .text('DETAILS', 263, headerY + 8);
+        } else {
+            doc.text('DATE', 55, headerY + 8)
+                .text('TIME', 129, headerY + 8)
+                .text('ACTIVITY', 188, headerY + 8)
+                .text('DETAILS', 263, headerY + 8);
+        }
+
+        return headerY + 24;
+    };
+
+    // Highlights and feeding summary
+    doc.fillColor(green).font('Helvetica-Bold').fontSize(10)
+        .text('CLINICAL HIGHLIGHTS', 48, 117)
+        .text('FEEDING SUMMARY', 310, 117);
+
+    doc.strokeColor(border)
+        .moveTo(48, 137).lineTo(292, 137).stroke()
+        .moveTo(310, 137).lineTo(564, 137).stroke();
+
+    const highlights = [
+        `Average sleep: ${formatMinutesShort(Math.round(totalSleep / (range === 'week' ? 7 : 1)))} per day.`,
+        `Longest sleep session: ${formatMinutesShort(longestSleep)}.`,
+        `${feedings.length} feeding entries logged.`,
+        `${diapers.length} diaper changes logged.`
+    ];
+
+    highlights.forEach((line, index) => {
+        doc.fillColor('#333333').font('Helvetica').fontSize(8)
+            .text(`•  ${line}`, 52, 150 + index * 20, {
+                width: 238
+            });
+    });
+
+    const types = ['Breast', 'Bottle', 'Solids'];
+    types.forEach((type, index) => {
+        const x = 310 + index * 85;
+
+        doc.roundedRect(x, 152, 79, 62, 4)
+            .strokeColor(border).stroke();
+
+        doc.fillColor('#555555').font('Helvetica-Bold').fontSize(8)
+            .text(type, x + 4, 163, {
+                width: 71,
+                align: 'center'
+            });
+
+        doc.fillColor(green).fontSize(11)
+            .text(`${feedingAmount(type)} oz`, x + 4, 184, {
+                width: 71,
+                align: 'center'
+            });
+    });
+
+    doc.fillColor('#555555').font('Helvetica').fontSize(8)
+        .text(`Total recorded: ${feedings.reduce(
+            (sum, item) => sum + (Number(item.amount) || 0), 0
+        )} oz`, 310, 222, { width: 254 });
+
+    doc.strokeColor(border)
+        .moveTo(48, 247).lineTo(564, 247).stroke();
+
+    let pageNumber = 2;
+    let continued = false;
+    let y = drawTableHeader(258);
+
+    if (rows.length === 0) {
+        doc.fillColor('#666666').font('Helvetica').fontSize(8)
+            .text('No activities logged during this period.', 55, y + 12, {
+                width: 300
+            });
+    }
+
+    let lastDay = null;
+
+    for (const [index, row] of rows.entries()) {
+        const date = new Date(row.time);
+        const dayKey = date.toDateString();
+        const dayHeadingHeight =
+            range === 'week' && dayKey !== lastDay ? 25 : 0;
+
+        doc.font('Helvetica').fontSize(7.5);
+        const rowHeight = Math.max(
+            25,
+            doc.heightOfString(row.details, {
+                width: 294,
+                lineGap: 2
+            }) + 10
+        );
+
+        const notesSpace = index === rows.length - 1 ? 124 : 0;
+
+        if (y + dayHeadingHeight + rowHeight + notesSpace > 650) {
+            drawFooter(pageNumber);
+            doc.addPage();
+            drawReportHeader(doc, range);
+            pageNumber += 1;
+            continued = true;
+            y = drawTableHeader(117, true);
+            lastDay = null; // Repeat the date heading if a day spans pages.
+        }
+
+        if (range === 'week' && dayKey !== lastDay) {
+            doc.rect(48, y, 516, 23).fill('#EDF4EE');
+            doc.fillColor(green).font('Helvetica-Bold').fontSize(8)
+                .text(
+                    date.toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric'
+                    }),
+                    55, y + 6
+                );
+            y += 25;
+            lastDay = dayKey;
+        }
+
+        if (range === 'day') {
+            doc.fillColor('#333333').font('Helvetica').fontSize(7)
+                .text(date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                }), 55, y + 7, { width: 69 });
+        }
+
+        doc.fillColor('#333333').font('Helvetica').fontSize(7)
+            .text(date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit'
+            }), range === 'week' ? 55 : 129, y + 7, {
+                width: range === 'week' ? 90 : 54
+            });
+
+        doc.fillColor(row.color).font('Helvetica-Bold').fontSize(7.5)
+            .text(row.activity, range === 'week' ? 155 : 188, y + 7, {
+                width: range === 'week' ? 95 : 68
+            });
+
+        doc.fillColor('#333333').font('Helvetica').fontSize(7.5)
+            .text(row.details, 263, y + 7, {
+                width: 294,
+                lineGap: 2
+            });
+
+        y += rowHeight;
+        doc.strokeColor('#E5E5E5')
+            .moveTo(48, y).lineTo(564, y).stroke();
+    }
+
+    const notesY = y + (rows.length === 0 ? 52 : 14);
+
+    doc.roundedRect(48, notesY, 516, 110, 6)
+        .strokeColor(border).stroke();
+
+    doc.fillColor(green).font('Helvetica-Bold').fontSize(9)
+        .text('NOTES (Caregiver / Pediatrician)', 60, notesY + 13);
+
+    for (let i = 0; i < 4; i++) {
+        const lineY = notesY + 42 + i * 16;
+        doc.strokeColor('#D9D9D9')
+            .moveTo(60, lineY).lineTo(552, lineY).stroke();
+    }
+
+    drawFooter(pageNumber);
+};
+
 module.exports = {
     drawReportHeader,
     drawChildInformation,
@@ -921,5 +1183,6 @@ module.exports = {
     drawSleepChart,
     drawFeedingChart,
     drawDiaperSummary,
-    drawChartsPanel
+    drawChartsPanel,
+    drawActivityDetails
 };

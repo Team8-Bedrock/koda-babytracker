@@ -61,3 +61,33 @@
 .collapsible-card-body--mini {
   margin-top: 8px;
 }
+
+.collapsible-card {
+  background: var(--k-card-bg);
+  backdrop-filter: var(--k-blur);
+  border: 1.5px solid var(--k-sage);
+  border-radius: var(--k-radius-card);
+  box-shadow: var(--k-card-shadow);
+  color: var(--k-ink);
+  padding: var(--k-pad);
+}
+
+.collapsible-mini-title {
+  font-family: var(--k-font-title);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--k-ink);
+}
+
+.collapsible-toggle-link {
+  font-family: var(--k-font-body);
+  font-size: var(--k-size-small);
+  font-weight: 700;
+  color: var(--k-ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.collapsible-toggle-link:hover {
+  color: var(--k-deep);
+}

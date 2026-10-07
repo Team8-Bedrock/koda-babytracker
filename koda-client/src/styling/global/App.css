@@ -1,4 +1,3 @@
-/* Global styles: font imports, resets, and shared card/button classes (glass-card, save-btn-card) used across AccountSettings, Activities, HistoryPage, and AnalyticsPage. */
 @import url("https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Londrina+Solid:wght@100;300;400;900&family=Nunito:wght@400;600;700;800;900&display=swap");
 
 * {
@@ -90,4 +89,108 @@ body {
   font-weight: 700;
   color: #4a3a26;
   margin-bottom: 10px;
+}
+
+:root {
+
+  --k-cream: #f5f0e8;
+  --k-cream-soft: #fdfbf7;
+  --k-mist: #dce5d4;
+  --k-sage: #a8c0a0;
+  --k-sage-line: #c9d6c0;
+  --k-deep: #4f7f57;
+  --k-deep-hover: #5a8c62;
+  --k-deep-shadow: #365a3c;
+  --k-ink: #3f6647;
+  --k-ink-soft: #6b8a6f;
+
+
+  --k-card-bg: rgba(245, 240, 232, 0.9);
+  --k-panel-bg: linear-gradient(160deg, rgba(245, 240, 232, 0.82), rgba(220, 229, 212, 0.72));
+  --k-blur: blur(14px) saturate(130%);
+  --k-card-shadow: 0 3px 0 rgba(79, 127, 87, 0.22), 0 8px 18px rgba(47, 70, 52, 0.1);
+
+
+  --k-font-title: "Londrina Solid", cursive;
+  --k-font-body: "Nunito", sans-serif;
+  --k-size-page-title: 26px;
+  --k-size-card-title: 22px;
+  --k-size-button: 21px;
+  --k-size-body: 14.5px;
+  --k-size-small: 12.5px;
+
+
+  --k-radius-panel: 24px;
+  --k-radius-card: 18px;
+  --k-radius-field: 12px;
+  --k-gap: 12px;
+  --k-pad: 16px;
+}
+
+.glass-card,
+.glass-card--translucent {
+  background: var(--k-card-bg);
+  backdrop-filter: var(--k-blur);
+  border: 1.5px solid var(--k-sage);
+  border-radius: var(--k-radius-card);
+  box-shadow: var(--k-card-shadow);
+  color: var(--k-ink);
+  padding: var(--k-pad);
+}
+
+.card-header,
+.history-section-title {
+  font-family: var(--k-font-title);
+  font-size: var(--k-size-card-title);
+  font-weight: 400;
+  color: var(--k-ink);
+  letter-spacing: 0.2px;
+}
+
+.card-header svg {
+  color: var(--k-deep);
+  stroke: var(--k-deep);
+}
+
+.empty-msg-light {
+  font-family: var(--k-font-body);
+  font-size: var(--k-size-body);
+  font-weight: 600;
+  color: var(--k-ink-soft);
+}
+
+.save-btn-card {
+  width: 100%;
+  max-width: none;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: var(--k-deep);
+  border: 1.5px solid #436e4a;
+  box-shadow: 0 4px 0 var(--k-deep-shadow);
+  color: var(--k-cream);
+  font-family: var(--k-font-title);
+  font-size: var(--k-size-button);
+  font-weight: 400;
+}
+
+.save-btn-card span {
+  font-family: var(--k-font-title);
+  font-size: var(--k-size-button);
+  font-weight: 400;
+}
+
+.save-btn-card:hover {
+  background: var(--k-deep-hover);
+}
+
+.save-btn-card:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--k-deep-shadow);
+}
+.card-header *,
+.history-section-title * {
+  font-family: var(--k-font-title);
+  font-size: inherit;
+  font-weight: 400;
+  color: inherit;
 }

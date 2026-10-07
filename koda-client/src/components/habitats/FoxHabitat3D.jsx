@@ -3,6 +3,17 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
+function HideWhenAnimated({ children }) {
+  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+  React.useEffect(() => {
+    const onChange = (e) => setHidden(!!e.detail?.active);
+    window.addEventListener("mood-animation", onChange);
+    return () => window.removeEventListener("mood-animation", onChange);
+  }, []);
+  return hidden ? null : children;
+}
+
+
 const FOX_HEIGHT = 0.3;
 
 const FOX_POSITION = [0.13,2.50];
@@ -699,9 +710,9 @@ export function FoxHabitat3D() {
           {puffs.map((p) => (
             <LeafPuff key={p.id} position={p.position} onDone={() => removePuff(p.id)} />
           ))}
-          <FoxErrorBoundary position={FOX_POSITION} onMunch={addPuff}>
+          <HideWhenAnimated><FoxErrorBoundary position={FOX_POSITION} onMunch={addPuff}>
             <Fox model={FOX_MODEL} position={FOX_POSITION} onMunch={addPuff} />
-          </FoxErrorBoundary>
+          </FoxErrorBoundary></HideWhenAnimated>
         </group>
       </Suspense>
     </Canvas>

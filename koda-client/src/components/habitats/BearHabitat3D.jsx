@@ -6,6 +6,17 @@ import "../../styling/components/habitats.css";
 import { DEFAULT_MODEL } from "../../constants/avatars";
 import { seededRand, drawWrapped } from "./habitatUtils";
 
+function HideWhenAnimated({ children }) {
+  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+  React.useEffect(() => {
+    const onChange = (e) => setHidden(!!e.detail?.active);
+    window.addEventListener("mood-animation", onChange);
+    return () => window.removeEventListener("mood-animation", onChange);
+  }, []);
+  return hidden ? null : children;
+}
+
+
 const BEAR_MODEL = "/models/characters/bear/bear.glb";
 const HOUSE_MODEL = "/models/habitats/house.glb";
 
@@ -13,13 +24,13 @@ const BEAR_HEIGHT = 0.32;
 const BEAR_POSITION = [0.02, 0.72];
 
 const PALETTE = {
-  background: "#558577",
-  fog: "#6b9a8a",
-  sun: "#ffdca6",
+  background: "#9ccbe0",
+  fog: "#cfe8ee",
+  sun: "#fff1d6",
   rim: "#a8d8cc",
-  hemiSky: "#e8f4ea",
-  hemiGround: "#2c4a3e",
-  groundBase: "hsl(140, 30%, 40%)",
+  hemiSky: "#ffffff",
+  hemiGround: "#5f8a6e",
+  groundBase: "hsl(115, 38%, 50%)",
   pine: "#2f6b56",
   pineLight: "#3f8a6a",
   pineDeep: "#255545",
@@ -733,7 +744,7 @@ const BearHabitat3D = ({ characterModel, showCharacter = true, houseModel, useHo
         shadows
         orthographic
         camera={{ position: ISO_POSITION, zoom: ISO_ZOOM, near: 0.1, far: 60 }}
-        gl={{ toneMappingExposure: 1.12 }}
+        gl={{ toneMappingExposure: 1.2 }}
         dpr={[1, 2]}
         style={{ touchAction: "none" }}
         onCreated={({ gl }) => {
@@ -741,12 +752,12 @@ const BearHabitat3D = ({ characterModel, showCharacter = true, houseModel, useHo
         }}
       >
         <color attach="background" args={[PALETTE.background]} />
-        <fog attach="fog" args={[PALETTE.fog, 5, 13]} />
+        <fog attach="fog" args={[PALETTE.fog, 8, 20]} />
 
-        <ambientLight intensity={0.7} color="#f3ecdc" />
+        <ambientLight intensity={0.85} color="#f3ecdc" />
         <directionalLight
           position={[5, 8, 3]}
-          intensity={1.7}
+          intensity={2.1}
           color={PALETTE.sun}
           castShadow
           shadow-mapSize={[2048, 2048]}
@@ -755,8 +766,8 @@ const BearHabitat3D = ({ characterModel, showCharacter = true, houseModel, useHo
           shadow-camera-top={5}
           shadow-camera-bottom={-5}
         />
-        <directionalLight position={[-5, 3, -4]} intensity={0.3} color={PALETTE.rim} />
-        <hemisphereLight args={[PALETTE.hemiSky, PALETTE.hemiGround, 0.85]} />
+        <directionalLight position={[-5, 3, -4]} intensity={0.6} color={PALETTE.rim} />
+        <hemisphereLight args={[PALETTE.hemiSky, PALETTE.hemiGround, 0.95]} />
 
         <Suspense fallback={null}>
           <group position={[0, -0.18, 0]}>
@@ -791,9 +802,9 @@ const BearHabitat3D = ({ characterModel, showCharacter = true, houseModel, useHo
             <Stones />
             <Fireflies />
             {showCharacter && (
-              <BearErrorBoundary position={BEAR_POSITION}>
+              <HideWhenAnimated><BearErrorBoundary position={BEAR_POSITION}>
                 <Bear model={bearModel} position={BEAR_POSITION} />
-              </BearErrorBoundary>
+              </BearErrorBoundary></HideWhenAnimated>
             )}
           </group>
         </Suspense>

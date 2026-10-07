@@ -1,9 +1,10 @@
 // Renders the correct per-avatar 3D habitat scene behind every page
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useGLTF } from "@react-three/drei";
 import { getSelectedChildForUser } from "../utils/authStorage";
 import { getAvatarById, DEFAULT_MODEL } from "../constants/avatars";
+import { API_URL } from "../config";
 import FoxHabitat3D from "./habitats/FoxHabitat3D";
 import FrogHabitat3D from "./habitats/FrogHabitat3D";
 import BunnyHabitat3D from "./habitats/BunnyHabitat3D";
@@ -11,6 +12,7 @@ import PandaHabitat3D from "./habitats/PandaHabitat3D";
 import BearHabitat3D from "./habitats/BearHabitat3D";
 import KoalaHabitat3D from "./habitats/KoalaHabitat3D";
 import "../styling/components/habitatBackground.css";
+import "../styling/pages/setUp.css";
 
 useGLTF.preload(DEFAULT_MODEL);
 useGLTF.preload("/models/feeding.glb");
@@ -23,12 +25,42 @@ const HabitatBackground = () => {
   const selectedChild = getSelectedChildForUser();
   const character = getAvatarById(selectedChild?.avatar);
   const characterModel = character?.model || DEFAULT_MODEL;
+  const [isUnlinkedCaregiver, setIsUnlinkedCaregiver] = useState(false);
 
   const allowFrogHabitat = FROG_HABITAT_PATHS.includes(location.pathname.toLowerCase());
 
   useEffect(() => {
     useGLTF.preload(characterModel);
   }, [characterModel]);
+
+  useEffect(() => {
+    if (character) {
+      setIsUnlinkedCaregiver(false);
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    fetch(`${API_URL}/api/auth/me`, { headers: { "x-auth-token": token } })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((user) => setIsUnlinkedCaregiver(user?.role === "caregiver"))
+      .catch(() => setIsUnlinkedCaregiver(false));
+  }, [character]);
+
+  if (!character && isUnlinkedCaregiver) {
+    return (
+      <div className="habitat-background-container">
+        <div className="setup-container habitat-caregiver-unlinked-bg">
+          <div className="firefly-layer">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="firefly" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="habitat-background-container">
