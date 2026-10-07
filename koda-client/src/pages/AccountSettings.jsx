@@ -211,7 +211,7 @@ const AccountSettings = () => {
                   </div>
 
                   <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
-                    show less
+                    cancel
                   </button>
                 </div>
               ) : (
@@ -234,7 +234,7 @@ const AccountSettings = () => {
                   {isCaregiver ? <CaregiverLinkPanel /> : <CaregiverManagementPanel />}
 
                   <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
-                    show less
+                    cancel
                   </button>
                 </div>
               ) : (
@@ -258,7 +258,7 @@ const AccountSettings = () => {
                     <ChildProfilePicker />
 
                     <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
-                      show less
+                      cancel
                     </button>
                   </div>
                 ) : (
