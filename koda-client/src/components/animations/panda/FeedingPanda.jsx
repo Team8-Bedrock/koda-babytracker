@@ -1,13 +1,78 @@
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
 const LOCAL_REFERENCE_HEIGHT = 1.6;
-const MOUTH = [0, 1.13, 0.5];
-const TILT = 0.45;
-const PAW_SPREAD = 0.075;
+const pandaAsset = { url: "/models/characters/panda/feeding.glb" };
 const koalaAsset = { url: "/models/characters/koala/koala.glb" };
+
+const PARTS = {
+  head: [1, 31, 34],
+  eyes: [32, 33],
+  nose: [22],
+  earLeft: [24, 28],
+  earRight: [26, 30],
+  armLeft: [3, 5],
+  armRight: [7, 9],
+  bow: [36, 38],
+};
+
+const NECK = new THREE.Vector3(0, 0.86, 0);
+const MOUTH = new THREE.Vector3(0, 0.985, 0.279);
+const BITE_POINT = new THREE.Vector3(0.03, 0.985, 0.3);
+const NOSE = new THREE.Vector3(0, 1.065, 0.31);
+const EAR_LEFT = new THREE.Vector3(-0.24, 1.24, -0.12);
+const EAR_RIGHT = new THREE.Vector3(0.25, 1.25, -0.08);
+const SHOULDER_LEFT = new THREE.Vector3(-0.2, 0.86, -0.02);
+const SHOULDER_RIGHT = new THREE.Vector3(0.17, 0.86, -0.02);
+const ARM_REST_LEFT = new THREE.Vector3(-0.11, -0.12, 0.085).normalize();
+const ARM_REST_RIGHT = new THREE.Vector3(0.1, -0.12, 0.085).normalize();
+const BOW = new THREE.Vector3(0.02, 0.9, 0.25);
+const FLOOR = 0.015;
+
+const STICK_DIR = new THREE.Vector3(0.35, -0.75, 0.55).normalize();
+const STICK_QUAT = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), STICK_DIR);
+const STICK_LENGTH = LOCAL_REFERENCE_HEIGHT * 0.28;
+const PAW_SPREAD = 0.045;
+
+const BITE_TIME = 2.6;
+const BITES_PER_STICK = 6;
+const CHOMP_AT = 0.22;
+const CHEW_START = 0.4;
+const CHEWS = 4;
+
+const smooth = (a, b, x) => {
+  const k = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
+  return k * k * (3 - 2 * k);
+};
+const easeOutBack = (k) => {
+  const c = 2.2;
+  return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2);
+};
+const remainingBefore = (n) => (n >= BITES_PER_STICK ? 0 : 1 - n * 0.14);
+
+function mealState(t) {
+  const k = Math.floor(t / BITE_TIME);
+  const u = (t % BITE_TIME) / BITE_TIME;
+  const n = k % BITES_PER_STICK;
+  const lastBite = n === BITES_PER_STICK - 1;
+
+  const reach = smooth(0, CHOMP_AT, u) * (1 - smooth(CHOMP_AT + 0.03, CHEW_START, u));
+  const chomp = u > CHOMP_AT - 0.03 && u < CHOMP_AT + 0.08 ? Math.sin(((u - CHOMP_AT + 0.03) / 0.11) * Math.PI) : 0;
+  const tug = u > CHOMP_AT + 0.04 && u < CHEW_START ? Math.sin(((u - CHOMP_AT - 0.04) / (CHEW_START - CHOMP_AT - 0.04)) * Math.PI) : 0;
+  const chewU = (u - CHEW_START) / (1 - CHEW_START);
+  const chewing = u > CHEW_START ? 0.5 - 0.5 * Math.cos(chewU * Math.PI * 2 * CHEWS) : 0;
+  const mouthFull = smooth(CHOMP_AT, CHOMP_AT + 0.05, u) * (1 - smooth(0.85, 1, u));
+
+  let len = THREE.MathUtils.lerp(remainingBefore(n), remainingBefore(n + 1), smooth(CHOMP_AT - 0.01, CHOMP_AT + 0.03, u));
+  const grow = n === 0 ? easeOutBack(smooth(0, 0.14, u)) : 1;
+  len *= grow;
+
+  const open = Math.max(smooth(0.05, CHOMP_AT - 0.02, u) * (1 - smooth(CHOMP_AT - 0.02, CHOMP_AT + 0.01, u)), chewing * 0.4);
+
+  return { u, n, lastBite, reach, chomp, tug, chewing, mouthFull, len, grow, open, chompTime: k * BITE_TIME + CHOMP_AT * BITE_TIME };
+}
 
 function usePaws() {
   const koala = useGLTF(koalaAsset.url);
@@ -26,18 +91,28 @@ function usePaws() {
   }, [koala]);
 }
 
-function useNormalized(url, targetHeight) {
-  const { scene } = useGLTF(url);
+function usePandaRig(url, targetHeight) {
+  const gltf = useGLTF(url);
   return useMemo(() => {
-    const root = scene.clone(true);
+    const src = gltf.scene;
+    const root = src.clone(true);
+
+    const originals = [];
+    const clones = [];
+    src.traverse((o) => originals.push(o));
+    root.traverse((o) => clones.push(o));
+    const byNode = new Map();
+    originals.forEach((o, i) => {
+      const a = gltf.parser?.associations?.get(o);
+      if (a && a.nodes !== undefined) byNode.set(a.nodes, clones[i]);
+    });
+
     root.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(root);
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();
     box.getSize(size);
     box.getCenter(center);
-    const s = targetHeight / (size.y || 1);
-    const group = new THREE.Group();
     root.position.set(-center.x, -box.min.y, -center.z);
     root.traverse((o) => {
       if (o.isMesh) {
@@ -45,10 +120,74 @@ function useNormalized(url, targetHeight) {
         o.receiveShadow = true;
       }
     });
-    group.add(root);
-    group.scale.setScalar(s);
-    return group;
-  }, [scene, targetHeight]);
+    const scaled = new THREE.Group();
+    scaled.add(root);
+    const k = targetHeight / (size.y || 1);
+    scaled.scale.setScalar(k);
+    const norm = { center: center.clone(), minY: box.min.y, k };
+
+    const rig = new THREE.Group();
+    rig.add(scaled);
+    rig.updateMatrixWorld(true);
+
+    const pivot = (parent, point) => {
+      parent.updateMatrixWorld(true);
+      const g = new THREE.Group();
+      g.position.copy(parent.worldToLocal(point.clone()));
+      parent.add(g);
+      g.updateMatrixWorld(true);
+      return g;
+    };
+    const take = (group, ids) =>
+      ids.forEach((id) => {
+        const o = byNode.get(id);
+        if (o) group.attach(o);
+      });
+    const centerOf = (id) => {
+      const o = byNode.get(id);
+      return o ? new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()) : null;
+    };
+
+    const head = pivot(rig, NECK);
+    take(head, PARTS.head);
+    const headBase = head.position.clone();
+
+    const eyes = PARTS.eyes
+      .map((id) => {
+        const c = centerOf(id);
+        if (!c) return null;
+        const p = pivot(head, c);
+        p.attach(byNode.get(id));
+        return p;
+      })
+      .filter(Boolean);
+
+    const nose = pivot(head, NOSE);
+    take(nose, PARTS.nose);
+    const noseBaseY = nose.position.y;
+
+    const earLeft = pivot(head, EAR_LEFT);
+    take(earLeft, PARTS.earLeft);
+    const earRight = pivot(head, EAR_RIGHT);
+    take(earRight, PARTS.earRight);
+
+    const mouth = pivot(head, MOUTH);
+    const mouthMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 20, 14),
+      new THREE.MeshStandardMaterial({ color: "#4a1d24", roughness: 0.6 }),
+    );
+    mouth.add(mouthMesh);
+
+    const armLeft = pivot(rig, SHOULDER_LEFT);
+    take(armLeft, PARTS.armLeft);
+    const armRight = pivot(rig, SHOULDER_RIGHT);
+    take(armRight, PARTS.armRight);
+
+    const bow = pivot(rig, BOW);
+    take(bow, PARTS.bow);
+
+    return { rig, scaled, norm, head, headBase, eyes, nose, earLeft, earRight, mouth: mouthMesh, noseBaseY, armLeft, armRight, bow };
+  }, [gltf, targetHeight]);
 }
 
 function makeBubbleTexture() {
@@ -211,51 +350,58 @@ function FloatSymbols({ chewing }) {
   );
 }
 
-const CRUMB_COUNT = 6;
+const BURST_COUNT = 10;
+const GRAVITY = -3.2;
 
-function Crumbs({ chewing }) {
+function BiteBurst() {
   const refs = useRef([]);
   const seeds = useMemo(
     () =>
-      Array.from({ length: CRUMB_COUNT }, (_, i) => ({
-        offset: (i / CRUMB_COUNT) * 1.9,
-        speed: 0.5 + ((i * 37) % 10) / 30,
-        driftX: (((i * 53) % 10) / 10 - 0.5) * 0.08,
-        driftZ: (((i * 29) % 10) / 10 - 0.5) * 0.06,
-        size: 0.008 + ((i * 17) % 10) / 900,
-        spin: 0.8 + ((i * 11) % 5) * 0.3,
-      })),
+      Array.from({ length: BURST_COUNT }, (_, i) => {
+        const a = (i / BURST_COUNT) * Math.PI * 1.6 - 0.3;
+        return {
+          chunk: i < 4,
+          vx: Math.cos(a) * (0.25 + ((i * 37) % 10) / 30),
+          vy: 0.35 + ((i * 53) % 10) / 16,
+          vz: 0.25 + ((i * 29) % 10) / 22,
+          size: i < 4 ? 0.016 + ((i * 7) % 3) / 300 : 0.008 + ((i * 17) % 10) / 900,
+          spin: 4 + ((i * 11) % 5) * 1.5,
+        };
+      }),
     [],
   );
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
+    const meal = mealState(t);
+    let tb = t - meal.chompTime;
+    if (tb < 0) tb += BITE_TIME;
+    const lastWasStub = (Math.floor((t - tb) / BITE_TIME) % BITES_PER_STICK) === BITES_PER_STICK - 1;
+
     refs.current.forEach((m, i) => {
       if (!m) return;
-      const seed = seeds[i];
-      const fall = 0.75;
-      const life = ((t * seed.speed + seed.offset) % 1.9) / 1.9;
-      const y = 0.72 - life * fall;
-      const onFloor = y <= 0.02;
-      m.visible = chewing && !(life > 0.94);
+      const s = seeds[i];
+      const y0 = BITE_POINT.y;
+      const land = (s.vy + Math.sqrt(s.vy * s.vy - 2 * GRAVITY * (y0 - FLOOR))) / -GRAVITY;
+      const tt = Math.min(tb, land);
       m.position.set(
-        0.03 + seed.driftX * life * 3 + Math.sin(t * 2 + i) * 0.005,
-        Math.max(y, 0.015),
-        0.34 + seed.driftZ * life * 3,
+        BITE_POINT.x + s.vx * tt * 0.6,
+        Math.max(FLOOR, y0 + s.vy * tt + 0.5 * GRAVITY * tt * tt),
+        BITE_POINT.z + s.vz * tt * 0.6,
       );
-      m.rotation.set(t * seed.spin + i, t * seed.spin * 0.7, i);
-      const s = onFloor ? seed.size * 0.8 : seed.size;
-      m.scale.setScalar(s);
+      if (tb < land) m.rotation.set(tb * s.spin + i, tb * s.spin * 0.7, i);
+      const shrink = 1 - smooth(1.4, 2.3, tb);
+      m.scale.setScalar(s.size * shrink);
+      m.visible = shrink > 0.01 && !(lastWasStub && s.chunk);
     });
   });
 
   return (
     <group>
-      {seeds.map((_, i) => (
-        <mesh key={i} ref={(el) => (refs.current[i] = el)}>
-          <dodecahedronGeometry args={[1, 0]} />
-
-          <meshStandardMaterial color={i % 3 === 0 ? "#5c7a3f" : "#7a9a52"} roughness={0.9} />
+      {seeds.map((s, i) => (
+        <mesh key={i} ref={(el) => (refs.current[i] = el)} castShadow>
+          {s.chunk ? <cylinderGeometry args={[1, 1, 1.6, 8]} /> : <dodecahedronGeometry args={[1, 0]} />}
+          <meshStandardMaterial color={s.chunk ? "#3c9a45" : i % 3 === 0 ? "#cfe38a" : "#7a9a52"} roughness={0.8} />
         </mesh>
       ))}
     </group>
@@ -303,16 +449,42 @@ function useBambooStick(targetHeight) {
     group.position.y = -targetHeight;
     const outer = new THREE.Group();
     outer.add(group);
-    return outer;
+
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.92, radius * 0.92, radius * 0.25, 10),
+      new THREE.MeshStandardMaterial({ color: "#e9f5b8", roughness: 0.7 }),
+    );
+    cap.position.y = -radius * 0.1;
+
+    return { stick: outer, cap, radius };
   }, [targetHeight]);
 }
 
-function FeedingPandaRig({ worldScale }) {
-  const panda = useNormalized("/models/characters/panda/feeding.glb", LOCAL_REFERENCE_HEIGHT);
+function makeMatte(root) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+      if (!m || m.userData.kodaMatte) return;
+      if ("roughness" in m) m.roughness = 1;
+      if ("metalness" in m) m.metalness = 0;
+      if ("clearcoat" in m) m.clearcoat = 0;
+      if ("specularIntensity" in m) m.specularIntensity = 0;
+      m.userData.kodaMatte = true;
+      m.needsUpdate = true;
+    });
+  });
+}
+
+function FeedingPandaRig({ worldScale, placement }) {
+  const matteRef = useRef(null);
+  useEffect(() => {
+    if (placement && matteRef.current) makeMatte(matteRef.current);
+  }, [placement]);
+  const panda = usePandaRig(pandaAsset.url, LOCAL_REFERENCE_HEIGHT);
   const paws = usePaws();
   const pawGroups = useMemo(() => {
-    const root = panda.children[0];
-    const scale = panda.scale.x;
+    const root = panda.scaled.children[0];
+    const scale = panda.scaled.scale.x;
     return paws.map((p) => {
       const holder = new THREE.Group();
       const inner = new THREE.Group();
@@ -329,74 +501,150 @@ function FeedingPandaRig({ worldScale }) {
   }, [panda, paws]);
   const leftPawRef = useRef(null);
   const rightPawRef = useRef(null);
-  const bamboo = useBambooStick(LOCAL_REFERENCE_HEIGHT * 0.28);
+  const bamboo = useBambooStick(STICK_LENGTH);
 
   const pandaRef = useRef(null);
   const bambooRef = useRef(null);
+  const stickRef = useRef(null);
+  const capRef = useRef(null);
   const symbolsRef = useRef(null);
-  const bite = useRef(1);
   const chewing = true;
 
-  useFrame((state, rawDelta) => {
-    const dt = Math.min(rawDelta, 0.05);
+  const tmp = useMemo(
+    () => ({
+      q: new THREE.Quaternion(),
+      q2: new THREE.Quaternion(),
+      e: new THREE.Euler(),
+      v: new THREE.Vector3(),
+      mouth: new THREE.Vector3(),
+      paw: new THREE.Vector3(),
+    }),
+    [],
+  );
+
+  useFrame((state) => {
     const t = state.clock.elapsedTime;
-    const chewSpeed = 7;
-    const chew = Math.sin(t * chewSpeed) * 0.5 + 0.5;
+    const m = mealState(t);
+    const breathe = Math.sin(t * 1.6) * 0.015;
+    const fullCheeks = m.lastBite ? 1.8 : 1;
 
     if (pandaRef.current) {
-      const breathe = Math.sin(t * 1.6) * 0.015;
-      pandaRef.current.scale.set(
-        1 + chew * 0.05 + breathe * 0.5,
-        1 - chew * 0.06 + breathe,
-        1 + chew * 0.05 + breathe * 0.5,
-      );
-      pandaRef.current.position.y = -chew * 0.03;
-      pandaRef.current.rotation.z = Math.sin(t * chewSpeed * 0.5) * 0.02;
+      const sq = m.chewing * 0.035 + m.chomp * 0.05;
+      pandaRef.current.scale.set(1 + sq + breathe * 0.5, 1 - sq * 1.2 + breathe, 1 + sq + breathe * 0.5);
+      pandaRef.current.position.y = -sq * 0.4;
+      pandaRef.current.rotation.z = Math.sin(t * 1.3) * 0.02 + m.tug * 0.03;
     }
 
+    const head = panda.head;
+    head.rotation.x = m.reach * 0.06 + m.chomp * 0.1 - m.tug * 0.07 + m.chewing * 0.03;
+    head.rotation.z = Math.sin(t * 1.1) * 0.03 - m.tug * 0.05;
+    head.rotation.y = -m.reach * 0.06;
+    const lunge = m.reach * 0.02 + m.chomp * 0.015;
+    head.position.copy(panda.headBase);
+    head.position.z += lunge;
+    const puff = (m.chewing * 0.04 + m.mouthFull * 0.015) * fullCheeks;
+    head.scale.set(1 + puff, 1 - puff * 0.5, 1 + puff * 0.5);
+
+    const open = m.open;
+    panda.mouth.scale.set(0.034 + open * 0.008, 0.005 + open * 0.026, 0.016);
+    panda.nose.position.y = panda.noseBaseY - m.chewing * 0.012 + open * 0.006;
+    panda.eyes.forEach((eye) => eye.scale.set(1, 1 - m.chomp * 0.45 - m.chewing * 0.12, 1));
+
+    const flop = m.chewing * 0.07 + m.chomp * 0.18;
+    panda.earLeft.rotation.z = flop + Math.sin(t * 2.1) * 0.02;
+    panda.earRight.rotation.z = -flop - Math.sin(t * 2.1 + 1) * 0.02;
+    panda.bow.rotation.z = Math.sin(t * 3 + 0.5) * 0.04 + m.chomp * 0.08;
+
+    tmp.mouth.copy(BITE_POINT).sub(NECK).applyEuler(head.rotation).add(NECK).add(tmp.v.set(0, 0, lunge));
+
+    const away = 0.085 * (1 - m.reach) + m.tug * 0.03 - m.chomp * 0.008;
     if (bambooRef.current) {
-      bite.current -= dt * 0.08;
-      if (bite.current < 0) bite.current = 1;
-      const push = chew * 0.06;
-      const b = bite.current;
-      bambooRef.current.scale.set(1, THREE.MathUtils.lerp(0.2, 1, b), 1);
-      bambooRef.current.position.set(MOUTH[0], MOUTH[1] - push * 0.3, MOUTH[2] + push * 0.3);
-      bambooRef.current.rotation.set(-TILT - chew * 0.06, 0, 0.1);
+      bambooRef.current.position.copy(tmp.mouth).addScaledVector(STICK_DIR, away);
+      tmp.q2.setFromAxisAngle(tmp.v.set(1, 0, 0), m.tug * 0.12 + m.chewing * 0.03);
+      bambooRef.current.quaternion.copy(tmp.q2).multiply(STICK_QUAT);
     }
-    const len = LOCAL_REFERENCE_HEIGHT * 0.28 * THREE.MathUtils.lerp(0.2, 1, bite.current);
-    const reach = Math.max(0.09, len * 0.55);
-    const hold = Math.sin(t * chewSpeed) * 0.012;
-    const py = MOUTH[1] - reach * Math.cos(TILT) + hold;
-    const pz = MOUTH[2] + reach * Math.sin(TILT) + 0.03;
-    if (leftPawRef.current) leftPawRef.current.position.set(MOUTH[0] - PAW_SPREAD, py, pz);
-    if (rightPawRef.current) rightPawRef.current.position.set(MOUTH[0] + PAW_SPREAD, py - 0.02, pz);
+    if (stickRef.current) {
+      stickRef.current.visible = m.len > 0.01;
+      stickRef.current.scale.set(Math.min(1, m.grow + 0.001), Math.max(m.len, 0.001), Math.min(1, m.grow + 0.001));
+    }
+    if (capRef.current) capRef.current.visible = m.len > 0.01 && !(m.n === 0 && m.u < CHOMP_AT);
+
+    const lenWorld = m.len * STICK_LENGTH;
+    const grips = [Math.max(0.1, lenWorld * 0.5), Math.max(0.14, lenWorld * 0.82)];
+    const pawRefs = [leftPawRef, rightPawRef];
+    pawRefs.forEach((ref, i) => {
+      if (!ref.current) return;
+      const side = i === 0 ? -1 : 1;
+      ref.current.position.set(side * PAW_SPREAD, -grips[i], 0.02 + Math.sin(t * 7 + i) * 0.003);
+    });
+
+    const arms = [
+      [panda.armLeft, SHOULDER_LEFT, ARM_REST_LEFT, -1, 0],
+      [panda.armRight, SHOULDER_RIGHT, ARM_REST_RIGHT, 1, 1],
+    ];
+    arms.forEach(([arm, shoulder, rest, side, i]) => {
+      tmp.paw.set(side * PAW_SPREAD, -grips[i], 0).applyQuaternion(bambooRef.current ? bambooRef.current.quaternion : STICK_QUAT);
+      if (bambooRef.current) tmp.paw.add(bambooRef.current.position);
+      tmp.v.copy(tmp.paw).sub(shoulder).normalize();
+      tmp.q.setFromUnitVectors(rest, tmp.v);
+      arm.quaternion.identity().slerp(tmp.q, 0.75);
+    });
 
     if (symbolsRef.current) {
       symbolsRef.current.position.y = 1.25 + Math.sin(t * 1.4) * 0.03;
     }
   });
 
-  return (
-    <group scale={worldScale}>
+  const content = (
+    <>
       <group ref={pandaRef}>
-        <primitive object={panda} />
+        <primitive object={panda.rig} />
         <group ref={symbolsRef}>
           <Bubbles chewing={chewing} />
         </group>
         <FloatSymbols chewing={chewing} />
-        <Crumbs chewing={chewing} />
-        <group ref={leftPawRef}><primitive object={pawGroups[0]} /></group>
-        {pawGroups[1] && <group ref={rightPawRef}><primitive object={pawGroups[1]} /></group>}
         <group ref={bambooRef}>
-          <primitive object={bamboo} />
+          <group ref={stickRef}>
+            <primitive object={bamboo.stick} />
+          </group>
+          <group ref={capRef}>
+            <primitive object={bamboo.cap} />
+          </group>
+          <group ref={leftPawRef}><primitive object={pawGroups[0]} /></group>
+          {pawGroups[1] && <group ref={rightPawRef}><primitive object={pawGroups[1]} /></group>}
         </group>
       </group>
-    </group>
+      <BiteBurst />
+    </>
   );
+
+  if (placement) {
+    const { homePosition, offset, scale, yaw = 0, lean = 0 } = placement;
+    const { center, minY, k } = panda.norm;
+    const feetY = offset[1] + scale * minY;
+    return (
+      <group ref={matteRef} position={[homePosition[0], feetY, homePosition[1]]} rotation={[-lean, yaw, 0]}>
+        <group position={[offset[0], offset[1] - feetY, offset[2]]} scale={scale}>
+          <group position={[center.x, minY, center.z]} scale={1 / k}>
+            {content}
+          </group>
+        </group>
+      </group>
+    );
+  }
+
+  return <group scale={worldScale}>{content}</group>;
 }
 
-export default function FeedingPanda({ homePosition = [0, 0], scale = 1, referenceHeight = 1 }) {
+export default function FeedingPanda({ homePosition = [0, 0], scale = 1, referenceHeight = 1, placement }) {
   const worldScale = (referenceHeight * scale) / LOCAL_REFERENCE_HEIGHT;
+  if (placement) {
+    return (
+      <Suspense fallback={null}>
+        <FeedingPandaRig placement={placement} />
+      </Suspense>
+    );
+  }
   return (
     <group position={[homePosition[0], 0, homePosition[1]]}>
       <Suspense fallback={null}>
@@ -406,5 +654,5 @@ export default function FeedingPanda({ homePosition = [0, 0], scale = 1, referen
   );
 }
 
-useGLTF.preload("/models/characters/panda/feeding.glb");
+useGLTF.preload(pandaAsset.url);
 useGLTF.preload(koalaAsset.url);

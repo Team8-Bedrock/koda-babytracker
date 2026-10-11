@@ -3,9 +3,77 @@ import axios from "axios";
 import { API_URL } from "../config";
 import { getCurrentUserId, setSelectedChildForUser } from "../utils/authStorage";
 
-const INK = "#2f4a3a";
-const PAPER = "#f5efdc";
-const LINE = "rgba(47,74,58,0.18)";
+const THEMES = {
+  day: {
+    INK: "#2f4a3a",
+    PAPER: "#f5efdc",
+    LINE: "rgba(47,74,58,0.18)",
+    overlay: "rgba(20,45,30,0.35)",
+    strip: "#6b9f6e",
+    stripText: "#fffaf0",
+    photo: "#ebe3c8",
+    field: "#fffaf0",
+    btnBg: "#fffaf0",
+    cta: "#6b9f6e",
+    ctaText: "#fffaf0",
+    title: "#2f4a3a",
+    toggleOn: "#6b9f6e",
+    toggleOff: "rgba(47,74,58,0.2)",
+    error: "#b24a4a",
+    stamp: "#3f7d54",
+    stampBg: "rgba(255,248,238,0.6)",
+    stampRing: "rgba(63,125,84,0.5)",
+    moodStamp: "rgba(178,74,74,0.7)",
+    moodStampBorder: "rgba(178,74,74,0.55)",
+    shadow: "0 14px 34px rgba(20,45,30,0.22)",
+    stampText: "SEE YOU SOON ✦",
+    stampHandle: "#c99b6b",
+    stampNeck: "#b98a5a",
+    stampBase: "#2f5a3a",
+    stampDash: "rgba(255,248,238,0.55)",
+    confetti: ["#ffb7c9", "#f6c945", "#7fd34e", "#9fd3ff", "#ff9f6b"],
+  },
+  // matches the app's night theme: navy glass, light text, soft yellow titles, purple-blue buttons
+  night: {
+    INK: "#ece9ff",
+    PAPER: "#262f58",
+    LINE: "rgba(160,170,235,0.28)",
+    overlay: "rgba(10,14,35,0.5)",
+    strip: "linear-gradient(135deg, #5e7fd6, #7b6fd1)",
+    stripText: "#ffffff",
+    photo: "#1f2850",
+    field: "#1f2850",
+    btnBg: "#2f3a6c",
+    cta: "linear-gradient(135deg, #5e7fd6, #7b6fd1)",
+    ctaText: "#ffffff",
+    title: "#fff3c4",
+    toggleOn: "#7b8fe0",
+    toggleOff: "rgba(201,198,239,0.25)",
+    error: "#ffc4c4",
+    stamp: "#f4d77a",
+    stampBg: "rgba(38,47,88,0.75)",
+    stampRing: "rgba(244,215,122,0.5)",
+    moodStamp: "rgba(255,170,190,0.85)",
+    moodStampBorder: "rgba(255,170,190,0.6)",
+    shadow: "0 14px 34px rgba(5,8,25,0.5)",
+    stampText: "SWEET DREAMS ☾",
+    stampHandle: "#c9c6ef",
+    stampNeck: "#a9a6dc",
+    stampBase: "#3a4680",
+    stampDash: "rgba(244,215,122,0.6)",
+    confetti: ["#f4d77a", "#e4e7ff", "#c9b6e4", "#fff3c4", "#9fb4ff"],
+  },
+};
+
+function useNightMode() {
+  const [night, setNight] = useState(() => typeof window !== "undefined" && localStorage.getItem("koda-dark-mode") === "true");
+  useEffect(() => {
+    const onMode = (e) => setNight(e?.detail && typeof e.detail.isDarkMode === "boolean" ? e.detail.isDarkMode : localStorage.getItem("koda-dark-mode") === "true");
+    window.addEventListener("koda-dark-mode", onMode);
+    return () => window.removeEventListener("koda-dark-mode", onMode);
+  }, []);
+  return night;
+}
 
 const ageText = (dob) => {
   if (!dob) return "";
@@ -36,7 +104,7 @@ const Field = ({ label, value }) => (
   </div>
 );
 
-const Toggle = ({ on, onChange, disabled }) => (
+const Toggle = ({ on, onChange, disabled, T = THEMES.day }) => (
   <button
     type="button"
     disabled={disabled}
@@ -49,7 +117,7 @@ const Toggle = ({ on, onChange, disabled }) => (
       border: "none",
       padding: 2,
       cursor: disabled ? "default" : "pointer",
-      background: on ? "#6b9f6e" : "rgba(47,74,58,0.2)",
+      background: on ? T.toggleOn : T.toggleOff,
       transition: "background 0.2s",
       flexShrink: 0,
     }}
@@ -69,27 +137,6 @@ const Toggle = ({ on, onChange, disabled }) => (
   </button>
 );
 
-const card = {
-  background: PAPER,
-  borderRadius: 22,
-  border: `1.5px solid ${LINE}`,
-  boxShadow: "0 14px 34px rgba(20,45,30,0.22)",
-  color: INK,
-  fontFamily: "inherit",
-};
-
-const inputStyle = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: `1.5px solid ${LINE}`,
-  borderRadius: 12,
-  padding: "7px 10px",
-  background: "#fffaf0",
-  color: INK,
-  fontFamily: "inherit",
-  fontSize: 13,
-};
-
 const PencilIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -100,6 +147,29 @@ const PencilIcon = () => (
 const CLOSE_KEYFRAMES = `@keyframes bpBtnAway{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.7)}}@keyframes bpFadeOut{to{opacity:0}}@keyframes bpSettle{0%{transform:scale(1)}55%{transform:scale(0.965) rotate(-1deg)}100%{transform:scale(0.955) rotate(0.6deg)}}@keyframes bpSheetIn{0%{transform:translate(var(--sx),-120px) rotate(var(--rot)) scale(0.6);opacity:0}55%{transform:translate(var(--sx),7px) rotate(var(--rot)) scale(1.05);opacity:1}75%{transform:translate(var(--sx),-3px) rotate(var(--rot)) scale(0.99)}100%{transform:translate(var(--sx),0) rotate(var(--rot)) scale(1);opacity:1}}@keyframes bpStackUp{0%{transform:translate(0,0) rotate(0)}65%{transform:translate(var(--sx),calc(var(--ty) + 8px)) rotate(var(--rot)) scale(1.02)}82%{transform:translate(var(--sx),calc(var(--ty) - 3px)) rotate(var(--rot))}100%{transform:translate(var(--sx),var(--ty)) rotate(var(--rot))}}@keyframes bpBlank{from{opacity:0}to{opacity:1}}@keyframes bpAway{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(-30px,360px) rotate(-14deg)}}@keyframes bpStampSlam{0%{transform:translate(-50%,-160px) scale(1.1);opacity:0}12%{opacity:1}32%{transform:translate(-50%,0) scale(1)}40%{transform:translate(-50%,-8px) scale(1.03)}48%,82%{transform:translate(-50%,0) scale(1)}100%{transform:translate(-50%,-170px) scale(1);opacity:0}}@keyframes bpMark{0%{transform:translate(-50%,-50%) scale(2.2) rotate(10deg);opacity:0}55%{transform:translate(-50%,-50%) scale(1) rotate(-7deg);opacity:1}100%{transform:translate(-50%,-50%) scale(1) rotate(-7deg);opacity:1}}@keyframes bpThump{0%{transform:translate(-50%,-50%) scale(0.3);opacity:0}15%{opacity:0.9}100%{transform:translate(-50%,-50%) scale(1.6);opacity:0}}@keyframes bpConfetti{0%{transform:translate(0,0) scale(0.3) rotate(0);opacity:0}15%{opacity:1}60%{transform:translate(var(--dx),var(--dy)) scale(1) rotate(var(--r));opacity:1}100%{transform:translate(var(--dx),calc(var(--dy) + 40px)) scale(0.8) rotate(var(--r));opacity:0}}`;
 
 export default function BabyProfile({ child, mood, photo, onClose }) {
+  const night = useNightMode();
+  const T = night ? THEMES.night : THEMES.day;
+  const { INK, PAPER, LINE } = T;
+  const card = {
+    background: PAPER,
+    borderRadius: 22,
+    border: `1.5px solid ${LINE}`,
+    boxShadow: T.shadow,
+    color: INK,
+    fontFamily: "inherit",
+  };
+  const inputStyle = {
+    width: "100%",
+    boxSizing: "border-box",
+    border: `1.5px solid ${LINE}`,
+    borderRadius: 12,
+    padding: "7px 10px",
+    background: T.field,
+    color: INK,
+    fontFamily: "inherit",
+    fontSize: 13,
+    colorScheme: night ? "dark" : "light",
+  };
   const [closing, setClosing] = useState(false);
   const [stack, setStack] = useState({ mood: 0, notes: 0 });
   const passRef = React.useRef(null);
@@ -249,7 +319,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
         position: "fixed",
         inset: 0,
         zIndex: 50,
-        background: "rgba(20,45,30,0.35)",
+        background: T.overlay,
         backdropFilter: "blur(6px)",
         WebkitBackdropFilter: "blur(6px)",
         overflowY: "auto",
@@ -262,12 +332,12 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
         <div ref={passRef} style={{ position: "relative" }}>
           <div style={{ ...card, position: "relative", overflow: "hidden", animation: closing ? "bpSettle 0.45s ease-out both" : "mbPop 0.35s ease-out both" }}>
             {blank(0)}
-            <div style={{ background: "#6b9f6e", color: "#fffaf0", padding: "6px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, letterSpacing: 2, fontWeight: 700 }}>
+            <div style={{ background: T.strip, color: T.stripText, padding: "6px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, letterSpacing: 2, fontWeight: 700 }}>
               <span>KODA PASSPORT</span>
               <span>{String(name).toUpperCase()}</span>
             </div>
             <div style={{ display: "flex", gap: 12, padding: 12 }}>
-              <div style={{ width: 84, height: 104, flexShrink: 0, borderRadius: 12, border: `1.5px dashed ${LINE}`, background: "#ebe3c8", overflow: "hidden" }}>
+              <div style={{ width: 84, height: 104, flexShrink: 0, borderRadius: 12, border: `1.5px dashed ${LINE}`, background: T.photo, overflow: "hidden" }}>
                 {photo}
               </div>
               <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 10px", alignContent: "start", minWidth: 0 }}>
@@ -312,7 +382,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
                       type="button"
                       onClick={() => setEditing(false)}
                       aria-label="cancel editing"
-                      style={{ border: `1.5px solid ${LINE}`, borderRadius: 999, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "#fffaf0", color: INK, cursor: "pointer", fontSize: 12, fontWeight: 700 }}
+                      style={{ border: `1.5px solid ${LINE}`, borderRadius: 999, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: T.btnBg, color: INK, cursor: "pointer", fontSize: 12, fontWeight: 700 }}
                     >
                       ✕
                     </button>
@@ -321,7 +391,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
                       onClick={saveProfile}
                       disabled={savingProfile || !profile.name?.trim()}
                       aria-label="save passport"
-                      style={{ border: "none", borderRadius: 999, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "#6b9f6e", color: "#fffaf0", cursor: savingProfile ? "default" : "pointer", fontSize: 13, fontWeight: 700, opacity: savingProfile ? 0.55 : 1 }}
+                      style={{ border: "none", borderRadius: 999, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: T.cta, color: T.ctaText, cursor: savingProfile ? "default" : "pointer", fontSize: 13, fontWeight: 700, opacity: savingProfile ? 0.55 : 1 }}
                     >
                       ✓
                     </button>
@@ -331,7 +401,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
                     type="button"
                     onClick={() => setEditing(true)}
                     aria-label="edit passport"
-                    style={{ border: `1.5px solid ${LINE}`, borderRadius: 999, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: "#fffaf0", color: INK, cursor: "pointer", flexShrink: 0 }}
+                    style={{ border: `1.5px solid ${LINE}`, borderRadius: 999, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", background: T.btnBg, color: INK, cursor: "pointer", flexShrink: 0 }}
                   >
                     <PencilIcon />
                   </button>
@@ -348,32 +418,32 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
                     left: "50%",
                     top: 0,
                     whiteSpace: "nowrap",
-                    color: "#3f7d54",
-                    border: "3.5px solid #3f7d54",
+                    color: T.stamp,
+                    border: `3.5px solid ${T.stamp}`,
                     borderRadius: 12,
                     padding: "8px 20px",
                     fontSize: 28,
                     fontWeight: 900,
                     letterSpacing: 2,
-                    background: "rgba(255,248,238,0.6)",
+                    background: T.stampBg,
                     animation: "bpMark 0.35s cubic-bezier(.2,1.4,.4,1) 1.05s both",
                   }}
                 >
-                  SEE YOU SOON ✦
+                  {T.stampText}
                 </span>
-                <span style={{ position: "absolute", left: "50%", top: 0, width: 210, height: 210, borderRadius: 999, border: "4px solid rgba(63,125,84,0.5)", animation: "bpThump 0.5s ease-out 1.05s both" }} />
+                <span style={{ position: "absolute", left: "50%", top: 0, width: 210, height: 210, borderRadius: 999, border: `4px solid ${T.stampRing}`, animation: "bpThump 0.5s ease-out 1.05s both" }} />
               </div>
               <div style={{ position: "absolute", left: "50%", top: -116, width: 108, height: 96, animation: "bpStampSlam 1.5s cubic-bezier(.55,0,.45,1) 0.68s both" }}>
-                <span style={{ position: "absolute", left: "50%", top: 0, transform: "translateX(-50%)", width: 40, height: 36, borderRadius: "50%", background: "#c99b6b", boxShadow: "inset 0 -5px 0 rgba(0,0,0,0.12)" }} />
-                <span style={{ position: "absolute", left: "50%", top: 28, transform: "translateX(-50%)", width: 22, height: 30, borderRadius: 6, background: "#b98a5a" }} />
-                <span style={{ position: "absolute", left: 0, bottom: 0, width: 108, height: 40, borderRadius: 11, background: "#2f5a3a", boxShadow: "inset 0 -6px 0 rgba(0,0,0,0.18)" }}>
-                  <span style={{ position: "absolute", inset: 6, borderRadius: 6, border: "2px dashed rgba(255,248,238,0.55)" }} />
+                <span style={{ position: "absolute", left: "50%", top: 0, transform: "translateX(-50%)", width: 40, height: 36, borderRadius: "50%", background: T.stampHandle, boxShadow: "inset 0 -5px 0 rgba(0,0,0,0.12)" }} />
+                <span style={{ position: "absolute", left: "50%", top: 28, transform: "translateX(-50%)", width: 22, height: 30, borderRadius: 6, background: T.stampNeck }} />
+                <span style={{ position: "absolute", left: 0, bottom: 0, width: 108, height: 40, borderRadius: 11, background: T.stampBase, boxShadow: "inset 0 -6px 0 rgba(0,0,0,0.18)" }}>
+                  <span style={{ position: "absolute", inset: 6, borderRadius: 6, border: `2px dashed ${T.stampDash}` }} />
                 </span>
               </div>
               {Array.from({ length: 14 }).map((_, i) => {
                 const ang = -Math.PI / 2 + ((i / 13) - 0.5) * Math.PI * 1.5;
                 const dist = 70 + (i % 4) * 18;
-                const colors = ["#ffb7c9", "#f6c945", "#7fd34e", "#9fd3ff", "#ff9f6b"];
+                const colors = T.confetti;
                 const shape = i % 3;
                 return (
                   <span
@@ -411,8 +481,8 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
                 top: 12,
                 right: 14,
                 transform: "rotate(-12deg)",
-                border: "2px solid rgba(178,74,74,0.55)",
-                color: "rgba(178,74,74,0.7)",
+                border: `2px solid ${T.moodStampBorder}`,
+                color: T.moodStamp,
                 borderRadius: 8,
                 padding: "2px 8px",
                 fontSize: 10,
@@ -428,7 +498,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
         <div ref={notesRef} style={{ ...card, padding: "14px 16px", animation: "mbPop 0.35s 0.16s ease-out both", ...stackStyle(stack.notes, 7, "3deg", 0.3, 3) }}>
           {blank(0.2)}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>notes</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: T.title }}>notes</div>
             {isParent ? <div style={{ fontSize: 10, letterSpacing: 0.5, opacity: 0.55, textTransform: "uppercase" }}>caretaker visibility</div> : null}
           </div>
 
@@ -444,7 +514,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
               </div>
               {isParent ? (
                 <>
-                  <Toggle on={!!note.visibleToCaregiver} onChange={(v) => toggleShare(note, v)} />
+                  <Toggle T={T} on={!!note.visibleToCaregiver} onChange={(v) => toggleShare(note, v)} />
                   <button
                     type="button"
                     onClick={() => removeNote(note)}
@@ -464,7 +534,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
               <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} rows={2} placeholder="write a note..." style={{ ...inputStyle, resize: "vertical" }} />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                  <Toggle on={share} onChange={setShare} />
+                  <Toggle T={T} on={share} onChange={setShare} />
                   caretaker visibility
                 </label>
                 <button
@@ -475,8 +545,8 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
                     border: "none",
                     borderRadius: 999,
                     padding: "7px 14px",
-                    background: "#6b9f6e",
-                    color: "#fffaf0",
+                    background: T.cta,
+                    color: T.ctaText,
                     fontFamily: "inherit",
                     fontWeight: 700,
                     fontSize: 13,
@@ -490,12 +560,12 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
             </div>
           ) : null}
 
-          {error ? <p style={{ margin: "8px 0 0", fontSize: 12, color: "#b24a4a" }}>{error}</p> : null}
+          {error ? <p style={{ margin: "8px 0 0", fontSize: 12, color: T.error }}>{error}</p> : null}
         </div>
         <button
           type="button"
           onClick={shut}
-          style={{ ...(closing ? { animation: "bpBtnAway 0.4s ease-in 0.9s forwards", pointerEvents: "none" } : {}), alignSelf: "center", marginTop: 4, border: `1.5px solid ${LINE}`, background: "#6b9f6e", color: "#fffaf0", padding: "10px 22px", borderRadius: 999, fontSize: 14, fontWeight: 700, letterSpacing: 1, cursor: "pointer", boxShadow: "0 6px 16px rgba(20,45,30,0.25)" }}
+          style={{ ...(closing ? { animation: "bpBtnAway 0.4s ease-in 0.9s forwards", pointerEvents: "none" } : {}), alignSelf: "center", marginTop: 4, border: `1.5px solid ${LINE}`, background: T.cta, color: T.ctaText, padding: "10px 22px", borderRadius: 999, fontSize: 14, fontWeight: 700, letterSpacing: 1, cursor: "pointer", boxShadow: "0 6px 16px rgba(20,45,30,0.25)" }}
         >
           close passport
         </button>

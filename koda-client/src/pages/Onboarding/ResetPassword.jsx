@@ -8,7 +8,6 @@ const ResetPassword = () => {
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [message, setMessage] = useState("");
 
   const handleReset = async () => {
     if (password !== confirm) return alert("Passwords do not match");

@@ -1,17 +1,163 @@
 import React from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import FeedingPanda from "../animations/panda/FeedingPanda";
+import AngryPanda from "../animations/panda/AngryPanda";
+import CryingPanda from "../animations/panda/CryingPanda";
+import HungryPanda from "../animations/panda/HungryPanda";
+import SleepyPanda from "../animations/panda/SleepyPanda";
+import SleepingPanda from "../animations/panda/SleepingPanda";
+import WokePanda from "../animations/panda/WokePanda";
+import HappyPanda from "../animations/panda/HappyPanda";
+import EnergeticPanda from "../animations/panda/EnergeticPanda";
+import QuietPanda from "../animations/panda/QuietPanda";
+import OtherPanda from "../animations/panda/OtherPanda";
+import PlaytimePanda from "../animations/panda/PlaytimePanda";
+import DiaperPanda from "../animations/panda/DiaperPanda";
 
-function HideWhenAnimated({ children }) {
-  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+function useNightMode() {
+  const [night, setNight] = React.useState(() => typeof window !== "undefined" && localStorage.getItem("koda-dark-mode") === "true");
   React.useEffect(() => {
-    const onChange = (e) => setHidden(!!e.detail?.active);
+    const onMode = (e) => setNight(e && e.detail && typeof e.detail.isDarkMode === "boolean" ? e.detail.isDarkMode : localStorage.getItem("koda-dark-mode") === "true");
+    window.addEventListener("koda-dark-mode", onMode);
+    return () => window.removeEventListener("koda-dark-mode", onMode);
+  }, []);
+  return night;
+}
+
+function NightFireflies({ area, count, color, size }) {
+  const ref = React.useRef();
+  const data = React.useMemo(() => {
+    let s = 9;
+    const rnd = () => {
+      s = (s * 1103515245 + 12345) % 2147483648;
+      return s / 2147483648;
+    };
+    return Array.from({ length: count }, () => ({
+      x: (rnd() * 2 - 1) * area[0],
+      y: area[1] + rnd() * area[2],
+      z: (rnd() * 2 - 1) * area[3],
+      p: rnd() * 6.28
+    }));
+  }, [area, count]);
+  useFrame((state) => {
+    if (!ref.current) return;
+    const t = state.clock.elapsedTime;
+    ref.current.children.forEach((m, i) => {
+      const d = data[i];
+      m.position.set(d.x + Math.sin(t * 0.5 + d.p) * 0.14, d.y + Math.sin(t * 0.8 + d.p * 1.7) * 0.09, d.z + Math.cos(t * 0.42 + d.p) * 0.14);
+      m.material.opacity = 0.35 + Math.abs(Math.sin(t * 2.2 + d.p)) * 0.6;
+    });
+  });
+  return (
+    <group ref={ref}>
+      {data.map((d, i) => (
+        <mesh key={i}>
+          <sphereGeometry args={[size, 6, 6]} />
+          <meshBasicMaterial color={color} fog={false} transparent opacity={0.9} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// Panda night: its own look, built from the panda's daytime theme —
+// a jade-green moonlit bamboo grove, softly glowing pink blossoms and lotus,
+// silvery water, peach-glowing stone lanterns and pink sparkle stars.
+const NIGHT = {
+  background: "#24504f",
+  fog: "#24504f",
+  ambient: 0.62,
+  ambientColor: "#c4e6dc",
+  sun: 0.85,
+  sunColor: "#d6ecff",
+  rim: 0.5,
+  rimColor: "#a6d8e8",
+  hemiSky: "#9fd0c8",
+  hemiGround: "#2f5a52",
+  hemiI: 0.75,
+  firefly: "#d8ffa0",
+  star: "#ffd6e6",
+  lantern: "#ffc9a0",
+  glow: "#ffb98a",
+  water: "#2f7a86",
+  waterShallow: "#4f9aa4",
+  waterfallTint: "#b3d6dc",
+  waterfallSheet: "#c4e4e6",
+  waterfall: "#b3d6dc",
+  waterLip: "#c4e4e6",
+  foamBlob: "#d4ecee",
+  foam: "#d4ecee",
+  mist: "#b8dcd8",
+  rock: "#6f8a8c",
+  rockDark: "#5a7476",
+  stone: "#8fa6a6",
+  moss: "#4f8f78",
+  mossDark: "#3e7463",
+  leaf: "#79b9a0",
+  shootTop: "#b8dcc8",
+  lily: "#4f9a7e",
+  lily2: "#5aa58a",
+  lotus: "#f6b8d2",
+  lotusCenter: "#ffe2a0",
+  petals: ["#f6bfd6", "#f9d3e3", "#ffe1ee"],
+  flecks: ["#f2c4d8", "#e2f0ea", "#e8b8cc", "#b8dcc8", "#f2c4d8"],
+  daisy: "#e8f2ee",
+  daisyCenter: "#ffe2a0",
+  puff: "#9fd8bc",
+  groundBase: "hsl(165, 30%, 36%)",
+};
+
+
+const INLINE_MOODS = {
+  feeding: FeedingPanda,
+  angry: AngryPanda,
+  crying: CryingPanda,
+  hungry: HungryPanda,
+  sleepy: SleepyPanda,
+  sleeping: SleepingPanda,
+  woke: WokePanda,
+  groggy: WokePanda,
+  happy: HappyPanda,
+  energetic: EnergeticPanda,
+  quiet: QuietPanda,
+  other: OtherPanda,
+  playtime: PlaytimePanda,
+  diaper: DiaperPanda,
+};
+const PANDA_MOOD_MODELS = ["angry", "crying", "feeding", "hungry", "sleepy", "sleeping"].map((name) => `/models/characters/panda/${name}.glb`);
+const INLINE_LEAN = 0.1;
+const BUBBLE_LIFT = 0.02;
+
+function readMoodAnimation() {
+  if (typeof window === "undefined") return { active: false };
+  return window.__moodAnimation || { active: !!window.__moodAnimationActive };
+}
+
+function useMoodAnimation() {
+  const [mood, setMood] = React.useState(readMoodAnimation);
+  React.useEffect(() => {
+    const onChange = (e) => setMood(e.detail || readMoodAnimation());
     window.addEventListener("mood-animation", onChange);
     return () => window.removeEventListener("mood-animation", onChange);
   }, []);
-  return hidden ? null : children;
+  return mood;
+}
+
+function publishMoodAnchor(camera, gl, topWorld, bottomWorld) {
+  const rect = gl.domElement.getBoundingClientRect();
+  const toScreen = (p) => {
+    const v = p.clone().project(camera);
+    return [rect.left + ((v.x + 1) / 2) * rect.width, rect.top + ((1 - v.y) / 2) * rect.height];
+  };
+  const [x, top] = toScreen(topWorld);
+  const [, bottom] = toScreen(bottomWorld);
+  const prev = window.__moodAnchor;
+  if (prev && Math.abs(prev.x - x) < 0.5 && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.bottom - bottom) < 0.5) return;
+  window.__moodAnchor = { x, top, bottom };
+  window.dispatchEvent(new CustomEvent("mood-anchor", { detail: window.__moodAnchor }));
 }
 
 
@@ -42,12 +188,15 @@ const PALETTE = {
   fog: "#5cc198",
   fogNear: 5,
   fogFar: 13,
-  sun: "#f4fff6",
-  rimLight: "#bfeee0",
-  hemiSky: "#dcfaee",
-  hemiGround: "#1e4a3c",
-  water: "#2e9e8f",
-  waterShallow: "#6fd0be",
+  sun: "#fff0cf",
+  rimLight: "#b6e3d6",
+  hemiSky: "#ffffff",
+  hemiGround: "#6f9a6e",
+  water: "#3fb3a4",
+  waterShallow: "#86dccc",
+  waterfall: "#ffffff",
+  waterLip: "#d6f6f1",
+  foamBlob: "#effcf9",
   rock: "#6f83a0",
   rockDark: "#5a6c88",
   moss: "#6fae6a",
@@ -57,13 +206,17 @@ const PALETTE = {
 
 const FLOOR_TEX_SIZE = 512;
 
-function buildMossFloorTexture() {
+function buildMossFloorTexture(night = false) {
   const canvas = document.createElement("canvas");
   canvas.width = FLOOR_TEX_SIZE;
   canvas.height = FLOOR_TEX_SIZE;
   const ctx = canvas.getContext("2d");
+  // night: same shapes, cool moonlit teal instead of bright green
+  const hueShift = night ? 14 : 0;
+  const sat = night ? 0.62 : 1;
+  const lightScale = night ? 0.74 : 1;
 
-  ctx.fillStyle = "hsl(152, 50%, 52%)";
+  ctx.fillStyle = night ? NIGHT.groundBase : "hsl(152, 50%, 52%)";
   ctx.fillRect(0, 0, FLOOR_TEX_SIZE, FLOOR_TEX_SIZE);
 
   for (let i = 0; i < 46; i++) {
@@ -71,12 +224,12 @@ function buildMossFloorTexture() {
     const bx = (seed * 37) % FLOOR_TEX_SIZE;
     const by = (seed * 53) % FLOOR_TEX_SIZE;
     const radius = 42 + (seed % 5) * 20;
-    const hue = 150 + (seed % 9) * 3;
-    const light = 44 + (seed % 6) * 4;
+    const hue = 150 + (seed % 9) * 3 + hueShift;
+    const light = (44 + (seed % 6) * 4) * lightScale;
     drawWrapped(ctx, bx, by, FLOOR_TEX_SIZE, radius, (x, y) => {
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
-      grad.addColorStop(0, `hsla(${hue}, 50%, ${light}%, 0.5)`);
-      grad.addColorStop(1, `hsla(${hue}, 50%, ${light}%, 0)`);
+      grad.addColorStop(0, `hsla(${hue}, ${50 * sat}%, ${light}%, 0.5)`);
+      grad.addColorStop(1, `hsla(${hue}, ${50 * sat}%, ${light}%, 0)`);
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -88,9 +241,9 @@ function buildMossFloorTexture() {
     const seed = i * 17 + 9;
     const bx = (seed * 31) % FLOOR_TEX_SIZE;
     const by = (seed * 47) % FLOOR_TEX_SIZE;
-    const hue = 130 + (seed % 10) * 3;
-    const light = 58 + (seed % 8) * 3;
-    ctx.fillStyle = `hsla(${hue}, 46%, ${light}%, 0.5)`;
+    const hue = 130 + (seed % 10) * 3 + hueShift;
+    const light = (58 + (seed % 8) * 3) * lightScale;
+    ctx.fillStyle = `hsla(${hue}, ${46 * sat}%, ${light}%, 0.5)`;
     drawWrapped(ctx, bx, by, FLOOR_TEX_SIZE, 6, (x, y) => {
       ctx.save();
       ctx.translate(x, y);
@@ -107,7 +260,7 @@ function buildMossFloorTexture() {
     const dx = (seed * 17) % FLOOR_TEX_SIZE;
     const dy = (seed * 41) % FLOOR_TEX_SIZE;
     drawWrapped(ctx, dx, dy, FLOOR_TEX_SIZE, 4, (x, y) => {
-      ctx.fillStyle = "rgba(235,250,244,0.5)";
+      ctx.fillStyle = night ? "rgba(255,214,230,0.5)" : "rgba(235,250,244,0.5)";
       ctx.beginPath();
       ctx.arc(x, y, 1.1, 0, Math.PI * 2);
       ctx.fill();
@@ -126,28 +279,30 @@ function buildMossFloorTexture() {
 const GROUND_SIZE = 9;
 
 function Ground() {
-  const tex = useMemo(() => buildMossFloorTexture(), []);
+  const night = useNightMode();
+  const tex = useMemo(() => buildMossFloorTexture(night), [night]);
   useEffect(() => {
     tex.repeat.set(GROUND_SIZE / 2.6, GROUND_SIZE / 2.6);
+    return () => tex.dispose();
   }, [tex]);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[GROUND_SIZE, GROUND_SIZE]} />
-      <meshStandardMaterial map={tex} />
+      <meshStandardMaterial key={night ? "n" : "d"} map={tex} roughness={1} />
     </mesh>
   );
 }
 
-function buildBambooTexture() {
+function buildBambooTexture(night = false) {
   const canvas = document.createElement("canvas");
   canvas.width = 32;
   canvas.height = 256;
   const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#57b884";
+  ctx.fillStyle = night ? "#4f9a82" : "#57b884";
   ctx.fillRect(0, 0, 32, 256);
-  ctx.fillStyle = "rgba(38,105,76,0.6)";
+  ctx.fillStyle = night ? "rgba(28,70,60,0.6)" : "rgba(38,105,76,0.6)";
   for (let y = 0; y < 256; y += 34) ctx.fillRect(0, y, 32, 5);
-  ctx.fillStyle = "rgba(205,245,220,0.35)";
+  ctx.fillStyle = night ? "rgba(214,236,255,0.3)" : "rgba(205,245,220,0.35)";
   ctx.fillRect(6, 0, 3, 256);
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
@@ -157,7 +312,8 @@ function buildBambooTexture() {
 }
 
 function BambooStalk({ position, height, tilt = 0, leafCount = 3 }) {
-  const tex = useMemo(() => buildBambooTexture(), []);
+  const night = useNightMode();
+  const tex = useMemo(() => buildBambooTexture(night), [night]);
   const ref = useRef(null);
   const phase = useMemo(() => Math.random() * Math.PI * 2, []);
   useFrame(({ clock }) => {
@@ -181,12 +337,12 @@ function BambooStalk({ position, height, tilt = 0, leafCount = 3 }) {
     <group position={position} ref={ref}>
       <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.035, 0.05, height, 8]} />
-        <meshStandardMaterial map={tex} roughness={0.75} />
+        <meshStandardMaterial key={night ? "n" : "d"} map={tex} roughness={0.9} />
       </mesh>
       {leaves.map((l, i) => (
         <mesh key={i} position={l.position} rotation={l.rotation} scale={l.scale} castShadow>
           <coneGeometry args={[0.04, 0.26, 3]} />
-          <meshStandardMaterial color="#96e0ae" roughness={0.7} side={THREE.DoubleSide} />
+          <meshStandardMaterial color={night ? NIGHT.leaf : "#96e0ae"} roughness={0.85} side={THREE.DoubleSide} />
         </mesh>
       ))}
     </group>
@@ -219,15 +375,16 @@ function BambooGrove() {
   );
 }
 
-function buildMoundTexture() {
+function buildMoundTexture(night = false) {
   const canvas = document.createElement("canvas");
   canvas.width = 64;
   canvas.height = 64;
   const ctx = canvas.getContext("2d");
   const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 30);
-  grad.addColorStop(0, "rgba(45,100,80,0.9)");
-  grad.addColorStop(0.6, "rgba(45,100,80,0.6)");
-  grad.addColorStop(1, "rgba(45,100,80,0)");
+  const c = night ? "30,72,64" : "45,100,80";
+  grad.addColorStop(0, `rgba(${c},0.9)`);
+  grad.addColorStop(0.6, `rgba(${c},0.6)`);
+  grad.addColorStop(1, `rgba(${c},0)`);
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.arc(32, 32, 30, 0, Math.PI * 2);
@@ -245,23 +402,24 @@ const SHOOT_PLACEMENTS = [
 ];
 
 function BambooShootPatch() {
-  const mound = useMemo(() => buildMoundTexture(), []);
-  const tex = useMemo(() => buildBambooTexture(), []);
+  const night = useNightMode();
+  const mound = useMemo(() => buildMoundTexture(night), [night]);
+  const tex = useMemo(() => buildBambooTexture(night), [night]);
   return (
     <>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.57, 0.014, 0.13]}>
         <circleGeometry args={[0.7, 24]} />
-        <meshStandardMaterial map={mound} transparent depthWrite={false} roughness={1} />
+        <meshStandardMaterial key={night ? "n" : "d"} map={mound} transparent depthWrite={false} roughness={1} />
       </mesh>
       {SHOOT_PLACEMENTS.map((s, i) => (
         <group key={i} position={[s.x, 0, s.z]} rotation={[0, s.rotation, 0.06]}>
           <mesh position={[0, s.height / 2, 0]} castShadow>
             <cylinderGeometry args={[0.045, 0.06, s.height, 8]} />
-            <meshStandardMaterial map={tex} roughness={0.75} />
+            <meshStandardMaterial key={night ? "n" : "d"} map={tex} roughness={0.9} />
           </mesh>
           <mesh position={[0, s.height, 0]}>
             <circleGeometry args={[0.045, 8]} />
-            <meshStandardMaterial color="#cdeecb" roughness={0.6} />
+            <meshStandardMaterial color={night ? NIGHT.shootTop : "#cdeecb"} roughness={0.8} />
           </mesh>
         </group>
       ))}
@@ -279,19 +437,21 @@ const ROCK_PLACEMENTS = [
 ];
 
 function MossyRock({ position, scale, rotation, dark }) {
+  const night = useNightMode();
+  const P = night ? NIGHT : PALETTE;
   return (
     <group position={position} rotation={[0.15, rotation, 0.1]} scale={scale}>
       <mesh castShadow receiveShadow>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color={dark ? PALETTE.rockDark : PALETTE.rock} roughness={0.85} />
+        <meshStandardMaterial color={dark ? P.rockDark : P.rock} roughness={0.9} />
       </mesh>
       <mesh position={[0.05, 0.5, -0.05]} scale={[0.78, 0.24, 0.72]} receiveShadow>
         <sphereGeometry args={[1, 12, 10]} />
-        <meshStandardMaterial color={PALETTE.moss} roughness={1} />
+        <meshStandardMaterial color={P.moss} roughness={1} />
       </mesh>
       <mesh position={[-0.42, 0.28, 0.3]} scale={[0.36, 0.14, 0.32]} receiveShadow>
         <sphereGeometry args={[1, 10, 8]} />
-        <meshStandardMaterial color={PALETTE.mossDark} roughness={1} />
+        <meshStandardMaterial color={P.mossDark} roughness={1} />
       </mesh>
     </group>
   );
@@ -330,123 +490,232 @@ const POND_BORDER_ROCKS = (() => {
   return rocks;
 })();
 
-function buildWaterfallTexture() {
+// Seamless, softly broken highlights: the whole texture moves downward.
+function buildWaterfallTexture(P) {
   const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 256;
+  canvas.width = 256;
+  canvas.height = 512;
   const ctx = canvas.getContext("2d");
-
-  ctx.fillStyle = "#c9f2ef";
-  ctx.fillRect(0, 0, 64, 256);
-  const sheen = ctx.createLinearGradient(0, 0, 64, 0);
-  sheen.addColorStop(0, "rgba(255,255,255,0.35)");
-  sheen.addColorStop(0.35, "rgba(255,255,255,0)");
-  sheen.addColorStop(0.75, "rgba(140,205,200,0.25)");
-  sheen.addColorStop(1, "rgba(255,255,255,0.2)");
-  ctx.fillStyle = sheen;
-  ctx.fillRect(0, 0, 64, 256);
-
-  for (let i = 0; i < 16; i++) {
-    const seed = i * 13 + 5;
-    const x = (seed * 17) % 64;
-    const w = 1 + (seed % 3);
-    ctx.fillStyle = `rgba(255,255,255,${0.18 + (seed % 4) * 0.07})`;
-    ctx.fillRect(x, 0, w, 256);
-  }
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
-  for (let i = 0; i < 30; i++) {
-    const seed = i * 29 + 3;
-    const x = (seed * 23) % 60;
-    const y = (seed * 31) % 256;
-    for (const yy of [y, y - 256]) {
+  if (!ctx) return new THREE.Texture();
+  ctx.fillStyle = P.waterShallow;
+  ctx.fillRect(0, 0, 256, 512);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (let i = 0; i < 12; i++) {
+    const x = 12 + i * 21;
+    const y = seededRand(i * 29 + 8) * 512;
+    const length = 90 + seededRand(i * 11 + 2) * 150;
+    const bend = 3 + seededRand(i * 13 + 7) * 5;
+    ctx.strokeStyle = i % 3 === 0 ? P.foam : P.waterLip;
+    ctx.lineWidth = 7 + seededRand(i * 7 + 5) * 7;
+    [-512, 0, 512].forEach((offset) => {
       ctx.beginPath();
-      ctx.ellipse(x, yy, 2 + (seed % 3), 1.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
+      ctx.moveTo(x, y + offset);
+      ctx.bezierCurveTo(x - bend, y + offset + length * 0.3, x + bend, y + offset + length * 0.7, x, y + offset + length);
+      ctx.stroke();
+    });
   }
-
   const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(1, 1.5);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
-function Waterfall() {
-  const tex = useMemo(() => buildWaterfallTexture(), []);
-  const splashRef = useRef(null);
-  const mistRef = useRef(null);
-  const x = POND_CENTER[0] + 0.08;
-  const z = POND_CENTER[2] - 0.5;
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    tex.offset.y = (t * 0.55) % 1;
-    if (splashRef.current) {
-      const s = 1 + Math.sin(t * 3.2) * 0.12;
-      splashRef.current.scale.set(s, s, 1);
-      splashRef.current.material.opacity = 0.5 + Math.sin(t * 3.2) * 0.12;
+// One continuous ribbon: stream, rounded crest, free fall, then a pond apron.
+function buildWaterfallGeometry() {
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0.86, -0.24),
+    new THREE.Vector3(0, 0.87, -0.12),
+    new THREE.Vector3(0, 0.83, -0.025),
+    new THREE.Vector3(0, 0.68, 0.025),
+    new THREE.Vector3(0, 0.36, 0.055),
+    new THREE.Vector3(0, 0.09, 0.10),
+    new THREE.Vector3(0, 0.041, 0.19),
+    new THREE.Vector3(0, 0.039, 0.30),
+  ]);
+  const positions = [], uv = [], indices = [];
+  const rows = 64, columns = 12;
+  for (let i = 0; i <= rows; i++) {
+    const t = i / rows;
+    const p = curve.getPoint(t);
+    const halfWidth = 0.145 + 0.025 * Math.sin(t * Math.PI) + 0.035 * t ** 6;
+    for (let j = 0; j <= columns; j++) {
+      const u = j / columns;
+      const across = u * 2 - 1;
+      positions.push(across * halfWidth, p.y, p.z + Math.cos(across * Math.PI / 2) * 0.009);
+      uv.push(u, 1 - t);
+      if (i < rows && j < columns) {
+        const k = i * (columns + 1) + j;
+        indices.push(k, k + columns + 1, k + 1, k + 1, k + columns + 1, k + columns + 2);
+      }
     }
-    if (mistRef.current) {
-      const c = (t * 0.4) % 1;
-      mistRef.current.position.y = 0.06 + c * 0.28;
-      mistRef.current.material.opacity = 0.35 * (1 - c);
-      mistRef.current.scale.setScalar(0.5 + c * 0.9);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+// The little cliff behind the waterfall, built from the same mossy rocks as the pond edge
+// so it matches the rest of the habitat. Big rocks at the bottom, smaller ones stacked up.
+const CLIFF_ROCKS = [
+  { position: [-0.34, 0.16, 0.0], scale: 0.19, rotation: 0.3 },
+  { position: [0.34, 0.15, 0.01], scale: 0.18, rotation: 1.4 },
+  { position: [-0.3, 0.46, -0.06], scale: 0.16, rotation: 2.2 },
+  { position: [0.3, 0.45, -0.05], scale: 0.15, rotation: 0.8 },
+  { position: [-0.17, 0.76, -0.14], scale: 0.13, rotation: 1.9 },
+  { position: [0.18, 0.75, -0.13], scale: 0.12, rotation: 2.7 },
+];
+
+
+function Waterfall() {
+  const night = useNightMode();
+  const P = night ? NIGHT : PALETTE;
+  const tex = useMemo(() => buildWaterfallTexture(P), [P]);
+  const geometry = useMemo(buildWaterfallGeometry, []);
+  const rest = useMemo(() => geometry.attributes.position.array.slice(), [geometry]);
+  const time = useRef(0);
+  const ripples = useRef([]);
+  const foam = useRef([]);
+  const splash = useRef(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const x = POND_CENTER[0] + 0.08;
+  const z = POND_CENTER[2] - 0.48;
+  const foamSpots = useMemo(() => Array.from({ length: 9 }, (_, i) => ({
+    x: (seededRand(i * 13 + 3) - 0.5) * 0.31,
+    z: 0.15 + seededRand(i * 19 + 4) * 0.12,
+    size: 0.02 + seededRand(i * 23 + 7) * 0.024,
+    phase: seededRand(i * 5 + 2) * Math.PI * 2,
+  })), []);
+
+  useEffect(() => () => tex.dispose(), [tex]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+
+  useFrame((_, rawDelta) => {
+    time.current += Math.min(rawDelta, 0.05);
+    const t = time.current;
+    // Positive V offset carries features from the crest toward the pond.
+    tex.offset.y = (t * 0.65) % 1;
+    const positions = geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      const u = geometry.attributes.uv.getX(i);
+      const v = geometry.attributes.uv.getY(i);
+      const envelope = Math.sin(v * Math.PI) * Math.sin(u * Math.PI);
+      positions.setZ(i, rest[i * 3 + 2] + envelope * (
+        Math.sin(v * 24 + t * 5 + u * 8) * 0.006 + Math.sin(v * 43 + t * 8) * 0.003
+      ));
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    foam.current.forEach((m, i) => {
+      if (!m) return;
+      const d = foamSpots[i];
+      const pulse = 1 + Math.sin(t * 2 + d.phase) * 0.15;
+      m.scale.set(pulse * 1.5, pulse, 1);
+      m.position.z = d.z + Math.sin(t * 1.4 + d.phase) * 0.012;
+      m.material.opacity = 0.45 + Math.sin(t * 1.8 + d.phase) * 0.12;
+    });
+    ripples.current.forEach((m, i) => {
+      if (!m) return;
+      const cycle = (t * 0.42 + i / 3) % 1;
+      const radius = 0.055 + cycle * 0.22;
+      m.scale.set(radius * 1.3, radius, 1);
+      m.material.opacity = Math.sin(cycle * Math.PI) * (night ? 0.2 : 0.32);
+    });
+    if (splash.current) {
+      for (let i = 0; i < 18; i++) {
+        const c = (t * 0.9 + i / 18) % 1;
+        const a = seededRand(i * 17 + 2) * Math.PI * 2;
+        const r = 0.015 + c * 0.12;
+        dummy.position.set(Math.cos(a) * r, 0.046 + Math.sin(c * Math.PI) * (0.045 + seededRand(i + 9) * 0.055), 0.18 + Math.sin(a) * r * 0.55 + c * 0.025);
+        const size = Math.sin(c * Math.PI) * (0.003 + seededRand(i + 1) * 0.003);
+        dummy.scale.set(size, size * 1.4, size);
+        dummy.updateMatrix();
+        splash.current.setMatrixAt(i, dummy.matrix);
+      }
+      splash.current.instanceMatrix.needsUpdate = true;
     }
   });
+
   return (
-    <>
-      <group position={[x, 0.45, z - 0.12]} rotation={[0, 0.25, 0]}>
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[0.7, 0.9, 0.42]} />
-          <meshStandardMaterial color={PALETTE.rock} roughness={0.9} />
+    <group position={[x, 0, z]}>
+      <group position={[0, 0, -0.14]}>
+        <mesh position={[0, 0.42, -0.2]} scale={[0.38, 0.47, 0.14]} castShadow receiveShadow>
+          <sphereGeometry args={[1, 16, 12]} />
+          <meshStandardMaterial color={P.rockDark} roughness={1} />
         </mesh>
-        <mesh position={[0, 0.47, 0]} scale={[0.34, 0.1, 0.2]}>
-          <sphereGeometry args={[1, 12, 8]} />
-          <meshStandardMaterial color={PALETTE.moss} roughness={1} />
-        </mesh>
-        <mesh position={[0.22, 0.44, 0.1]} scale={[0.12, 0.06, 0.1]}>
-          <sphereGeometry args={[1, 10, 8]} />
-          <meshStandardMaterial color={PALETTE.mossDark} roughness={1} />
-        </mesh>
-        <mesh position={[-0.2, 0.3, 0.18]} scale={[0.12, 0.07, 0.09]}>
-          <sphereGeometry args={[1, 10, 8]} />
-          <meshStandardMaterial color={PALETTE.moss} roughness={1} />
-        </mesh>
+        {CLIFF_ROCKS.map((r, i) => <MossyRock key={i} {...r} dark={i % 2 === 1} />)}
       </group>
-      <mesh position={[x, 0.905, z - 0.12]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.16, 20]} />
-        <meshBasicMaterial color={PALETTE.waterShallow} transparent opacity={0.9} />
+      <mesh geometry={geometry}>
+        <meshStandardMaterial map={tex} roughness={0.24} metalness={0.05} transparent opacity={0.9} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position={[x, 0.44, z + 0.1]}>
-        <planeGeometry args={[0.34, 0.92]} />
-        <meshBasicMaterial map={tex} transparent opacity={0.92} side={THREE.DoubleSide} />
-      </mesh>
-      <mesh position={[x, 0.42, z + 0.135]}>
-        <planeGeometry args={[0.2, 0.86]} />
-        <meshBasicMaterial color="#eafcf9" transparent opacity={0.45} side={THREE.DoubleSide} />
-      </mesh>
-      <mesh position={[x, 0.9, z + 0.1]} rotation={[0, 0, Math.PI / 2]}>
-        <capsuleGeometry args={[0.045, 0.24, 4, 10]} />
-        <meshBasicMaterial color={PALETTE.foam} transparent opacity={0.95} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.035, z + 0.24]}>
-        <circleGeometry args={[0.17, 20]} />
-        <meshBasicMaterial color={PALETTE.foam} transparent opacity={0.75} />
-      </mesh>
-      <mesh ref={splashRef} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.045, z + 0.24]}>
-        <ringGeometry args={[0.14, 0.22, 20]} />
-        <meshBasicMaterial color={PALETTE.foam} transparent opacity={0.5} side={THREE.DoubleSide} />
-      </mesh>
-      <mesh ref={mistRef} position={[x, 0.06, z + 0.2]}>
-        <sphereGeometry args={[0.14, 10, 8]} />
-        <meshBasicMaterial color="#eafaf4" transparent opacity={0.3} depthWrite={false} />
-      </mesh>
-    </>
+      {foamSpots.map((d, i) => (
+        <mesh key={i} ref={(el) => { foam.current[i] = el; }} rotation={[-Math.PI / 2, 0, 0]} position={[d.x, 0.047 + i * 0.0002, d.z]}>
+          <circleGeometry args={[d.size, 16]} />
+          <meshBasicMaterial color={P.foam} transparent opacity={0.5} depthWrite={false} />
+        </mesh>
+      ))}
+      {[0, 1, 2].map((i) => (
+        <mesh key={i} ref={(el) => { ripples.current[i] = el; }} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.049 + i * 0.0002, 0.23]}>
+          <ringGeometry args={[0.975, 1, 64, 1, 0, Math.PI * 2]} />
+          <meshBasicMaterial color={P.foam} transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+      <instancedMesh ref={splash} args={[undefined, undefined, 18]} frustumCulled={false}>
+        <sphereGeometry args={[1, 6, 4]} />
+        <meshBasicMaterial color={P.foam} transparent opacity={0.7} depthWrite={false} />
+      </instancedMesh>
+    </group>
   );
 }
 
+function buildPondTexture(P) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.Texture();
+  const depth = ctx.createLinearGradient(0, 0, 0, 512);
+  depth.addColorStop(0, P.waterShallow);
+  depth.addColorStop(0.55, P.waterShallow);
+  depth.addColorStop(1, P.water);
+  ctx.fillStyle = depth;
+  ctx.fillRect(0, 0, 512, 512);
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = P.waterShallow;
+  ctx.fillRect(0, 0, 512, 512);
+  ctx.globalAlpha = 1;
+  const landing = ctx.createRadialGradient(300, 92, 8, 300, 92, 300);
+  landing.addColorStop(0, P.waterLip);
+  landing.addColorStop(0.35, P.waterShallow);
+  landing.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = landing;
+  ctx.fillRect(0, 0, 512, 512);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (let i = 0; i < 9; i++) {
+    const x = 95 + seededRand(i * 17 + 4) * 320;
+    const y = 95 + seededRand(i * 29 + 8) * 320;
+    const radius = 24 + seededRand(i * 11 + 2) * 36;
+    ctx.strokeStyle = i % 3 === 0 ? P.foam : P.waterLip;
+    ctx.lineWidth = 5 + seededRand(i * 7 + 5) * 3;
+    ctx.beginPath();
+    ctx.ellipse(x, y, radius, radius * 0.4, 0, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 function Pond() {
+  const night = useNightMode();
+  const P = night ? NIGHT : PALETTE;
+  const tex = useMemo(() => buildPondTexture(P), [P]);
+  useEffect(() => () => tex.dispose(), [tex]);
   const waterRef = useRef(null);
   useFrame(({ clock }) => {
     const mat = waterRef.current?.material;
@@ -460,7 +729,7 @@ function Pond() {
         position={[POND_CENTER[0], 0.03, POND_CENTER[2]]}
       >
         <circleGeometry args={[POND_RADIUS, 32]} />
-        <meshStandardMaterial color={PALETTE.water} roughness={0.25} transparent opacity={0.92} />
+        <meshStandardMaterial map={tex} roughness={0.25} transparent opacity={0.92} />
       </mesh>
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
@@ -468,7 +737,7 @@ function Pond() {
       >
         <circleGeometry args={[POND_RADIUS * 0.42, 24]} />
         <meshStandardMaterial
-          color={PALETTE.waterShallow}
+          color={P.waterShallow}
           roughness={0.3}
           transparent
           opacity={0.55}
@@ -476,11 +745,11 @@ function Pond() {
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0.5]} position={[POND_CENTER[0] + 0.2, 0.045, POND_CENTER[2] + 0.12]}>
         <circleGeometry args={[0.13, 20, 0.4, Math.PI * 2 - 0.8]} />
-        <meshStandardMaterial color="#4f9e63" roughness={0.7} side={THREE.DoubleSide} />
+        <meshStandardMaterial color={night ? NIGHT.lily : "#4f9e63"} roughness={0.8} side={THREE.DoubleSide} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 2.2]} position={[POND_CENTER[0] - 0.12, 0.045, POND_CENTER[2] + 0.26]}>
         <circleGeometry args={[0.09, 18, 0.4, Math.PI * 2 - 0.8]} />
-        <meshStandardMaterial color="#5fb371" roughness={0.7} side={THREE.DoubleSide} />
+        <meshStandardMaterial color={night ? NIGHT.lily2 : "#5fb371"} roughness={0.8} side={THREE.DoubleSide} />
       </mesh>
       <group position={[POND_CENTER[0] + 0.2, 0.06, POND_CENTER[2] + 0.12]}>
         {[0, 1, 2, 3, 4].map((i) => {
@@ -492,13 +761,23 @@ function Pond() {
               rotation={[0.7, a, 0]}
             >
               <coneGeometry args={[0.018, 0.05, 4]} />
-              <meshStandardMaterial color="#ffb9d6" roughness={0.5} />
+              <meshStandardMaterial
+                color={night ? NIGHT.lotus : "#ffb9d6"}
+                emissive={night ? NIGHT.lotus : "#000000"}
+                emissiveIntensity={night ? 0.45 : 0}
+                roughness={0.7}
+              />
             </mesh>
           );
         })}
         <mesh position={[0, 0.02, 0]}>
           <sphereGeometry args={[0.016, 8, 8]} />
-          <meshStandardMaterial color="#ffe38a" roughness={0.5} />
+          <meshStandardMaterial
+            color={night ? NIGHT.lotusCenter : "#ffe38a"}
+            emissive={night ? NIGHT.lotusCenter : "#000000"}
+            emissiveIntensity={night ? 0.5 : 0}
+            roughness={0.7}
+          />
         </mesh>
       </group>
       {POND_BORDER_ROCKS.map((r, i) => (
@@ -509,17 +788,18 @@ function Pond() {
 }
 
 function MistWisp({ radius, speed, height, phase, scale }) {
+  const night = useNightMode();
   const ref = useRef(null);
   useFrame(({ clock }) => {
     if (!ref.current) return;
     const t = clock.getElapsedTime() * speed + phase;
     ref.current.position.set(Math.cos(t) * radius, height, Math.sin(t) * radius);
-    ref.current.material.opacity = 0.16 + Math.sin(t * 1.3) * 0.05;
+    ref.current.material.opacity = (0.16 + Math.sin(t * 1.3) * 0.05) * (night ? 0.55 : 1);
   });
   return (
     <mesh ref={ref} scale={scale}>
       <sphereGeometry args={[0.6, 12, 12]} />
-      <meshBasicMaterial color="#eaf7f0" transparent opacity={0.18} depthWrite={false} />
+      <meshBasicMaterial color={night ? NIGHT.mist : "#eaf7f0"} transparent opacity={0.18} depthWrite={false} />
     </mesh>
   );
 }
@@ -542,6 +822,8 @@ function MistWisps() {
 const PETAL_COLORS = ["#ffb7d5", "#ffcfe3", "#ffe1ee"];
 
 function Petal({ radius, speed, phase, colorIndex }) {
+  const night = useNightMode();
+  const colors = night ? NIGHT.petals : PETAL_COLORS;
   const ref = useRef(null);
   useFrame(({ clock }) => {
     if (!ref.current) return;
@@ -559,7 +841,9 @@ function Petal({ radius, speed, phase, colorIndex }) {
     <mesh ref={ref} scale={[0.55, 1, 1]}>
       <circleGeometry args={[0.028, 8]} />
       <meshStandardMaterial
-        color={PETAL_COLORS[colorIndex % PETAL_COLORS.length]}
+        color={colors[colorIndex % colors.length]}
+        emissive={night ? colors[colorIndex % colors.length] : "#000000"}
+        emissiveIntensity={night ? 0.3 : 0}
         side={THREE.DoubleSide}
         roughness={0.5}
       />
@@ -608,6 +892,7 @@ const FLECK_PLACEMENTS = (() => {
 })();
 
 function TinyDaisy({ position }) {
+  const night = useNightMode();
   return (
     <group position={position} rotation={[-Math.PI / 2, 0, 0]}>
       {[0, 1, 2, 3, 4].map((i) => {
@@ -620,13 +905,13 @@ function TinyDaisy({ position }) {
             scale={[1.8, 1, 1]}
           >
             <circleGeometry args={[0.016, 8]} />
-            <meshStandardMaterial color="#fff6fa" roughness={0.6} />
+            <meshStandardMaterial color={night ? NIGHT.daisy : "#fff6fa"} roughness={0.8} />
           </mesh>
         );
       })}
       <mesh>
         <circleGeometry args={[0.014, 8]} />
-        <meshStandardMaterial color="#ffce54" roughness={0.6} />
+        <meshStandardMaterial color={night ? NIGHT.daisyCenter : "#ffce54"} roughness={0.8} />
       </mesh>
     </group>
   );
@@ -641,6 +926,7 @@ const DAISY_SPOTS = [
 ];
 
 function FlowerFlecks() {
+  const night = useNightMode();
   return (
     <>
       {FLECK_PLACEMENTS.map((f, i) => (
@@ -651,7 +937,7 @@ function FlowerFlecks() {
           scale={[1.9, 1, 1]}
         >
           <circleGeometry args={[f.scale, 12]} />
-          <meshStandardMaterial color={f.color} roughness={0.6} />
+          <meshStandardMaterial color={night ? NIGHT.flecks[i % NIGHT.flecks.length] : f.color} roughness={0.8} />
         </mesh>
       ))}
       {DAISY_SPOTS.map((p, i) => (
@@ -661,8 +947,10 @@ function FlowerFlecks() {
   );
 }
 
-function Panda({ modelUrl, position = PANDA_POSITION, onMunch }) {
+function Panda({ modelUrl, position = PANDA_POSITION, onMunch, inline: InlineAnimation = null, variant }) {
   const group = useRef(null);
+  const frame = useRef(null);
+  const { camera, gl } = useThree();
   const body = useRef(null);
   const nextMunch = useRef(1.5 + Math.random() * 2);
   const nextGlance = useRef(1 + Math.random() * 2);
@@ -683,13 +971,37 @@ function Panda({ modelUrl, position = PANDA_POSITION, onMunch }) {
       if (obj.isMesh) {
         obj.castShadow = true;
         obj.receiveShadow = true;
-        const mat = obj.material;
-        if (mat && "roughness" in mat) mat.roughness = Math.min(mat.roughness ?? 0.9, 0.9);
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach((m) => {
+          if (!m) return;
+          if ("roughness" in m) m.roughness = 1;
+          if ("metalness" in m) m.metalness = 0;
+          if ("clearcoat" in m) m.clearcoat = 0;
+          if ("specularIntensity" in m) m.specularIntensity = 0;
+          m.needsUpdate = true;
+        });
       }
     });
     wrapper.add(clone);
+    wrapper.userData.placement = {
+      offset: [-center.x, -box.min.y, -center.z],
+      scale,
+      box: box.clone(),
+    };
     return wrapper;
   }, [gltf.scene]);
+
+  const anchorPoints = useMemo(() => {
+    const { offset, scale, box } = model.userData.placement;
+    const x = position[0] + offset[0] + ((box.min.x + box.max.x) / 2) * scale;
+    const z = position[1] + offset[2] + ((box.min.z + box.max.z) / 2) * scale;
+    return {
+      top: new THREE.Vector3(x, offset[1] + box.max.y * scale + BUBBLE_LIFT, z),
+      bottom: new THREE.Vector3(x, offset[1] + box.min.y * scale, z),
+      topWorld: new THREE.Vector3(),
+      bottomWorld: new THREE.Vector3(),
+    };
+  }, [model, position]);
 
   useLayoutEffect(() => {
     if (!group.current) return;
@@ -697,6 +1009,13 @@ function Panda({ modelUrl, position = PANDA_POSITION, onMunch }) {
   }, [model]);
 
   useFrame(({ clock }) => {
+    if (frame.current) {
+      frame.current.updateWorldMatrix(true, false);
+      anchorPoints.topWorld.copy(anchorPoints.top).applyMatrix4(frame.current.matrixWorld);
+      anchorPoints.bottomWorld.copy(anchorPoints.bottom).applyMatrix4(frame.current.matrixWorld);
+      publishMoodAnchor(camera, gl, anchorPoints.topWorld, anchorPoints.bottomWorld);
+    }
+
     if (!group.current) return;
     const t = clock.getElapsedTime();
 
@@ -719,12 +1038,45 @@ function Panda({ modelUrl, position = PANDA_POSITION, onMunch }) {
     group.current.position.y = Math.sin(t * 1.2) * 0.012;
   });
 
+  if (InlineAnimation) {
+    const { offset, scale } = model.userData.placement;
+    return (
+      <group ref={frame}>
+        <InlineAnimation
+          placement={{ homePosition: position, offset, scale, yaw: 0, lean: INLINE_LEAN }}
+          idleModelPath={modelUrl}
+          variant={variant}
+        />
+      </group>
+    );
+  }
+
   return (
-    <group ref={group} position={[position[0], 0, position[1]]}>
-      <group ref={body}>
-        <primitive object={model} />
+    <group ref={frame}>
+      <group ref={group} position={[position[0], 0, position[1]]}>
+        <group ref={body}>
+          <primitive object={model} />
+        </group>
       </group>
     </group>
+  );
+}
+
+function PandaSlot({ onMunch }) {
+  const mood = useMoodAnimation();
+  const Inline = mood.active ? INLINE_MOODS[mood.mood] || null : null;
+  if (mood.active && !Inline) return null;
+  return (
+    <PandaErrorBoundary position={PANDA_POSITION} onMunch={Inline ? undefined : onMunch}>
+      <Panda
+        key={Inline ? `${mood.mood}-${mood.variant || ""}` : "idle"}
+        modelUrl={PANDA_MODEL_URL}
+        position={PANDA_POSITION}
+        onMunch={Inline ? undefined : onMunch}
+        inline={Inline}
+        variant={mood.variant}
+      />
+    </PandaErrorBoundary>
   );
 }
 
@@ -751,6 +1103,7 @@ class PandaErrorBoundary extends React.Component {
 }
 
 function LeafPuff({ position, onDone }) {
+  const night = useNightMode();
   const ref = useRef(null);
   const start = useRef(null);
   const DURATION = 0.55;
@@ -773,9 +1126,65 @@ function LeafPuff({ position, onDone }) {
       position={[position[0], 0.03, position[1]]}
     >
       <ringGeometry args={[0.08, 0.14, 5]} />
-      <meshBasicMaterial color="#bdeeb0" transparent opacity={0.5} side={THREE.DoubleSide} />
+      <meshBasicMaterial color={night ? NIGHT.puff : "#bdeeb0"} transparent opacity={0.5} side={THREE.DoubleSide} />
     </mesh>
   );
+}
+
+// Same twinkling yellow stars as the bear habitat.
+function YellowStars() {
+  const group = useRef(null);
+  const shape = useMemo(() => {
+    const outline = new THREE.Shape();
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.PI / 2 + (i * Math.PI) / 5;
+      const r = i % 2 === 0 ? 1 : 0.44;
+      const x = Math.cos(angle) * r;
+      const y = Math.sin(angle) * r;
+      if (i === 0) outline.moveTo(x, y);
+      else outline.lineTo(x, y);
+    }
+    outline.closePath();
+    return outline;
+  }, []);
+  const stars = useMemo(() => Array.from({ length: 13 }, (_, i) => ({
+    x: -0.86 + (i % 5) * 0.4 + seededRand(i * 17 + 2) * 0.13,
+    y: 0.57 + seededRand(i * 23 + 7) * 0.32,
+    radius: i % 3 === 0 ? 5 : 3,
+    phase: seededRand(i + 11) * Math.PI * 2,
+  })), []);
+  useFrame(({ camera, size, clock }) => {
+    if (!group.current || !camera.isOrthographicCamera) return;
+    group.current.position.copy(camera.position);
+    group.current.quaternion.copy(camera.quaternion);
+    const halfWidth = (camera.right - camera.left) / (2 * camera.zoom);
+    const halfHeight = (camera.top - camera.bottom) / (2 * camera.zoom);
+    group.current.children.forEach((mesh, i) => {
+      const star = stars[i];
+      mesh.position.set(star.x * halfWidth, star.y * halfHeight, -0.5);
+      mesh.scale.setScalar((star.radius * halfHeight * 2) / size.height);
+      mesh.material.opacity = 0.65 + Math.sin(clock.getElapsedTime() * 0.8 + star.phase) * 0.2;
+    });
+  });
+  return (
+    <group ref={group}>
+      {stars.map((star, i) => (
+        <mesh key={i} renderOrder={100} frustumCulled={false}>
+          <shapeGeometry args={[shape]} />
+          <meshBasicMaterial color={NIGHT.star} transparent opacity={0.8} depthTest={false} depthWrite={false} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// gl settings are only read once, so keep brightness in sync with night mode
+function ExposureSync({ exposure }) {
+  const { gl } = useThree();
+  useEffect(() => {
+    gl.toneMappingExposure = exposure;
+  }, [gl, exposure]);
+  return null;
 }
 
 const ISO_DISTANCE = 4.4;
@@ -787,7 +1196,8 @@ const ISO_POSITION = [
   ISO_DISTANCE * Math.cos(ISO_ELEVATION),
 ];
 
-export function PandaHabitat3D() {
+export function PandaHabitat3D({ showPanda = true } = {}) {
+  const night = useNightMode();
   const [puffs, setPuffs] = useState([]);
 
   const addPuff = (position) =>
@@ -795,34 +1205,48 @@ export function PandaHabitat3D() {
   const removePuff = (id) => setPuffs((prev) => prev.filter((p) => p.id !== id));
 
   useEffect(() => {
-    useGLTF.preload(PANDA_MODEL_URL);
+    if (!showPanda) return;
+    [PANDA_MODEL_URL, ...PANDA_MOOD_MODELS].forEach((url) => useGLTF.preload(url));
+  }, [showPanda]);
+
+  useEffect(() => {
+    window.__habitatInline = { animal: "panda", moods: Object.keys(INLINE_MOODS) };
+    window.dispatchEvent(new CustomEvent("habitat-inline", { detail: window.__habitatInline }));
+    return () => {
+      window.__habitatInline = null;
+      window.__moodAnchor = null;
+      window.dispatchEvent(new CustomEvent("habitat-inline", { detail: null }));
+    };
   }, []);
 
   return (
     <Canvas
-      shadows
+      shadows="soft"
       orthographic
       camera={{ position: ISO_POSITION, zoom: ISO_ZOOM, near: 0.1, far: 60 }}
-      gl={{ toneMappingExposure: 1.2 }}
+      gl={{ toneMappingExposure: night ? 1.0 : 1.15 }}
       dpr={[1, 2]}
     >
-      <color attach="background" args={[PALETTE.background]} />
-      <fog attach="fog" args={[PALETTE.fog, PALETTE.fogNear, PALETTE.fogFar]} />
+      <ExposureSync exposure={night ? 1.0 : 1.15} />
+      <color attach="background" args={[night ? NIGHT.background : PALETTE.background]} />
+      <fog attach="fog" args={[night ? NIGHT.fog : PALETTE.fog, PALETTE.fogNear, PALETTE.fogFar]} />
 
-      <ambientLight intensity={1.0} />
+      <ambientLight intensity={night ? NIGHT.ambient : 0.9} color={night ? NIGHT.ambientColor : "#fff4e2"} />
       <directionalLight
         position={[5, 8, 3]}
-        intensity={1.5}
-        color={PALETTE.sun}
+        intensity={night ? NIGHT.sun : 2.0}
+        color={night ? NIGHT.sunColor : PALETTE.sun}
         castShadow
         shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0004}
         shadow-camera-left={-5}
         shadow-camera-right={5}
         shadow-camera-top={5}
         shadow-camera-bottom={-5}
       />
-      <directionalLight position={[-5, 3, -4]} intensity={0.3} color={PALETTE.rimLight} />
-      <hemisphereLight args={[PALETTE.hemiSky, PALETTE.hemiGround, 1.0]} />
+      <directionalLight position={[-5, 3, -4]} intensity={night ? NIGHT.rim : 0.6} color={night ? NIGHT.rimColor : PALETTE.rimLight} />
+      <hemisphereLight args={[night ? NIGHT.hemiSky : PALETTE.hemiSky, night ? NIGHT.hemiGround : PALETTE.hemiGround, night ? NIGHT.hemiI : 0.95]} />
+      {night && <YellowStars />}
 
       <Suspense fallback={null}>
         <group position={[0, -0.18, 0]}>
@@ -835,12 +1259,11 @@ export function PandaHabitat3D() {
           <FlowerFlecks />
           <MistWisps />
           <Petals />
+          {night && <NightFireflies area={[1.5, 0.15, 0.55, 1.5]} count={12} color={NIGHT.firefly} size={0.014} />}
           {puffs.map((p) => (
             <LeafPuff key={p.id} position={p.position} onDone={() => removePuff(p.id)} />
           ))}
-          <HideWhenAnimated><PandaErrorBoundary position={PANDA_POSITION} onMunch={addPuff}>
-            <Panda modelUrl={PANDA_MODEL_URL} position={PANDA_POSITION} onMunch={addPuff} />
-          </PandaErrorBoundary></HideWhenAnimated>
+          {showPanda && <PandaSlot onMunch={addPuff} />}
         </group>
       </Suspense>
     </Canvas>

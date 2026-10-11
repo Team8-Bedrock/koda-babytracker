@@ -40,7 +40,7 @@ const Welcome = () => {
 
         <p className="setup-footer">
           Already have an account?{" "}
-          <a onClick={() => navigate("/login")}>Login</a>
+          <button type="button" className="setup-footer-link" onClick={() => navigate("/login")}>Login</button>
         </p>
       </div>
     </div>

@@ -235,8 +235,7 @@ function HungryBunnyRig({ worldScale }) {
     const leftHand = useRef(null);
     const rightHand = useRef(null);
 
-    useFrame((state, rawDelta) => {
-        const delta = Math.min(rawDelta, 0.05);
+    useFrame((state) => {
         const time = state.clock.elapsedTime;
         if (!bunnyRef.current) return;
 

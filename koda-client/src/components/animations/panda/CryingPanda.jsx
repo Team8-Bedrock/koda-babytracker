@@ -1,183 +1,125 @@
-import { Suspense, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { PandaMood, smooth, pulse, aimArm, headPoint, getTexture } from "./pandaRig";
 
-const MODEL_URL = "/models/characters/panda/crying.glb";
-const LOCAL_REFERENCE_HEIGHT = 2.6;
+const MODEL = "/models/characters/panda/crying.glb";
+const CYCLE = 4;
+const TEARS = 16;
+const GRAVITY = -2.6;
 
-function useNormalizedScene(url, targetHeight = 2.6) {
-    const { scene } = useGLTF(url);
-    return useMemo(() => {
-        const root = scene.clone(true);
-        const box = new THREE.Box3().setFromObject(root);
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
-        box.getSize(size);
-        box.getCenter(center);
-        const scale = targetHeight / (size.y || 1);
-        root.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-        root.scale.setScalar(scale);
-        root.traverse((o) => {
-            if (o.isMesh) {
-                o.castShadow = true;
-                o.receiveShadow = true;
-            }
-        });
-        return { root, size: size.clone().multiplyScalar(scale) };
-    }, [scene, targetHeight]);
+function cryState(t) {
+  const u = (t % CYCLE) / CYCLE;
+  return {
+    u,
+    sniff: pulse(0.12, 0.2, u) + pulse(0.28, 0.36, u),
+    wipe: smooth(0.42, 0.5, u) * (1 - smooth(0.62, 0.7, u)),
+    wail: smooth(0.7, 0.76, u) * (1 - smooth(0.92, 0.99, u)),
+  };
 }
-const TEAR_COUNT = 14;
-const TEAR_MAT = new THREE.MeshPhysicalMaterial({
-    color: "#bfe6ff",
-    transparent: true,
-    opacity: 0.85,
-    roughness: 0.05,
-    metalness: 0,
-    transmission: 0.6,
-    thickness: 0.3,
-    ior: 1.33,
-});
 
-function Tears({ eyes }) {
-    const meshRef = useRef(null);
-    const dummy = useMemo(() => new THREE.Object3D(), []);
-    const drops = useMemo(
-        () =>
-            Array.from({ length: TEAR_COUNT }, (_, i) => ({
-                side: i % 2 === 0 ? -1 : 1,
-                t: (i / TEAR_COUNT) * 0.9 + Math.random() * 0.2,
-                life: 0.7 + Math.random() * 0.35,
-                drift: (Math.random() - 0.5) * 0.25,
-                spin: Math.random() * Math.PI * 2,
-                size: 0.65 + Math.random() * 0.7,
-                speed: 0.9 + Math.random() * 0.6,
-            })),
-        [],
-    );
-
-    useFrame((_, rawDelta) => {
-        const dt = Math.min(rawDelta, 0.05);
-        const mesh = meshRef.current;
-        if (!mesh) return;
-
-        drops.forEach((d, i) => {
-            d.t += dt * d.speed;
-            if (d.t > d.life) {
-                d.t = 0;
-                d.life = 0.7 + Math.random() * 0.35;
-                d.drift = (Math.random() - 0.5) * 0.25;
-                d.size = 0.65 + Math.random() * 0.7;
-                d.speed = 0.9 + Math.random() * 0.6;
-            }
-            const p = Math.max(d.t, 0) / d.life;
-            const origin = eyes[d.side < 0 ? 0 : 1];
-
-            const outward = 0.18 + p * 1.4 + p * p * 0.9;
-            const x = origin[0] + d.side * outward + d.drift * p;
-            const y = origin[1] + 0.05 + p * 0.25 - 4.2 * p * p;
-            const z = origin[2] + 0.05 - p * 0.35;
-
-            const grow = Math.min(p / 0.08, 1);
-            const s = d.size * 0.038 * grow * (p > 0.92 ? (1 - p) * 12.5 : 1);
-            dummy.position.set(x, y, z);
-            dummy.scale.set(s * 0.7, s * (1 + p * 2.4), s * 0.7);
-            dummy.rotation.set(0, d.spin + p * 4, 0);
-            dummy.updateMatrix();
-            mesh.setMatrixAt(i, dummy.matrix);
-        });
-        mesh.instanceMatrix.needsUpdate = true;
+function Tears({ rig }) {
+  const refs = useRef([]);
+  const texture = getTexture("tear");
+  const eye = useMemo(() => ({ l: new THREE.Vector3(), r: new THREE.Vector3() }), []);
+  const seeds = useMemo(() => Array.from({ length: TEARS }, (_, i) => ({ side: i % 2 ? 1 : -1, phase: (Math.floor(i / 2) / (TEARS / 2)) * 0.6 })), []);
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    const s = cryState(t);
+    headPoint(rig, rig.eyeOffsetLeft, eye.l);
+    headPoint(rig, rig.eyeOffsetRight, eye.r);
+    const power = 0.35 + s.wail * 1.1 - s.wipe * 0.3;
+    refs.current.forEach((sp, i) => {
+      if (!sp) return;
+      const sd = seeds[i];
+      const age = ((t + sd.phase) % 0.6) / 0.6;
+      const tt = age * 0.6;
+      const from = sd.side < 0 ? eye.l : eye.r;
+      const vx = sd.side * (0.18 + power * 0.38);
+      const vy = 0.15 + power * 0.45;
+      const y = from.y + vy * tt + 0.5 * GRAVITY * tt * tt;
+      sp.visible = y > 0.02 && power > 0.1;
+      sp.position.set(from.x + vx * tt, Math.max(0.02, y), from.z + 0.05 + tt * 0.2);
+      sp.material.opacity = 0.95 - age * 0.3;
+      sp.scale.setScalar(0.05 + power * 0.025);
+      sp.material.rotation = -sd.side * (0.3 + age);
     });
-
-    return (
-        <instancedMesh ref={meshRef} args={[undefined, undefined, TEAR_COUNT]} material={TEAR_MAT}>
-            <sphereGeometry args={[1, 16, 16]} />
-        </instancedMesh>
-    );
+  });
+  return (
+    <group>
+      {seeds.map((_, i) => (
+        <sprite key={i} ref={(el) => (refs.current[i] = el)}>
+          <spriteMaterial map={texture} transparent opacity={0} depthWrite={false} toneMapped={false} />
+        </sprite>
+      ))}
+    </group>
+  );
 }
 
-function Hand({ side, size }) {
-    const ref = useRef(null);
-
-    useFrame((state) => {
-        const g = ref.current;
-        if (!g) return;
-        const t = state.clock.elapsedTime;
-        const speed = 13;
-        const p = (t * speed) % (Math.PI * 2);
-        const down = p < Math.PI;
-        const u = down ? p / Math.PI : (p - Math.PI) / Math.PI;
-        const yFactor = down ? Math.cos(Math.PI * u) : -Math.cos(Math.PI * u);
-        const curve = Math.sin(Math.PI * u);
-
-        const baseX = side * (size.x * 0.38 + 0.10);
-        const baseY = -size.y * 0.22;
-        g.position.set(
-            baseX + side * curve * 0.32,
-            baseY + yFactor * 0.32,
-            size.z * 0.12 + curve * 0.08,
-        );
-        g.rotation.z = side * (0.55 + curve * 0.45);
-        g.rotation.x = curve * 0.35;
-        g.scale.setScalar(1);
-    });
-
-    return (
-        <group ref={ref}>
-            <mesh castShadow>
-                <sphereGeometry args={[0.16, 32, 32]} />
-                <meshStandardMaterial color="#111111" roughness={0.45} metalness={0.02} />
-            </mesh>
-        </group>
-    );
+function Puddle() {
+  const ref = useRef(null);
+  useFrame((state) => {
+    if (!ref.current) return;
+    const t = state.clock.elapsedTime;
+    const grow = Math.min(1, t / 12);
+    ref.current.scale.set(0.35 + grow * 0.45 + Math.sin(t * 2) * 0.01, 0.25 + grow * 0.3, 1);
+    ref.current.material.opacity = 0.35 + grow * 0.2;
+  });
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0.25]}>
+      <circleGeometry args={[1, 32]} />
+      <meshStandardMaterial color="#9fd6f5" transparent opacity={0.4} roughness={0.2} depthWrite={false} />
+    </mesh>
+  );
 }
 
-function CryingPandaRig() {
-    const { root, size } = useNormalizedScene(MODEL_URL, LOCAL_REFERENCE_HEIGHT);
-    const bodyRef = useRef(null);
-    const eyes = useMemo(() => {
-        const y = size.y * 0.5 - size.y * 0.515;
-        const x = size.y * 0.077;
-        const z = size.z * 0.5;
-        return [
-            [-x, y, z],
-            [x, y, z],
-        ];
-    }, [size]);
+export function CryingRig({ rig }) {
+  const bodyRef = useRef(null);
+  const tmp = useMemo(() => ({ eye: new THREE.Vector3(), target: new THREE.Vector3() }), []);
 
-    useFrame((state) => {
-        const g = bodyRef.current;
-        if (!g) return;
-        const t = state.clock.elapsedTime;
-        const bounceSpeed = 10;
-        const bounce = Math.abs(Math.sin(t * bounceSpeed));
-        const hop = Math.pow(bounce, 2.5) * 0.28;
-        g.position.y = hop;
-        g.rotation.z = 0;
-        g.rotation.x = 0;
-        g.scale.setScalar(1);
-    });
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    const s = cryState(t);
+    const sob = Math.sin(t * 9) * (0.3 + s.wail * 0.7);
 
-    return (
-        <group ref={bodyRef}>
-            <primitive object={root} />
-            <Hand side={-1} size={size} />
-            <Hand side={1} size={size} />
-            <Tears eyes={eyes} />
-        </group>
-    );
+    if (bodyRef.current) {
+      bodyRef.current.scale.set(1 + s.sniff * 0.03, 1 - s.sniff * 0.04 + sob * 0.01, 1 + s.sniff * 0.03);
+      bodyRef.current.position.y = s.sniff * 0.02;
+      bodyRef.current.rotation.z = Math.sin(t * 1.4) * 0.03 + sob * 0.01;
+    }
+
+    rig.head.position.copy(rig.headBase);
+    rig.head.rotation.set(0.12 - s.wail * 0.3 + s.sniff * 0.06 - s.wipe * 0.05, Math.sin(t * 1.1) * 0.05, Math.sin(t * 1.4) * 0.05 + s.wipe * Math.sin(t * 10) * 0.03);
+
+    [rig.eyeLeft, rig.eyeRight].forEach((e) => e.inner.forEach((g) => g.scale.set(1, 0.8 + sob * 0.08, 1)));
+    rig.earLeft.rotation.z = 0.35 + s.sniff * 0.08;
+    rig.earRight.rotation.z = -0.35 - s.sniff * 0.08;
+
+    rig.mouth.visible = true;
+    rig.mouth.scale.set(0.025 + s.wail * 0.02, 0.01 + s.wail * 0.035 + Math.max(0, sob) * 0.006, 0.012);
+
+    headPoint(rig, rig.eyeOffsetRight, tmp.eye);
+    tmp.target.copy(tmp.eye).add(new THREE.Vector3(Math.sin(t * 10) * 0.04, -0.04, 0.12));
+    aimArm(rig.armRight, rig.shoulderRight, rig.restRight, tmp.target, s.wipe * 0.95);
+    headPoint(rig, rig.eyeOffsetLeft, tmp.eye);
+    tmp.target.copy(tmp.eye).add(new THREE.Vector3(-Math.sin(t * 10 + 1) * 0.04, -0.04, 0.12));
+    aimArm(rig.armLeft, rig.shoulderLeft, rig.restLeft, tmp.target, s.wipe * 0.95);
+    if (s.wipe < 0.01) {
+      rig.armLeft.rotation.z = -0.1 - s.wail * 0.35;
+      rig.armRight.rotation.z = 0.1 + s.wail * 0.35;
+    }
+    rig.bow.rotation.z = Math.sin(t * 1.4) * 0.05;
+  });
+
+  return (
+    <group ref={bodyRef}>
+      <primitive object={rig.rig} />
+      <Tears rig={rig} />
+      <Puddle />
+    </group>
+  );
 }
-export default function CryingPanda({ homePosition = [0, 0], scale = 1, referenceHeight = 1 }) {
-    const worldScale = (referenceHeight * scale) / LOCAL_REFERENCE_HEIGHT;
-    return (
-        <group position={[homePosition[0], 0, homePosition[1]]}>
-            <group scale={worldScale}>
-                <Suspense fallback={null}>
-                    <CryingPandaRig />
-                </Suspense>
-            </group>
-        </group>
-    );
-}
 
-useGLTF.preload(MODEL_URL);
+export default function CryingPanda(props) {
+  return <PandaMood {...props} modelUrl={MODEL} Rig={CryingRig} />;
+}
