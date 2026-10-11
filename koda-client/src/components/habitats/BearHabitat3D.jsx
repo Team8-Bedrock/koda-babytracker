@@ -343,8 +343,6 @@ function LogCabin() {
   );
 }
 
-const nearPond = (x, z, pad) => Math.hypot(x - POND_CENTER[0], z - POND_CENTER[1]) < pad;
-
 const PATH_STONES = [
   { position: [-0.235, 0.012, -0.35], scale: [0.1, 0.024, 0.085], rotation: 0.4 },
   { position: [-0.175, 0.012, -0.1], scale: [0.095, 0.024, 0.08], rotation: 1.3 },
@@ -708,44 +706,6 @@ function Pond() {
             <meshBasicMaterial color={night ? NIGHT.waterSparkle : "#ffffff"} transparent opacity={0} depthWrite={false} toneMapped={false} />
           </mesh>
         ))}
-      </group>
-    </group>
-  );
-}
-const BUTTERFLIES = [
-  { center: [-0.3, 0.6], radius: 0.28, speed: 0.6, phase: 0, color: "#f7c3d3" },
-  { center: [0.4, 0.5], radius: 0.22, speed: 0.75, phase: 2.1, color: "#ffe08f" },
-  { center: [0.5, 1.2], radius: 0.3, speed: 0.5, phase: 4.2, color: "#d8e0ff" },
-];
-
-function Butterfly({ center, radius, speed, phase, color }) {
-  const ref = useRef(null);
-  const left = useRef(null);
-  const right = useRef(null);
-  useFrame(({ clock }) => {
-    const time = clock.getElapsedTime();
-    const t = time * speed + phase;
-    if (ref.current) {
-      ref.current.position.set(center[0] + Math.cos(t) * radius, 0.22 + Math.sin(t * 2.6) * 0.05, center[1] + Math.sin(t) * radius * 0.7);
-      ref.current.rotation.y = -t;
-    }
-    const flap = Math.sin(time * 14 + phase) * 0.9;
-    if (left.current) left.current.rotation.z = flap;
-    if (right.current) right.current.rotation.z = -flap;
-  });
-  return (
-    <group ref={ref}>
-      <group ref={left}>
-        <mesh position={[-0.014, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[0.014, 8]} />
-          <meshStandardMaterial color={color} side={THREE.DoubleSide} />
-        </mesh>
-      </group>
-      <group ref={right}>
-        <mesh position={[0.014, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[0.014, 8]} />
-          <meshStandardMaterial color={color} side={THREE.DoubleSide} />
-        </mesh>
       </group>
     </group>
   );

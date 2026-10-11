@@ -117,7 +117,7 @@ const Login = () => {
         </button>
 
         <p className="setup-footer">
-          Don't have an account? <a onClick={() => navigate("/registering")}>Sign Up</a>
+          Don't have an account? <button type="button" className="setup-footer-link" onClick={() => navigate("/registering")}>Sign Up</button>
         </p>
       </div>
     </div>

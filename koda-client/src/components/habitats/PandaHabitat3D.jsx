@@ -27,70 +27,6 @@ function useNightMode() {
   return night;
 }
 
-function NightStars({ count }) {
-  const geo = React.useMemo(() => {
-    let s = 42;
-    const rnd = () => {
-      s = (s * 1103515245 + 12345) % 2147483648;
-      return s / 2147483648;
-    };
-    const arr = [];
-    for (let i = 0; i < count; i++) {
-      arr.push(rnd() * 2.1 - 1.05, 0.12 + rnd() * 0.86, rnd() * 4 - 2);
-    }
-    return new Float32Array(arr);
-  }, []);
-  return (
-    <points frustumCulled={false}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[geo, 3]} />
-      </bufferGeometry>
-      <pointsMaterial color="#e6edff" size={3} sizeAttenuation={false} transparent opacity={0.85} fog={false} depthWrite={false} />
-    </points>
-  );
-}
-
-function NightSky({ moonRadius }) {
-  const { camera } = useThree();
-  const sky = React.useRef();
-  const stars = React.useRef();
-  const moon = React.useRef();
-  const dim = React.useRef({ w: 0, h: 0 });
-  useFrame(() => {
-    if (sky.current) {
-      sky.current.matrixAutoUpdate = false;
-      sky.current.matrix.copy(camera.matrixWorld);
-      sky.current.matrixWorldNeedsUpdate = true;
-    }
-    const w = ((camera.right - camera.left) / 2) / camera.zoom;
-    const h = ((camera.top - camera.bottom) / 2) / camera.zoom;
-    if (w && h) {
-      if (stars.current && (Math.abs(w - dim.current.w) > 0.001 || Math.abs(h - dim.current.h) > 0.001)) {
-        dim.current = { w, h };
-        stars.current.scale.set(w, h, 1);
-      }
-      if (moon.current) moon.current.position.set(-0.58 * w, 0.62 * h, -10);
-    }
-  });
-  return (
-    <group ref={sky}>
-      <group ref={stars} position={[0, 0, -12]}>
-        <NightStars count={110} />
-      </group>
-      <group ref={moon} position={[-1, 1.5, -10]}>
-        <mesh>
-          <sphereGeometry args={[moonRadius * 2.1, 20, 20]} />
-          <meshBasicMaterial color="#a8bde0" transparent opacity={0.22} fog={false} depthWrite={false} />
-        </mesh>
-        <mesh>
-          <sphereGeometry args={[moonRadius, 20, 20]} />
-          <meshBasicMaterial color="#f4f0dd" fog={false} />
-        </mesh>
-      </group>
-    </group>
-  );
-}
-
 function NightFireflies({ area, count, color, size }) {
   const ref = React.useRef();
   const data = React.useMemo(() => {
@@ -105,7 +41,7 @@ function NightFireflies({ area, count, color, size }) {
       z: (rnd() * 2 - 1) * area[3],
       p: rnd() * 6.28
     }));
-  }, []);
+  }, [area, count]);
   useFrame((state) => {
     if (!ref.current) return;
     const t = state.clock.elapsedTime;
@@ -1192,60 +1128,6 @@ function LeafPuff({ position, onDone }) {
       <ringGeometry args={[0.08, 0.14, 5]} />
       <meshBasicMaterial color={night ? NIGHT.puff : "#bdeeb0"} transparent opacity={0.5} side={THREE.DoubleSide} />
     </mesh>
-  );
-}
-
-// Little stone lanterns by the pond: unlit-looking stone by day, a soft warm glow at night.
-const STONE_LANTERNS = [
-  { position: [0.22, 0, -0.02], rotation: 0.4 },
-  { position: [-0.9, 0, 0.42], rotation: -0.3 },
-];
-
-function StoneLantern({ position, rotation = 0 }) {
-  const night = useNightMode();
-  const stone = night ? NIGHT.stone : "#b8bcc4";
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      <mesh position={[0, 0.015, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.05, 0.058, 0.03, 6]} />
-        <meshStandardMaterial color={stone} roughness={1} flatShading />
-      </mesh>
-      <mesh position={[0, 0.07, 0]} castShadow>
-        <cylinderGeometry args={[0.018, 0.022, 0.08, 6]} />
-        <meshStandardMaterial color={stone} roughness={1} flatShading />
-      </mesh>
-      <mesh position={[0, 0.13, 0]} castShadow>
-        <boxGeometry args={[0.06, 0.045, 0.06]} />
-        <meshStandardMaterial
-          color={night ? NIGHT.lantern : "#e9e4d6"}
-          emissive={night ? NIGHT.lantern : "#000000"}
-          emissiveIntensity={night ? 0.9 : 0}
-          roughness={1}
-          toneMapped={!night}
-        />
-      </mesh>
-      <mesh position={[0, 0.172, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-        <coneGeometry args={[0.065, 0.045, 4]} />
-        <meshStandardMaterial color={stone} roughness={1} flatShading />
-      </mesh>
-      <mesh position={[0, 0.2, 0]}>
-        <sphereGeometry args={[0.012, 8, 6]} />
-        <meshStandardMaterial color={stone} roughness={1} />
-      </mesh>
-      {night && (
-        <>
-          <mesh position={[0, 0.13, 0]}>
-            <sphereGeometry args={[0.06, 12, 10]} />
-            <meshBasicMaterial color={NIGHT.glow} transparent opacity={0.1} depthWrite={false} toneMapped={false} />
-          </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0]}>
-            <circleGeometry args={[0.17, 24]} />
-            <meshBasicMaterial color={NIGHT.glow} transparent opacity={0.08} depthWrite={false} toneMapped={false} />
-          </mesh>
-          <pointLight position={[0, 0.14, 0]} color={NIGHT.lantern} intensity={0.28} distance={0.7} decay={2} />
-        </>
-      )}
-    </group>
   );
 }
 

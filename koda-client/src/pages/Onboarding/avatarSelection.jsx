@@ -180,7 +180,7 @@ const AvatarSelection = () => {
         setModelLoading(false);
       },
     );
-  }, [selectedIndex]);
+  }, [selected]);
 
   const handleSelect = (index) => setSelectedIndex(index);
 
@@ -286,7 +286,7 @@ const AvatarSelection = () => {
           {!isAddChildMode && (
             <p className="setup-footer">
               Already have an account?{" "}
-              <a onClick={() => navigate("/login")}>Log in</a>
+              <button type="button" className="setup-footer-link" onClick={() => navigate("/login")}>Log in</button>
             </p>
           )}
         </div>

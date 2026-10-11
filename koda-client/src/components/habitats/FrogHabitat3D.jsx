@@ -950,47 +950,6 @@ function GrassTufts() {
   );
 }
 
-const BUSH_PLACEMENTS = [
-  { position: [-2.9, -4.6], scale: 0.75 },
-  { position: [2.9, -4.2], scale: 0.7 },
-  { position: [0.2, -5.7], scale: 0.65 },
-];
-
-function Bush({ position, scale }) {
-  const night = useNight();
-  const leaf = night ? NIGHT.bush : ["#5c9c53", "#6bab5f"];
-  return (
-    <group position={[position[0], 0, position[1]]} scale={scale}>
-      <mesh position={[0, 0.22, 0]} castShadow receiveShadow>
-        <sphereGeometry args={[0.26, 9, 7]} />
-        <meshStandardMaterial color={leaf[0]} roughness={0.95} />
-      </mesh>
-      <mesh position={[0.18, 0.16, 0.1]} castShadow receiveShadow>
-        <sphereGeometry args={[0.18, 8, 6]} />
-        <meshStandardMaterial color={leaf[1]} roughness={0.95} />
-      </mesh>
-      <mesh position={[-0.15, 0.14, -0.12]} castShadow receiveShadow>
-        <sphereGeometry args={[0.16, 8, 6]} />
-        <meshStandardMaterial color={leaf[1]} roughness={0.95} />
-      </mesh>
-      <mesh position={[0, 0.34, 0.05]}>
-        <sphereGeometry args={[0.03, 6, 6]} />
-        <meshStandardMaterial color="#ffd9e8" emissive={night ? "#ffd9e8" : "#000000"} emissiveIntensity={night ? 0.5 : 0} />
-      </mesh>
-    </group>
-  );
-}
-
-function Bushes() {
-  return (
-    <>
-      {BUSH_PLACEMENTS.map((b, i) => (
-        <Bush key={i} {...b} />
-      ))}
-    </>
-  );
-}
-
 const BLOOM_PLACEMENTS = [
   { position: [1.9, 1.5], color: "#ffb6c8", scale: 1 },
   { position: [-2.4, -1.1], color: "#fff6d8", scale: 0.85 },
@@ -1037,64 +996,6 @@ function WaterBlooms() {
     <>
       {BLOOM_PLACEMENTS.map((b, i) => (
         <WaterBloom key={i} {...b} />
-      ))}
-    </>
-  );
-}
-
-const TADPOLE_PLACEMENTS = [
-  { speed: 0.5, color: "#3b3b2a" },
-  { speed: 0.62, color: "#48482f" },
-  { speed: 0.45, color: "#33331f" },
-  { speed: 0.58, color: "#45452c" },
-  { speed: 0.4, color: "#3f3f26" },
-];
-
-function Tadpole({ speed, color }) {
-  const group = useRef();
-  const tailRef = useRef();
-  const { state, step } = useFreeRoam({ bounds: 3.2, minHeight: -0.05, maxHeight: 0.0, speed: speed * 0.7 });
-  const prevPos = useRef(state.pos.clone());
-  useFrame(({ clock }, delta) => {
-    const pos = step(delta);
-    if (group.current) {
-      const dx = pos.x - prevPos.current.x;
-      const dz = pos.z - prevPos.current.z;
-      if (Math.abs(dx) > 0.0001 || Math.abs(dz) > 0.0001) {
-        const targetYaw = Math.atan2(dx, dz);
-        let angleDelta = targetYaw - group.current.rotation.y;
-        while (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
-        while (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
-        group.current.rotation.y += angleDelta * 0.06;
-      }
-      group.current.position.set(pos.x, pos.y, pos.z);
-      prevPos.current.copy(pos);
-    }
-    if (tailRef.current) {
-      tailRef.current.rotation.y = Math.sin(clock.getElapsedTime() * 7) * 0.4;
-    }
-  });
-  return (
-    <group ref={group}>
-      <mesh scale={[0.05, 0.045, 0.09]}>
-        <sphereGeometry args={[1, 8, 6]} />
-        <meshStandardMaterial color={color} roughness={0.5} transparent opacity={0.55} depthWrite={false} />
-      </mesh>
-      <group ref={tailRef} position={[0, 0, -0.05]}>
-        <mesh rotation={[-Math.PI / 2, 0, 0]}>
-          <coneGeometry args={[0.022, 0.15, 5]} />
-          <meshStandardMaterial color={color} roughness={0.55} transparent opacity={0.45} depthWrite={false} />
-        </mesh>
-      </group>
-    </group>
-  );
-}
-
-function Tadpoles() {
-  return (
-    <>
-      {TADPOLE_PLACEMENTS.map((t, i) => (
-        <Tadpole key={i} {...t} />
       ))}
     </>
   );

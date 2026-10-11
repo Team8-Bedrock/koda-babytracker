@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -52,6 +52,7 @@ const Activities = () => {
   const [step, setStep] = useState(1);
   const [type, setType] = useState('');
   const [mode, setMode] = useState('');
+  const [canSchedule, setCanSchedule] = useState(false);
 
   const [value, setValue] = useState('');
   const [feedingAmount, setFeedingAmount] = useState('');
@@ -64,8 +65,7 @@ const Activities = () => {
   const [moodChoice, setMoodChoice] = useState('');
   const [moodNote, setMoodNote] = useState('');
 
-  const [repeat, setRepeat] = useState('once');
-  const [scheduleDate, setScheduleDate] = useState('');
+  const [repeat, setRepeat] = useState('daily');
   const [scheduleTime, setScheduleTime] = useState('');
   const [repeatDays, setRepeatDays] = useState([]);
 
@@ -75,6 +75,14 @@ const Activities = () => {
   const [submitting, setSubmitting] = useState(false);
   const [duplicateEntry, setDuplicateEntry] = useState(null);
   const [pendingActivity, setPendingActivity] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    axios.get(`${API_URL}/api/auth/me`, { headers: { 'x-auth-token': token } })
+      .then((response) => setCanSchedule(response.data?.role === 'parent'))
+      .catch((error) => console.error('Could not verify scheduling permissions:', error));
+  }, []);
 
   const toggleRepeatDay = (day) => {
     setRepeatDays((prev) =>
@@ -96,8 +104,7 @@ const Activities = () => {
     setEndTime('');
     setQuality('');
     setDiaperType('');
-    setRepeat('once');
-    setScheduleDate('');
+    setRepeat('daily');
     setScheduleTime('');
     setRepeatDays([]);
     setSleepError('');
@@ -107,7 +114,15 @@ const Activities = () => {
 
   const buildActivityDetails = () => {
     if (type === 'sleep' || type === 'playtime') {
-      return { startTime, endTime };
+      if (mode === 'schedule') {
+        return { startTime, endTime };
+      }
+
+      return {
+        startTime,
+        endTime,
+        ...(type === 'sleep' ? { quality } : {}),
+      };
     }
     if (type === 'feeding') {
       return {
@@ -233,12 +248,20 @@ const Activities = () => {
       let saved = true;
 
       if (mode === 'schedule') {
+        if (!['feeding', 'sleep'].includes(type)) {
+          setSubmitError('only feeding and sleep can be scheduled.');
+          return;
+        }
+        if (repeat === 'weekly' && repeatDays.length === 0) {
+          setSubmitError('choose at least one day for a weekly schedule.');
+          return;
+        }
         await axios.post(`${API_URL}/api/schedule`, {
           childId,
           activityType: type,
           repeat,
           time: scheduleTime,
-          ...(repeat === 'once' ? { date: scheduleDate } : {}),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           ...(repeat === 'weekly' ? { daysOfWeek: repeatDays } : {}),
           details: buildActivityDetails(),
         }, requestConfig);
@@ -423,7 +446,9 @@ const Activities = () => {
                   how would you like to log this?
                 </div>
                 <p className="log-form-subtitle">
-                  you can log this {typeLabel} now, or set it up as a recurring schedule.
+                  {canSchedule && ['feeding', 'sleep'].includes(type)
+                    ? `you can log this ${typeLabel} now, or set a daily or weekly reminder.`
+                    : `log this ${typeLabel} now.`}
                 </p>
 
                 <div className="mode-select-list">
@@ -437,16 +462,18 @@ const Activities = () => {
                   >
                     log activity
                   </button>
-                  <button
-                    type="button"
-                    className="activity-menu-btn activities-option-row"
-                    onClick={() => {
-                      setMode('schedule');
-                      setStep(3);
-                    }}
-                  >
-                    schedule activity
-                  </button>
+                  {canSchedule && ['feeding', 'sleep'].includes(type) && (
+                    <button
+                      type="button"
+                      className="activity-menu-btn activities-option-row"
+                      onClick={() => {
+                        setMode('schedule');
+                        setStep(3);
+                      }}
+                    >
+                      schedule activity
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -460,14 +487,14 @@ const Activities = () => {
             <>
               <div className="glass-card activities-glass-card">
 
-                {type === 'sleep' ? (
+                {type === 'sleep' && mode !== 'schedule' ? (
                   <div className="log-form-container">
                     <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Moon size={28} color="#4a3a26" />
                       <span>{mode === 'schedule' ? 'schedule nap' : 'sleep'}</span>
                     </div>
                     <p className="log-form-subtitle">
-                      {mode === 'schedule' ? 'when should this nap start and end?' : "track your baby's sleep"}
+                      {mode === 'schedule' ? 'For how long?' : "track your baby's sleep"}
                     </p>
 
                     {renderTimeFields(mode === 'schedule' ? 'nap starts' : 'fell asleep at', mode === 'schedule' ? 'nap ends' : 'woke up at')}
@@ -586,12 +613,27 @@ const Activities = () => {
                 ) : (
                   <div className="log-form-container">
                     <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
+                      {type === 'sleep' && mode === 'schedule' && <Calendar size={26} color="#4a3a26" />}
                       <span>
                         {mode === 'schedule'
                           ? (type === 'mood' ? 'schedule mood logging' : `schedule ${typeLabel}`)
                           : typeLabel}
                       </span>
                     </div>
+                    {type === 'sleep' && mode === 'schedule' && (
+                      <>
+                        <p className="log-form-subtitle" style={{ textAlign: "center", margin: "0 0 12px" }}>
+                         set your expected nap times for your baby
+                        </p>
+                        {renderTimeFields('expected start', 'expected end')}
+                        {sleepError && (
+                          <div className="sleep-warning" role="alert">
+                            <AlertTriangle size={18} />
+                            <span>{sleepError}</span>
+                          </div>
+                        )}
+                      </>
+                    )}
                     {type === 'playtime' && (
                       <>
                         <p className="log-form-subtitle" style={{ textAlign: "center", margin: "0 0 12px" }}>
@@ -640,16 +682,11 @@ const Activities = () => {
                 {mode === 'schedule' && (
                   <div className="log-form-container">
                     <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
-                      <Calendar size={26} color="#4a3a26" />
-                      <span>schedule</span>
                     </div>
-                    <p className="log-form-subtitle">set when this should repeat</p>
-
                     <div className="log-field-group">
                       <label className="log-label">repeat</label>
                       <div className="log-option-row">
                         {[
-                          { key: 'once', label: 'once' },
                           { key: 'daily', label: 'daily' },
                           { key: 'weekly', label: 'weekly' },
                         ].map(({ key, label }) => (
@@ -664,22 +701,6 @@ const Activities = () => {
                         ))}
                       </div>
                     </div>
-
-                    {repeat === 'once' && (
-                      <div className="log-field-group">
-                        <label className="log-label">date</label>
-                        <div className="log-input-wrapper">
-                          <input
-                            type="date"
-                            value={scheduleDate}
-                            onChange={(e) => setScheduleDate(e.target.value)}
-                            className="log-input"
-                            style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
-                            required
-                          />
-                        </div>
-                      </div>
-                    )}
 
                     {repeat === 'weekly' && (
                       <div className="log-field-group">

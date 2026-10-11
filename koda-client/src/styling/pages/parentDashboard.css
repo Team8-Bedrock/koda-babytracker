@@ -19,3 +19,63 @@
   bottom: 132px;
   left: 18px;
 }
+
+.dashboard-notice-stack {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+  animation: dashboard-reminder-in 0.2s ease-out;
+}
+
+.dashboard-reminder,
+.dashboard-anomaly {
+  border: 1px solid rgba(91, 123, 81, 0.42);
+  border-radius: 14px;
+  padding: 10px 13px;
+  background: rgba(250, 255, 245, 0.94);
+  box-shadow: 0 4px 14px rgba(25, 49, 31, 0.18);
+  color: #315b3d;
+  font-family: "Nunito", sans-serif;
+  font-size: 13px;
+}
+
+.dashboard-reminder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-reminder svg,
+.dashboard-anomaly-heading svg {
+  flex: 0 0 auto;
+}
+
+.dashboard-anomaly-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 3px;
+}
+
+.dashboard-anomaly p {
+  margin: 3px 0;
+}
+
+.dashboard-anomaly small {
+  display: block;
+  margin-top: 5px;
+  color: #66765f;
+  font-size: 11px;
+}
+
+@keyframes dashboard-reminder-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
