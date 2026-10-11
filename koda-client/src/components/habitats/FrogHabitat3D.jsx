@@ -1,30 +1,167 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import "../../styling/components/habitats.css";
 import { DEFAULT_MODEL } from "../../constants/avatars";
 import { useGroundedOffset, seededRand, drawWrapped } from "./habitatUtils";
+import FeedingFrog from "../animations/frog/FeedingFrog";
 
-function HideWhenAnimated({ children }) {
-  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+const INLINE_MOODS = { feeding: FeedingFrog };
+const INLINE_LEAN = 0.1;
+const BUBBLE_LIFT = 0.3;
+
+function useNightModeSetting() {
+  const [night, setNight] = React.useState(() => typeof window !== "undefined" && localStorage.getItem("koda-dark-mode") === "true");
   React.useEffect(() => {
-    const onChange = (e) => setHidden(!!e.detail?.active);
+    const onMode = (e) => setNight(e?.detail && typeof e.detail.isDarkMode === "boolean" ? e.detail.isDarkMode : localStorage.getItem("koda-dark-mode") === "true");
+    window.addEventListener("koda-dark-mode", onMode);
+    return () => window.removeEventListener("koda-dark-mode", onMode);
+  }, []);
+  return night;
+}
+const NightContext = React.createContext(false);
+const useNight = () => React.useContext(NightContext);
+
+const LIGHTS = {
+  day: {
+    background: "#8fd9ae", exposure: 1.15,
+    ambient: 0.8, ambientColor: "#fff6e6",
+    sun: 2.1, sunColor: "#fff3d6",
+    rim: 0.45, rimColor: "#a8e0ea",
+    hemiSky: "#f0ffe6", hemiGround: "#4a6b47", hemi: 0.95,
+  },
+  night: {
+    background: "#2f4b6e", exposure: 1.0,
+    ambient: 0.6, ambientColor: "#c9dcf2",
+    sun: 0.85, sunColor: "#d6e8ff",
+    rim: 0.55, rimColor: "#9fd6d0",
+    hemiSky: "#9cc4e0", hemiGround: "#2f4a3a", hemi: 0.75,
+  },
+};
+const NIGHT = {
+  waterCenter: "#3a7f9c",
+  waterEdge: "#1f4f74",
+  moon: "#dfeaff",
+  stone: ["#7d8aa0", "#8f9bb0"],
+  moss: ["#4f8a6a", "#3f7558"],
+  bush: ["#3f7a5a", "#4c8a66"],
+  tuft: ["#4c8a5e", "#5a9a6a"],
+  glowPatch: "#cfe6f2",
+  mist: "#c4d8ee",
+  firefly: "#e6ff8a",
+  star: "#fff1c9",
+};
+
+function GlowStars() {
+  const group = useRef(null);
+  const shape = useMemo(() => {
+    const outline = new THREE.Shape();
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.PI / 2 + (i * Math.PI) / 5;
+      const r = i % 2 === 0 ? 1 : 0.44;
+      if (i === 0) outline.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+      else outline.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+    }
+    outline.closePath();
+    return outline;
+  }, []);
+  const stars = useMemo(() => Array.from({ length: 13 }, (_, i) => ({
+    x: -0.86 + (i % 5) * 0.4 + seededRand(i * 17 + 2) * 0.13,
+    y: 0.57 + seededRand(i * 23 + 7) * 0.32,
+    radius: i % 3 === 0 ? 5 : 3,
+    phase: seededRand(i + 11) * Math.PI * 2,
+  })), []);
+  useFrame(({ camera, size, clock }) => {
+    if (!group.current || !camera.isOrthographicCamera) return;
+    group.current.position.copy(camera.position);
+    group.current.quaternion.copy(camera.quaternion);
+    const halfWidth = (camera.right - camera.left) / (2 * camera.zoom);
+    const halfHeight = (camera.top - camera.bottom) / (2 * camera.zoom);
+    group.current.children.forEach((mesh, i) => {
+      const star = stars[i];
+      mesh.position.set(star.x * halfWidth, star.y * halfHeight, -0.5);
+      mesh.scale.setScalar((star.radius * halfHeight * 2) / size.height);
+      mesh.material.opacity = 0.65 + Math.sin(clock.getElapsedTime() * 0.8 + star.phase) * 0.2;
+    });
+  });
+  return (
+    <group ref={group}>
+      {stars.map((_, i) => (
+        <mesh key={i} renderOrder={100} frustumCulled={false}>
+          <shapeGeometry args={[shape]} />
+          <meshBasicMaterial color={NIGHT.star} transparent opacity={0.8} depthTest={false} depthWrite={false} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function ExposureSync({ exposure }) {
+  const { gl } = useThree();
+  useEffect(() => {
+    gl.toneMappingExposure = exposure;
+  }, [gl, exposure]);
+  return null;
+}
+
+function makeMatte(root) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    mats.forEach((m) => {
+      if (!m) return;
+      if ("roughness" in m) m.roughness = 1;
+      if ("metalness" in m) m.metalness = 0;
+      if ("clearcoat" in m) m.clearcoat = 0;
+      if ("specularIntensity" in m) m.specularIntensity = 0;
+      m.needsUpdate = true;
+    });
+  });
+  return root;
+}
+
+function readMoodAnimation() {
+  if (typeof window === "undefined") return { active: false };
+  return window.__moodAnimation || { active: !!window.__moodAnimationActive };
+}
+
+function useMoodAnimation() {
+  const [mood, setMood] = React.useState(readMoodAnimation);
+  React.useEffect(() => {
+    const onChange = (e) => setMood(e.detail || readMoodAnimation());
     window.addEventListener("mood-animation", onChange);
     return () => window.removeEventListener("mood-animation", onChange);
   }, []);
-  return hidden ? null : children;
+  return mood;
+}
+
+function publishMoodAnchor(camera, gl, topWorld, bottomWorld) {
+  const rect = gl.domElement.getBoundingClientRect();
+  const toScreen = (p) => {
+    const v = p.clone().project(camera);
+    return [rect.left + ((v.x + 1) / 2) * rect.width, rect.top + ((1 - v.y) / 2) * rect.height];
+  };
+  const [x, top] = toScreen(topWorld);
+  const [, bottom] = toScreen(bottomWorld);
+  const prev = window.__moodAnchor;
+  if (prev && Math.abs(prev.x - x) < 0.5 && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.bottom - bottom) < 0.5) return;
+  window.__moodAnchor = { x, top, bottom };
+  window.dispatchEvent(new CustomEvent("mood-anchor", { detail: window.__moodAnchor }));
 }
 
 
 const GRASS_TEX_SIZE = 512;
-function buildShoreTexture() {
+function buildShoreTexture(night = false) {
   const canvas = document.createElement("canvas");
   canvas.width = GRASS_TEX_SIZE;
   canvas.height = GRASS_TEX_SIZE;
   const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "hsl(100, 38%, 51%)";
+  const H = night ? 42 : 0;
+  const S = night ? 0.55 : 1;
+  const L = night ? 0.68 : 1;
+  ctx.fillStyle = night ? "hsl(146, 24%, 32%)" : "hsl(100, 38%, 51%)";
   ctx.fillRect(0, 0, GRASS_TEX_SIZE, GRASS_TEX_SIZE);
 
   for (let i = 0; i < 45; i++) {
@@ -32,12 +169,12 @@ function buildShoreTexture() {
     const bx = (seed * 37) % GRASS_TEX_SIZE;
     const by = (seed * 53) % GRASS_TEX_SIZE;
     const radius = 45 + (seed % 5) * 20;
-    const hue = 96 + (seed % 9) * 2.5;
-    const light = 43 + (seed % 6) * 3;
+    const hue = 96 + (seed % 9) * 2.5 + H;
+    const light = (43 + (seed % 6) * 3) * L;
     drawWrapped(ctx, bx, by, GRASS_TEX_SIZE, radius, (x, y) => {
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
-      grad.addColorStop(0, `hsla(${hue}, 46%, ${light}%, 0.55)`);
-      grad.addColorStop(1, `hsla(${hue}, 46%, ${light}%, 0)`);
+      grad.addColorStop(0, `hsla(${hue}, ${46 * S}%, ${light}%, 0.55)`);
+      grad.addColorStop(1, `hsla(${hue}, ${46 * S}%, ${light}%, 0)`);
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -49,9 +186,9 @@ function buildShoreTexture() {
     const seed = i * 17 + 9;
     const bx = (seed * 31) % GRASS_TEX_SIZE;
     const by = (seed * 47) % GRASS_TEX_SIZE;
-    const hue = 100 + (seed % 10) * 2;
-    const light = 36 + (seed % 8) * 3;
-    ctx.fillStyle = `hsla(${hue}, 48%, ${light}%, 0.5)`;
+    const hue = 100 + (seed % 10) * 2 + H;
+    const light = (36 + (seed % 8) * 3) * L;
+    ctx.fillStyle = `hsla(${hue}, ${48 * S}%, ${light}%, 0.5)`;
     drawWrapped(ctx, bx, by, GRASS_TEX_SIZE, 6, (x, y) => {
       ctx.save();
       ctx.translate(x, y);
@@ -68,7 +205,7 @@ function buildShoreTexture() {
     const cx = (seed * 13) % GRASS_TEX_SIZE;
     const cy = (seed * 29) % GRASS_TEX_SIZE;
     drawWrapped(ctx, cx, cy, GRASS_TEX_SIZE, 6, (x, y) => {
-      ctx.fillStyle = "hsl(118, 38%, 38%)";
+      ctx.fillStyle = night ? "hsl(150, 22%, 26%)" : "hsl(118, 38%, 38%)";
       for (let l = 0; l < 3; l++) {
         const a = (l / 3) * Math.PI * 2;
         ctx.beginPath();
@@ -83,7 +220,7 @@ function buildShoreTexture() {
     const dx = (seed * 17) % GRASS_TEX_SIZE;
     const dy = (seed * 41) % GRASS_TEX_SIZE;
     drawWrapped(ctx, dx, dy, GRASS_TEX_SIZE, 5, (x, y) => {
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillStyle = night ? "rgba(220,235,255,0.6)" : "rgba(255,255,255,0.85)";
       for (let p = 0; p < 5; p++) {
         const a = (p / 5) * Math.PI * 2;
         ctx.beginPath();
@@ -108,28 +245,30 @@ function buildShoreTexture() {
 }
 
 function Ground({ size = 100 }) {
-  const tex = useMemo(() => buildShoreTexture(), []);
+  const night = useNight();
+  const tex = useMemo(() => buildShoreTexture(night), [night]);
   const repeats = size / 2.75;
   useEffect(() => {
     tex.repeat.set(repeats, repeats);
+    return () => tex.dispose();
   }, [tex, repeats]);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[size, size]} />
-      <meshStandardMaterial map={tex} />
+      <meshStandardMaterial key={night ? "n" : "d"} map={tex} roughness={1} />
     </mesh>
   );
 }
 
-function buildWaterTexture() {
+function buildWaterTexture(night = false) {
   const canvas = document.createElement("canvas");
   canvas.width = 128;
   canvas.height = 128;
   const ctx = canvas.getContext("2d");
 
   const gradient = ctx.createRadialGradient(64, 64, 10, 64, 64, 64);
-  gradient.addColorStop(0, "#5fd6c4");
-  gradient.addColorStop(1, "#2f92b0");
+  gradient.addColorStop(0, night ? NIGHT.waterCenter : "#5fd6c4");
+  gradient.addColorStop(1, night ? NIGHT.waterEdge : "#2f92b0");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 128, 128);
 
@@ -189,7 +328,8 @@ function buildPondLensGeometry(radiusX, frontZ, backZ, segments = 72) {
 }
 
 function Pond() {
-  const tex = useMemo(() => buildWaterTexture(), []);
+  const night = useNight();
+  const tex = useMemo(() => buildWaterTexture(night), [night]);
   const geo = useMemo(
     () => buildPondLensGeometry(POND_RADIUS_X, POND_FRONT_Z, POND_BACK_Z),
     []
@@ -202,16 +342,15 @@ function Pond() {
       ref.current.material.opacity = 0.88 + Math.sin(t * 0.6) * 0.03;
     }
     if (sheenRef.current) {
-      sheenRef.current.material.opacity = 0.16 + Math.sin(t * 0.8) * 0.05;
+      sheenRef.current.material.opacity = (0.16 + Math.sin(t * 0.8) * 0.05) * (night ? 1.4 : 1);
       sheenRef.current.position.x = -1.6 + Math.sin(t * 0.22) * 0.5;
     }
   });
   return (
     <>
       <mesh ref={ref} geometry={geo} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
-        <meshStandardMaterial map={tex} roughness={0.2} metalness={0.15} transparent opacity={0.9} />
+        <meshStandardMaterial key={night ? "n" : "d"} map={tex} roughness={0.45} metalness={0} transparent opacity={0.9} />
       </mesh>
-      {/* drifting sun sheen across the surface */}
       <mesh
         ref={sheenRef}
         rotation={[-Math.PI / 2, 0, 0.4]}
@@ -219,11 +358,13 @@ function Pond() {
         scale={[1, 0.5, 1]}
       >
         <circleGeometry args={[1.7, 28]} />
-        <meshBasicMaterial color="#eafaf4" transparent opacity={0.18} depthWrite={false} />
+        <meshBasicMaterial color={night ? NIGHT.moon : "#eafaf4"} transparent opacity={0.18} depthWrite={false} />
       </mesh>
     </>
   );
 }
+
+const DOCK = { x: 2.7, zStart: 3.0, zEnd: 1.15, width: 0.66 };
 
 function buildShoreStones(count = 26, margin = 1.08) {
   const stones = [];
@@ -235,6 +376,7 @@ function buildShoreStones(count = 26, margin = 1.08) {
     const x = Math.cos(theta) * POND_RADIUS_X * r;
     const z = Math.sin(theta) * zRadius * r;
     if (Math.hypot(x - HOME_PAD_POSITION[0], z - HOME_PAD_POSITION[1]) < 1.6) continue;
+    if (Math.abs(x - DOCK.x) < 0.7 && z > DOCK.zEnd - 0.3) continue;
     stones.push({
       position: [x, 0.03 + wobble * 0.02, z],
       scale: 0.15 + wobble * 0.16,
@@ -247,19 +389,20 @@ function buildShoreStones(count = 26, margin = 1.08) {
 const SHORE_STONES = buildShoreStones();
 
 function MossyStone({ position, scale, rotation, dark }) {
+  const night = useNight();
   return (
     <group position={position} rotation={[0.15, rotation, 0.1]} scale={scale}>
       <mesh castShadow receiveShadow>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color={dark ? "#8d9aa6" : "#a3aebc"} roughness={0.85} />
+        <meshStandardMaterial color={night ? NIGHT.stone[dark ? 0 : 1] : dark ? "#8d9aa6" : "#a3aebc"} roughness={0.9} />
       </mesh>
       <mesh position={[0.05, 0.5, -0.05]} scale={[0.78, 0.24, 0.72]} receiveShadow>
         <sphereGeometry args={[1, 12, 10]} />
-        <meshStandardMaterial color="#7fae5f" roughness={1} />
+        <meshStandardMaterial color={night ? NIGHT.moss[0] : "#7fae5f"} roughness={1} />
       </mesh>
       <mesh position={[-0.42, 0.26, 0.3]} scale={[0.34, 0.13, 0.3]} receiveShadow>
         <sphereGeometry args={[1, 10, 8]} />
-        <meshStandardMaterial color="#5c9c53" roughness={1} />
+        <meshStandardMaterial color={night ? NIGHT.moss[1] : "#5c9c53"} roughness={1} />
       </mesh>
     </group>
   );
@@ -296,29 +439,30 @@ function buildLightPatchTexture() {
 }
 
 function FrogLightPatch({ position = HOME_PAD_POSITION, radius = 2.1 }) {
+  const night = useNight();
   const tex = useMemo(() => buildLightPatchTexture(), []);
   const ref = useRef();
   useFrame(({ clock }) => {
     if (!ref.current) return;
     const t = clock.getElapsedTime();
-    ref.current.material.opacity = 0.78 + Math.sin(t * 0.5) * 0.1;
+    ref.current.material.opacity = (0.78 + Math.sin(t * 0.5) * 0.1) * (night ? 0.45 : 1);
   });
   return (
     <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[position[0], 0.018, position[1]]}>
       <circleGeometry args={[radius, 40]} />
-      <meshBasicMaterial map={tex} transparent opacity={0.85} depthWrite={false} />
+      <meshBasicMaterial map={tex} color={night ? NIGHT.glowPatch : "#ffffff"} transparent opacity={0.85} depthWrite={false} />
     </mesh>
   );
 }
 
-function buildFarPondTexture() {
+function buildFarPondTexture(night = false) {
   const canvas = document.createElement("canvas");
   canvas.width = 64;
   canvas.height = 64;
   const ctx = canvas.getContext("2d");
   const gradient = ctx.createRadialGradient(32, 32, 4, 32, 32, 32);
-  gradient.addColorStop(0, "#5fd6c4");
-  gradient.addColorStop(1, "#2f92b0");
+  gradient.addColorStop(0, night ? NIGHT.waterCenter : "#5fd6c4");
+  gradient.addColorStop(1, night ? NIGHT.waterEdge : "#2f92b0");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 64, 64);
   for (let i = 0; i < 10; i++) {
@@ -336,12 +480,13 @@ function buildFarPondTexture() {
 }
 
 function FarPond({ position = [-3.0, -6.9], radius = 0.6 }) {
-  const tex = useMemo(() => buildFarPondTexture(), []);
+  const night = useNight();
+  const tex = useMemo(() => buildFarPondTexture(night), [night]);
   return (
     <group position={[position[0], 0, position[1]]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]}>
         <circleGeometry args={[radius, 40]} />
-        <meshStandardMaterial map={tex} roughness={0.25} metalness={0.1} transparent opacity={0.9} />
+        <meshStandardMaterial key={night ? "n" : "d"} map={tex} roughness={0.45} metalness={0} transparent opacity={0.9} />
       </mesh>
       <mesh position={[0.4, 0.02, 0.25]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[0.22, 10]} />
@@ -362,7 +507,7 @@ function FarPond({ position = [-3.0, -6.9], radius = 0.6 }) {
           </mesh>
           <mesh position={[0, 0.22, 0]}>
             <sphereGeometry args={[0.06, 8, 8]} />
-            <meshStandardMaterial color={f.color} />
+            <meshStandardMaterial color={f.color} emissive={night ? f.color : "#000000"} emissiveIntensity={night ? 0.35 : 0} />
           </mesh>
         </group>
       ))}
@@ -425,6 +570,143 @@ function FrontMudFade() {
 
 const POND_CLUSTER_OFFSET = [0, 0, 2.6];
 
+function ThronePad({ position = HOME_PAD_POSITION }) {
+  const geo = useMemo(() => new THREE.CircleGeometry(1.0, 40, 0.35, Math.PI * 2 - 0.35), []);
+  const inner = useMemo(() => new THREE.CircleGeometry(0.72, 36, 0.35, Math.PI * 2 - 0.35), []);
+  return (
+    <group position={[position[0], 0.028, position[1]]} rotation={[0, 0.9, 0]}>
+      <mesh geometry={geo} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <meshStandardMaterial color="#5aa95a" roughness={1} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={inner} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0]} receiveShadow>
+        <meshStandardMaterial color="#76c06c" roughness={1} side={THREE.DoubleSide} />
+      </mesh>
+      {[0.9, 1.9, 2.9, 3.9, 4.9, 5.7].map((a, i) => (
+        <mesh key={i} position={[Math.cos(a) * 0.45, 0.009, -Math.sin(a) * 0.45]} rotation={[-Math.PI / 2, 0, a]}>
+          <planeGeometry args={[0.8, 0.025]} />
+          <meshStandardMaterial color="#4f9a50" roughness={1} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function ThroneLotus({ position = [HOME_PAD_POSITION[0] + 0.78, HOME_PAD_POSITION[1] + 0.35] }) {
+  const night = useNight();
+  const petal = "#ffb6cf";
+  return (
+    <group position={[position[0], 0.05, position[1]]} scale={1.4}>
+      {[0, 1, 2, 3, 4, 5].map((i) => {
+        const a = (i / 6) * Math.PI * 2;
+        return (
+          <mesh key={i} position={[Math.cos(a) * 0.07, 0.03, Math.sin(a) * 0.07]} rotation={[0.6, -a + Math.PI / 2, 0]} scale={[0.7, 1, 0.35]} castShadow>
+            <sphereGeometry args={[0.09, 10, 8]} />
+            <meshStandardMaterial color={petal} emissive={night ? petal : "#000000"} emissiveIntensity={night ? 0.45 : 0} roughness={0.9} />
+          </mesh>
+        );
+      })}
+      <mesh position={[0, 0.06, 0]}>
+        <sphereGeometry args={[0.05, 10, 8]} />
+        <meshStandardMaterial color="#ffe27a" emissive={night ? "#ffe27a" : "#000000"} emissiveIntensity={night ? 0.6 : 0} roughness={0.9} />
+      </mesh>
+    </group>
+  );
+}
+
+function Dock() {
+  const planks = [];
+  const count = 8;
+  for (let i = 0; i < count; i++) {
+    const z = DOCK.zStart - (i + 0.5) * ((DOCK.zStart - DOCK.zEnd) / count);
+    planks.push({ z, tilt: (seededRand(i * 3.3) - 0.5) * 0.04, shade: i % 2 });
+  }
+  const len = DOCK.zStart - DOCK.zEnd;
+  return (
+    <group position={[DOCK.x, 0, 0]}>
+      {planks.map((p, i) => (
+        <mesh key={i} position={[0, 0.13, p.z]} rotation={[0, p.tilt, 0]} castShadow receiveShadow>
+          <boxGeometry args={[DOCK.width, 0.045, len / count - 0.025]} />
+          <meshStandardMaterial color={p.shade ? "#c9925f" : "#d6a06c"} roughness={1} />
+        </mesh>
+      ))}
+      {[-1, 1].map((side) => (
+        <mesh key={`r${side}`} position={[side * (DOCK.width / 2 - 0.03), 0.1, (DOCK.zStart + DOCK.zEnd) / 2]} castShadow>
+          <boxGeometry args={[0.05, 0.035, len]} />
+          <meshStandardMaterial color="#a8774c" roughness={1} />
+        </mesh>
+      ))}
+      {[DOCK.zEnd + 0.06, (DOCK.zStart + DOCK.zEnd) / 2].flatMap((z) => [-1, 1].map((side) => [side, z])).map(([side, z], i) => (
+        <mesh key={`p${i}`} position={[side * (DOCK.width / 2 - 0.02), 0.07, z]} castShadow>
+          <cylinderGeometry args={[0.045, 0.05, 0.3, 8]} />
+          <meshStandardMaterial color="#9c6c45" roughness={1} />
+        </mesh>
+      ))}
+      {[-1, 1].map((side) => (
+        <mesh key={`c${side}`} position={[side * (DOCK.width / 2 - 0.02), 0.25, DOCK.zEnd + 0.06]} castShadow>
+          <cylinderGeometry args={[0.04, 0.045, 0.16, 8]} />
+          <meshStandardMaterial color="#9c6c45" roughness={1} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function ToyBoat({ position = [-2.0, 0.55] }) {
+  const ref = useRef();
+  const sail = useMemo(() => {
+    const sh = new THREE.Shape();
+    sh.moveTo(0, 0);
+    sh.lineTo(0, 0.36);
+    sh.lineTo(0.24, 0.02);
+    sh.closePath();
+    return sh;
+  }, []);
+  const sail2 = useMemo(() => {
+    const sh = new THREE.Shape();
+    sh.moveTo(0, 0.04);
+    sh.lineTo(0, 0.28);
+    sh.lineTo(-0.16, 0.04);
+    sh.closePath();
+    return sh;
+  }, []);
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const t = clock.getElapsedTime();
+    ref.current.position.y = 0.04 + Math.sin(t * 1.2) * 0.015;
+    ref.current.rotation.z = Math.sin(t * 1.1) * 0.06;
+    ref.current.rotation.x = Math.sin(t * 0.9 + 1) * 0.04;
+    ref.current.rotation.y = 0.5 + Math.sin(t * 0.15) * 0.3;
+  });
+  return (
+    <group ref={ref} position={[position[0], 0.04, position[1]]}>
+      <mesh scale={[0.32, 0.1, 0.13]} castShadow>
+        <sphereGeometry args={[1, 18, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2]} />
+        <meshStandardMaterial color="#d99a66" roughness={1} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[0.3, 0.12, 1]}>
+        <circleGeometry args={[1, 18]} />
+        <meshStandardMaterial color="#b97d4f" roughness={1} />
+      </mesh>
+      <mesh position={[0.02, 0.22, 0]} castShadow>
+        <cylinderGeometry args={[0.012, 0.012, 0.44, 6]} />
+        <meshStandardMaterial color="#8a5a38" roughness={1} />
+      </mesh>
+      <mesh position={[0.035, 0.04, 0]} castShadow>
+        <shapeGeometry args={[sail]} />
+        <meshStandardMaterial color="#fff4e6" roughness={1} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0.005, 0.04, 0]} castShadow>
+        <shapeGeometry args={[sail2]} />
+        <meshStandardMaterial color="#ffb6cf" roughness={1} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0.02, 0.47, 0]}>
+        <coneGeometry args={[0.03, 0.06, 3]} />
+        <meshStandardMaterial color="#ff8fb4" roughness={1} />
+      </mesh>
+    </group>
+  );
+}
+
 const LILYPAD_PLACEMENTS = [
   { size: "small", position: [1.9, -1.0], rotation: 0.4, scale: 0.85 },
   { size: "small", position: [-1.9, -4.0], rotation: 2.1, scale: 0.8 },
@@ -442,6 +724,7 @@ const ROCK_PLACEMENTS = [
 const MUSHROOM_CAP_COLORS = ["#ff6f6f", "#ffb3c6", "#ffd166"];
 
 function Mushroom({ position, rotation, scale, colorIndex }) {
+  const night = useNight();
   const capColor = MUSHROOM_CAP_COLORS[colorIndex % MUSHROOM_CAP_COLORS.length];
   return (
     <group position={[position[0], 0, position[1]]} rotation={[0, rotation, 0]} scale={scale}>
@@ -451,7 +734,7 @@ function Mushroom({ position, rotation, scale, colorIndex }) {
       </mesh>
       <mesh position={[0, 0.3, 0]} castShadow receiveShadow>
         <sphereGeometry args={[0.24, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial color={capColor} roughness={0.55} />
+        <meshStandardMaterial color={capColor} emissive={night ? capColor : "#000000"} emissiveIntensity={night ? 0.45 : 0} roughness={0.8} />
       </mesh>
       {[0, 1, 2, 3].map((i) => {
         const a = (i / 4) * Math.PI * 2 + 0.4;
@@ -609,6 +892,7 @@ const FLOWER_PLACEMENTS = FLOWER_PLACEMENTS_RAW.map((f) => ({
 }));
 
 function Flowers() {
+  const night = useNight();
   return (
     <>
       {FLOWER_PLACEMENTS.map((f, i) => (
@@ -619,7 +903,12 @@ function Flowers() {
           </mesh>
           <mesh position={[0, 0.26, 0]} castShadow>
             <sphereGeometry args={[0.07, 8, 8]} />
-            <meshStandardMaterial color={FLOWER_COLORS[f.color]} />
+            <meshStandardMaterial
+              color={FLOWER_COLORS[f.color]}
+              emissive={night ? FLOWER_COLORS[f.color] : "#000000"}
+              emissiveIntensity={night ? 0.35 : 0}
+              roughness={0.8}
+            />
           </mesh>
         </group>
       ))}
@@ -638,12 +927,13 @@ const GRASS_TUFT_PLACEMENTS = Array.from({ length: 20 }).map((_, i) => {
 });
 
 function GrassTuft({ position, rotation, scale }) {
+  const night = useNight();
   return (
     <group position={[position[0], 0, position[1]]} rotation={[0, rotation, 0]} scale={scale}>
       {[-0.05, 0, 0.05].map((dx, i) => (
         <mesh key={i} position={[dx, 0.09, 0]} rotation={[0, 0, dx * 2.5]} castShadow>
           <coneGeometry args={[0.02, 0.2, 5]} />
-          <meshStandardMaterial color={i === 1 ? "#5f9e4e" : "#6fae5a"} roughness={0.8} />
+          <meshStandardMaterial color={night ? NIGHT.tuft[i === 1 ? 0 : 1] : i === 1 ? "#5f9e4e" : "#6fae5a"} roughness={0.9} />
         </mesh>
       ))}
     </group>
@@ -667,23 +957,25 @@ const BUSH_PLACEMENTS = [
 ];
 
 function Bush({ position, scale }) {
+  const night = useNight();
+  const leaf = night ? NIGHT.bush : ["#5c9c53", "#6bab5f"];
   return (
     <group position={[position[0], 0, position[1]]} scale={scale}>
       <mesh position={[0, 0.22, 0]} castShadow receiveShadow>
         <sphereGeometry args={[0.26, 9, 7]} />
-        <meshStandardMaterial color="#5c9c53" roughness={0.85} />
+        <meshStandardMaterial color={leaf[0]} roughness={0.95} />
       </mesh>
       <mesh position={[0.18, 0.16, 0.1]} castShadow receiveShadow>
         <sphereGeometry args={[0.18, 8, 6]} />
-        <meshStandardMaterial color="#6bab5f" roughness={0.85} />
+        <meshStandardMaterial color={leaf[1]} roughness={0.95} />
       </mesh>
       <mesh position={[-0.15, 0.14, -0.12]} castShadow receiveShadow>
         <sphereGeometry args={[0.16, 8, 6]} />
-        <meshStandardMaterial color="#6bab5f" roughness={0.85} />
+        <meshStandardMaterial color={leaf[1]} roughness={0.95} />
       </mesh>
       <mesh position={[0, 0.34, 0.05]}>
         <sphereGeometry args={[0.03, 6, 6]} />
-        <meshStandardMaterial color="#ffd9e8" />
+        <meshStandardMaterial color="#ffd9e8" emissive={night ? "#ffd9e8" : "#000000"} emissiveIntensity={night ? 0.5 : 0} />
       </mesh>
     </group>
   );
@@ -706,6 +998,7 @@ const BLOOM_PLACEMENTS = [
 ];
 
 function WaterBloom({ position, color, scale }) {
+  const night = useNight();
   const ref = useRef();
   const phase = useMemo(() => Math.random() * Math.PI * 2, []);
   useFrame(({ clock }) => {
@@ -727,13 +1020,13 @@ function WaterBloom({ position, color, scale }) {
             castShadow
           >
             <sphereGeometry args={[0.07, 8, 6]} />
-            <meshStandardMaterial color={color} roughness={0.6} />
+            <meshStandardMaterial color={color} emissive={night ? color : "#000000"} emissiveIntensity={night ? 0.45 : 0} roughness={0.8} />
           </mesh>
         );
       })}
       <mesh position={[0, 0.01, 0]}>
         <sphereGeometry args={[0.06, 8, 8]} />
-        <meshStandardMaterial color="#ffe580" />
+        <meshStandardMaterial color="#ffe580" emissive={night ? "#ffe580" : "#000000"} emissiveIntensity={night ? 0.55 : 0} />
       </mesh>
     </group>
   );
@@ -867,7 +1160,7 @@ function Dragonflies() {
 }
 
 function Lilypad({ position, rotation, scale, sourceScene }) {
-  const object = useMemo(() => sourceScene.clone(), [sourceScene]);
+  const object = useMemo(() => makeMatte(sourceScene.clone()), [sourceScene]);
   const offset = useGroundedOffset(object);
   const ref = useRef();
   const bobPhase = useMemo(() => Math.random() * Math.PI * 2, []);
@@ -922,6 +1215,7 @@ class LilypadsErrorBoundary extends React.Component {
 }
 
 function LilyBlossom({ position, color, scale = 1 }) {
+  const night = useNight();
   const ref = useRef();
   const phase = useMemo(() => Math.random() * Math.PI * 2, []);
   useFrame(({ clock }) => {
@@ -936,13 +1230,13 @@ function LilyBlossom({ position, color, scale = 1 }) {
         return (
           <mesh key={i} position={[Math.cos(a) * 0.09, 0, Math.sin(a) * 0.09]} rotation={[0.75, a, 0]} castShadow>
             <coneGeometry args={[0.06, 0.16, 4]} />
-            <meshStandardMaterial color={color} roughness={0.5} />
+            <meshStandardMaterial color={color} emissive={night ? color : "#000000"} emissiveIntensity={night ? 0.45 : 0} roughness={0.8} />
           </mesh>
         );
       })}
       <mesh position={[0, 0.05, 0]}>
         <sphereGeometry args={[0.05, 8, 8]} />
-        <meshStandardMaterial color="#ffe580" roughness={0.5} />
+        <meshStandardMaterial color="#ffe580" emissive={night ? "#ffe580" : "#000000"} emissiveIntensity={night ? 0.55 : 0} roughness={0.8} />
       </mesh>
     </group>
   );
@@ -985,7 +1279,7 @@ function generateCattailRing(count = 18, margin = 0.9) {
 const CATTAIL_PLACEMENTS = generateCattailRing();
 
 function Cattail({ position, rotation, scale, sourceScene }) {
-  const object = useMemo(() => sourceScene.clone(), [sourceScene]);
+  const object = useMemo(() => makeMatte(sourceScene.clone()), [sourceScene]);
   const offset = useGroundedOffset(object);
   return (
     <group position={[position[0], 0, position[1]]} rotation={[0, rotation, 0]}>
@@ -1156,13 +1450,14 @@ function Firefly({ bounds, speed, height }) {
   return (
     <mesh ref={ref}>
       <sphereGeometry args={[0.025, 8, 8]} />
-      <meshBasicMaterial color="#c8f27a" />
-      <pointLight color="#c8f27a" intensity={0.3} distance={0.9} />
+      <meshBasicMaterial color={NIGHT.firefly} toneMapped={false} />
+      <pointLight color={NIGHT.firefly} intensity={0.3} distance={0.9} />
     </mesh>
   );
 }
 
 function MistWisp({ radius, speed, height, phase, scale }) {
+  const night = useNight();
   const ref = useRef();
   useFrame(({ clock }) => {
     if (!ref.current) return;
@@ -1173,7 +1468,7 @@ function MistWisp({ radius, speed, height, phase, scale }) {
   return (
     <mesh ref={ref} scale={scale}>
       <sphereGeometry args={[0.6, 12, 12]} />
-      <meshBasicMaterial color="#f0ffe6" transparent opacity={0.14} depthWrite={false} />
+      <meshBasicMaterial color={night ? NIGHT.mist : "#f0ffe6"} transparent opacity={0.14} depthWrite={false} />
     </mesh>
   );
 }
@@ -1195,11 +1490,26 @@ function MistWisps() {
 
 const FROG_BASE_YAW = 0;
 
-function IdleCharacter({ modelPath, homePosition, onRipple, scale = 2.1 }) {
+function IdleCharacter({ modelPath, homePosition, onRipple, scale = 2.1, inline: InlineAnimation = null }) {
   const group = useRef();
+  const frame = useRef();
+  const { camera, gl } = useThree();
   const { scene } = useGLTF(modelPath);
-  const object = useMemo(() => scene.clone(), [scene]);
+  const object = useMemo(() => makeMatte(scene.clone()), [scene]);
   const offset = useGroundedOffset(object);
+  const anchorPoints = useMemo(() => {
+    const b = new THREE.Box3().setFromObject(object);
+    if (b.isEmpty()) return null;
+    const s = typeof scale === "number" ? scale : 1;
+    const x = homePosition[0] + offset[0] + ((b.min.x + b.max.x) / 2) * s;
+    const z = homePosition[1] + offset[2] + ((b.min.z + b.max.z) / 2) * s;
+    return {
+      top: new THREE.Vector3(x, offset[1] + b.max.y * s + BUBBLE_LIFT, z),
+      bottom: new THREE.Vector3(x, offset[1] + b.min.y * s, z),
+      topWorld: new THREE.Vector3(),
+      bottomWorld: new THREE.Vector3(),
+    };
+  }, [object, offset, scale, homePosition]);
 
   const nextHop = useRef(2 + Math.random() * 2);
   const nextGlance = useRef(1 + Math.random() * 2);
@@ -1207,6 +1517,13 @@ function IdleCharacter({ modelPath, homePosition, onRipple, scale = 2.1 }) {
   const glanceOffset = useRef(0);
 
   useFrame(({ clock }) => {
+    if (anchorPoints && frame.current) {
+      frame.current.updateWorldMatrix(true, false);
+      anchorPoints.topWorld.copy(anchorPoints.top).applyMatrix4(frame.current.matrixWorld);
+      anchorPoints.bottomWorld.copy(anchorPoints.bottom).applyMatrix4(frame.current.matrixWorld);
+      publishMoodAnchor(camera, gl, anchorPoints.topWorld, anchorPoints.bottomWorld);
+    }
+
     if (!group.current) return;
     const t = clock.getElapsedTime();
 
@@ -1237,14 +1554,46 @@ function IdleCharacter({ modelPath, homePosition, onRipple, scale = 2.1 }) {
     group.current.scale.set(1 / Math.sqrt(breathSquash), breathSquash, 1 / Math.sqrt(breathSquash));
   });
 
+  if (InlineAnimation) {
+    return (
+      <group ref={frame}>
+        <InlineAnimation
+          placement={{ homePosition, offset, scale, yaw: FROG_BASE_YAW, lean: INLINE_LEAN }}
+          idleModelPath={modelPath}
+        />
+      </group>
+    );
+  }
+
   return (
-    <group ref={group} position={[homePosition[0], 0, homePosition[1]]} rotation={[0, FROG_BASE_YAW, 0]}>
-      <primitive
-        object={object}
-        scale={scale}
-        position={[offset[0], 0, offset[2]]}
-      />
+    <group ref={frame}>
+      <group ref={group} position={[homePosition[0], 0, homePosition[1]]} rotation={[0, FROG_BASE_YAW, 0]}>
+        <primitive
+          object={object}
+          scale={scale}
+          position={[offset[0], 0, offset[2]]}
+        />
+      </group>
     </group>
+  );
+}
+
+const FROG_SCALE = 2.75;
+
+function FrogSlot({ characterModel, onRipple }) {
+  const mood = useMoodAnimation();
+  const Inline = mood.active ? INLINE_MOODS[mood.mood] || null : null;
+  if (mood.active && !Inline) return null;
+  return (
+    <CharacterErrorBoundary position={HOME_PAD_POSITION}>
+      <IdleCharacter
+        modelPath={characterModel}
+        homePosition={HOME_PAD_POSITION}
+        onRipple={Inline ? undefined : onRipple}
+        scale={FROG_SCALE}
+        inline={Inline}
+      />
+    </CharacterErrorBoundary>
   );
 }
 
@@ -1274,7 +1623,19 @@ const ISO_POSITION = [
 ];
 
 const FrogHabitat3D = ({ characterModel, showCharacter = true }) => {
+  const night = useNightModeSetting();
+  const L = night ? LIGHTS.night : LIGHTS.day;
   const [ripples, setRipples] = useState([]);
+
+  useEffect(() => {
+    window.__habitatInline = { animal: "frog", moods: Object.keys(INLINE_MOODS) };
+    window.dispatchEvent(new CustomEvent("habitat-inline", { detail: window.__habitatInline }));
+    return () => {
+      window.__habitatInline = null;
+      window.__moodAnchor = null;
+      window.dispatchEvent(new CustomEvent("habitat-inline", { detail: null }));
+    };
+  }, []);
 
   const addRipple = (position) => {
     setRipples((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, position }]);
@@ -1286,99 +1647,111 @@ const FrogHabitat3D = ({ characterModel, showCharacter = true }) => {
   return (
     <div className="habitat-canvas-wrap habitat-canvas-wrap--no-touch-scroll">
       <Canvas
-        shadows
+        shadows="soft"
         orthographic
         camera={{ position: ISO_POSITION, zoom: 74, near: 0.1, far: 200 }}
-        gl={{ toneMappingExposure: 1.25 }}
+        gl={{ toneMappingExposure: L.exposure }}
         style={{ touchAction: "none" }}
         onCreated={({ gl }) => {
 
           gl.domElement.style.touchAction = "none";
         }}
       >
-        <color attach="background" args={["#8fd9ae"]} />
-        <fog attach="fog" args={["#8fd9ae", 60, 150]} />
+        <NightContext.Provider value={night}>
+          <ExposureSync exposure={L.exposure} />
+          <color attach="background" args={[L.background]} />
+          <fog attach="fog" args={[L.background, 60, 150]} />
 
-        <OrbitControls
-          makeDefault
-          target={[0, 0.7, 0]}
-          enableDamping
-          dampingFactor={0.08}
-          enablePan
-          screenSpacePanning
-          panSpeed={1}
-          enableRotate
-          rotateSpeed={0.6}
-          minPolarAngle={0.55}
-          maxPolarAngle={1.05}
-          minZoom={74}
-          maxZoom={150}
-          mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }}
-          touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }}
-        />
+          <OrbitControls
+            makeDefault
+            target={[0, 0.7, 0]}
+            enableDamping
+            dampingFactor={0.08}
+            enablePan
+            screenSpacePanning
+            panSpeed={1}
+            enableRotate
+            rotateSpeed={0.6}
+            minPolarAngle={0.55}
+            maxPolarAngle={1.05}
+            minZoom={74}
+            maxZoom={150}
+            mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }}
+            touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }}
+          />
 
-        <ambientLight intensity={0.85} />
-        <directionalLight
-          position={[5, 8, 3]}
-          intensity={2.3}
-          color="#fff7da"
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-          shadow-camera-left={-7}
-          shadow-camera-right={7}
-          shadow-camera-top={7}
-          shadow-camera-bottom={-7}
-        />
-        <directionalLight position={[-5, 3, -4]} intensity={0.4} color="#a8e0ea" />
-        <hemisphereLight args={["#f0ffe6", "#4a6b47", 1.1]} />
+          <ambientLight intensity={L.ambient} color={L.ambientColor} />
+          <directionalLight
+            position={[5, 8, 3]}
+            intensity={L.sun}
+            color={L.sunColor}
+            castShadow
+            shadow-bias={-0.0004}
+            shadow-mapSize={[2048, 2048]}
+            shadow-camera-left={-7}
+            shadow-camera-right={7}
+            shadow-camera-top={7}
+            shadow-camera-bottom={-7}
+          />
+          <directionalLight position={[-5, 3, -4]} intensity={L.rim} color={L.rimColor} />
+          <hemisphereLight args={[L.hemiSky, L.hemiGround, L.hemi]} />
+          {night && <GlowStars />}
 
-        <React.Suspense fallback={null}>
-          <Ground />
-          <FarPond />
+          <React.Suspense fallback={null}>
+            <Ground />
+            <FarPond />
 
-          <group position={POND_CLUSTER_OFFSET}>
-            <MudPatch />
-            <FrontMudFade />
-            <Pond />
-            <ShoreStones />
-            <FrogLightPatch />
-            <WaterBlooms />
-            <LilyBlossoms />
-            <MistWisps />
-            <Dragonflies />
+            <group position={POND_CLUSTER_OFFSET}>
+              <MudPatch />
+              <FrontMudFade />
+              <Pond />
+              <ShoreStones />
+              <FrogLightPatch />
+              <ThronePad />
+              <ThroneLotus />
+              <Dock />
+              <ToyBoat />
+              <WaterBlooms />
+              <LilyBlossoms />
+              <MistWisps />
+              {!night && <Dragonflies />}
 
-            <RippleManager ripples={ripples} onRippleDone={removeRipple} />
-            <LilyRipples />
+              <RippleManager ripples={ripples} onRippleDone={removeRipple} />
+              <LilyRipples />
 
-            <LilypadsErrorBoundary>
-              <React.Suspense fallback={null}>
-                <Lilypads />
-              </React.Suspense>
-            </LilypadsErrorBoundary>
+              <LilypadsErrorBoundary>
+                <React.Suspense fallback={null}>
+                  <Lilypads />
+                </React.Suspense>
+              </LilypadsErrorBoundary>
 
-            <CattailsErrorBoundary>
-              <React.Suspense fallback={null}>
-                <Cattails />
-              </React.Suspense>
-            </CattailsErrorBoundary>
+              <CattailsErrorBoundary>
+                <React.Suspense fallback={null}>
+                  <Cattails />
+                </React.Suspense>
+              </CattailsErrorBoundary>
 
-            <Firefly bounds={5} speed={0.5} height={0.8} />
-            <Firefly bounds={4.5} speed={0.55} height={1.0} />
-            <Firefly bounds={5.5} speed={0.45} height={0.65} />
+              {night && (
+                <>
+                  <Firefly bounds={5} speed={0.5} height={0.8} />
+                  <Firefly bounds={4.5} speed={0.55} height={1.0} />
+                  <Firefly bounds={5.5} speed={0.45} height={0.65} />
+                  <Firefly bounds={4} speed={0.4} height={0.9} />
+                  <Firefly bounds={6} speed={0.5} height={0.7} />
+                  <Firefly bounds={3.5} speed={0.6} height={1.1} />
+                </>
+              )}
 
-            <Mushrooms />
-            <TopMushrooms />
-            <Pebbles />
-            <PondRock />
-            <Flowers />
-            <GrassTufts />
-            {showCharacter && (
-              <HideWhenAnimated><CharacterErrorBoundary position={HOME_PAD_POSITION}>
-                <IdleCharacter modelPath={characterModel} homePosition={HOME_PAD_POSITION} onRipple={addRipple} scale={2.75} />
-              </CharacterErrorBoundary></HideWhenAnimated>
-            )}
-          </group>
-        </React.Suspense>
+              <Mushrooms />
+              <TopMushrooms />
+              <Pebbles />
+              <PondRock />
+              <Flowers />
+              <GrassTufts />
+              {showCharacter && <FrogSlot characterModel={characterModel} onRipple={addRipple} />}
+            </group>
+          </React.Suspense>
+        </NightContext.Provider>
       </Canvas>
     </div>
   );

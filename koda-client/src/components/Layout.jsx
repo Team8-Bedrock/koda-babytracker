@@ -16,6 +16,7 @@ import { API_URL } from "../config";
 import HabitatBackground from "./HabitatBackground";
 import NavIconButton from "./NavIconButton";
 import MoodBuddy from "./MoodBuddy";
+import NightTheme from "./NightTheme";
 import "../styling/global/layout.css";
 
 const Layout = ({ children }) => {
@@ -70,6 +71,7 @@ const Layout = ({ children }) => {
 
   return (
     <div className="layout-mobile-frame">
+      <NightTheme />
       <HabitatBackground />
       {selectedChild ? <MoodBuddy child={selectedChild} /> : null}
 

@@ -1,22 +1,46 @@
 import React, { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import FeedingFox from "../animations/fox/FeedingFox";
 
-function HideWhenAnimated({ children }) {
-  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+const INLINE_MOODS = { feeding: FeedingFox };
+const INLINE_LEAN = 0.1;
+const BUBBLE_LIFT = 0;
+
+function readMoodAnimation() {
+  if (typeof window === "undefined") return { active: false };
+  return window.__moodAnimation || { active: !!window.__moodAnimationActive };
+}
+
+function useMoodAnimation() {
+  const [mood, setMood] = React.useState(readMoodAnimation);
   React.useEffect(() => {
-    const onChange = (e) => setHidden(!!e.detail?.active);
+    const onChange = (e) => setMood(e.detail || readMoodAnimation());
     window.addEventListener("mood-animation", onChange);
     return () => window.removeEventListener("mood-animation", onChange);
   }, []);
-  return hidden ? null : children;
+  return mood;
+}
+
+function publishMoodAnchor(camera, gl, topWorld, bottomWorld) {
+  const rect = gl.domElement.getBoundingClientRect();
+  const toScreen = (p) => {
+    const v = p.clone().project(camera);
+    return [rect.left + ((v.x + 1) / 2) * rect.width, rect.top + ((1 - v.y) / 2) * rect.height];
+  };
+  const [x, top] = toScreen(topWorld);
+  const [, bottom] = toScreen(bottomWorld);
+  const prev = window.__moodAnchor;
+  if (prev && Math.abs(prev.x - x) < 0.5 && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.bottom - bottom) < 0.5) return;
+  window.__moodAnchor = { x, top, bottom };
+  window.dispatchEvent(new CustomEvent("mood-anchor", { detail: window.__moodAnchor }));
 }
 
 
 const FOX_HEIGHT = 0.3;
 
-const FOX_POSITION = [0.13,2.50];
+const FOX_POSITION = [0.13, 2.50];
 const FOX_MODEL = "/models/characters/fox/fox.glb";
 
 function seededRand(seed) {
@@ -537,8 +561,10 @@ function FallenLeafLitter() {
 }
 
 
-function Fox({ model, position = FOX_POSITION, onMunch }) {
+function Fox({ model, position = FOX_POSITION, onMunch, inline: InlineAnimation = null }) {
   const group = useRef(null);
+  const frame = useRef(null);
+  const { camera, gl } = useThree();
   const body = useRef(null);
   const nextMunch = useRef(1 + Math.random() * 2.5);
   const nextGlance = useRef(1 + Math.random() * 2);
@@ -564,8 +590,25 @@ function Fox({ model, position = FOX_POSITION, onMunch }) {
       }
     });
     wrapper.add(clone);
+    wrapper.userData.placement = {
+      offset: [-center.x, -box.min.y, -center.z],
+      scale,
+      box: box.clone(),
+    };
     return wrapper;
   }, [gltf.scene]);
+
+  const anchorPoints = useMemo(() => {
+    const { offset, scale, box } = normalizedModel.userData.placement;
+    const x = position[0] + offset[0] + ((box.min.x + box.max.x) / 2) * scale;
+    const z = position[1] + offset[2] + ((box.min.z + box.max.z) / 2) * scale;
+    return {
+      top: new THREE.Vector3(x, offset[1] + box.max.y * scale + BUBBLE_LIFT, z),
+      bottom: new THREE.Vector3(x, offset[1] + box.min.y * scale, z),
+      topWorld: new THREE.Vector3(),
+      bottomWorld: new THREE.Vector3(),
+    };
+  }, [normalizedModel, position]);
 
   useLayoutEffect(() => {
     if (!group.current) return;
@@ -573,6 +616,13 @@ function Fox({ model, position = FOX_POSITION, onMunch }) {
   }, [model]);
 
   useFrame(({ clock }) => {
+    if (frame.current) {
+      frame.current.updateWorldMatrix(true, false);
+      anchorPoints.topWorld.copy(anchorPoints.top).applyMatrix4(frame.current.matrixWorld);
+      anchorPoints.bottomWorld.copy(anchorPoints.bottom).applyMatrix4(frame.current.matrixWorld);
+      publishMoodAnchor(camera, gl, anchorPoints.topWorld, anchorPoints.bottomWorld);
+    }
+
     if (!group.current) return;
     const t = clock.getElapsedTime();
 
@@ -595,12 +645,37 @@ function Fox({ model, position = FOX_POSITION, onMunch }) {
     group.current.position.y = Math.sin(t * 1.2) * 0.012;
   });
 
+  if (InlineAnimation) {
+    const { offset, scale } = normalizedModel.userData.placement;
+    return (
+      <group ref={frame}>
+        <InlineAnimation
+          placement={{ homePosition: position, offset, scale, yaw: 0, lean: INLINE_LEAN }}
+          idleModelPath={model}
+        />
+      </group>
+    );
+  }
+
   return (
-    <group ref={group} position={[position[0], 0, position[1]]}>
-      <group ref={body}>
-        <primitive object={normalizedModel} />
+    <group ref={frame}>
+      <group ref={group} position={[position[0], 0, position[1]]}>
+        <group ref={body}>
+          <primitive object={normalizedModel} />
+        </group>
       </group>
     </group>
+  );
+}
+
+function FoxSlot({ onMunch }) {
+  const mood = useMoodAnimation();
+  const Inline = mood.active ? INLINE_MOODS[mood.mood] || null : null;
+  if (mood.active && !Inline) return null;
+  return (
+    <FoxErrorBoundary position={FOX_POSITION} onMunch={Inline ? undefined : onMunch}>
+      <Fox model={FOX_MODEL} position={FOX_POSITION} onMunch={Inline ? undefined : onMunch} inline={Inline} />
+    </FoxErrorBoundary>
   );
 }
 
@@ -670,6 +745,16 @@ export function FoxHabitat3D() {
     useGLTF.preload(FOX_MODEL);
   }, []);
 
+  useEffect(() => {
+    window.__habitatInline = { animal: "fox", moods: Object.keys(INLINE_MOODS) };
+    window.dispatchEvent(new CustomEvent("habitat-inline", { detail: window.__habitatInline }));
+    return () => {
+      window.__habitatInline = null;
+      window.__moodAnchor = null;
+      window.dispatchEvent(new CustomEvent("habitat-inline", { detail: null }));
+    };
+  }, []);
+
   return (
     <Canvas
       shadows
@@ -710,9 +795,7 @@ export function FoxHabitat3D() {
           {puffs.map((p) => (
             <LeafPuff key={p.id} position={p.position} onDone={() => removePuff(p.id)} />
           ))}
-          <HideWhenAnimated><FoxErrorBoundary position={FOX_POSITION} onMunch={addPuff}>
-            <Fox model={FOX_MODEL} position={FOX_POSITION} onMunch={addPuff} />
-          </FoxErrorBoundary></HideWhenAnimated>
+          <FoxSlot onMunch={addPuff} />
         </group>
       </Suspense>
     </Canvas>

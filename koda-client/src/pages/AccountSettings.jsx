@@ -308,10 +308,36 @@ const AccountSettings = () => {
         </div>
 
         {category === null && (
-          <button type="button" className="setup-btn-primary account-logout-btn" onClick={handleLogout}>
-            <LogOut size={20} />
-            <span>log out</span>
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="koda-logout-pill"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 28px',
+                borderRadius: 999,
+                border: '2px solid rgba(255, 255, 255, 0.6)',
+                background: 'linear-gradient(135deg, #8fbf7a, #5f9a5a)',
+                color: '#ffffff',
+                fontFamily: 'inherit',
+                fontWeight: 800,
+                fontSize: 15,
+                letterSpacing: 0.3,
+                cursor: 'pointer',
+                boxShadow: '0 8px 20px rgba(20, 45, 30, 0.18)',
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+            >
+              <LogOut size={18} />
+              <span>log out</span>
+              <span style={{ fontSize: 12, opacity: 0.6 }}>✦</span>
+            </button>
+          </div>
         )}
 
       </div>

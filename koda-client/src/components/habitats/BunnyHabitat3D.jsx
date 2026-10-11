@@ -1,19 +1,91 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import "../../styling/components/habitats.css";
 import { DEFAULT_MODEL } from "../../constants/avatars";
 import { useGroundedOffset, seededRand } from "./habitatUtils";
+import FeedingBunny from "../animations/bunny/FeedingBunny";
 
-function HideWhenAnimated({ children }) {
-  const [hidden, setHidden] = React.useState(() => typeof window !== "undefined" && !!window.__moodAnimationActive);
+// Moods this habitat plays right inside the scene, in the idle bunny's exact spot
+// (same camera, lights, size). Other moods still play in MoodBuddy's overlay.
+const INLINE_MOODS = { feeding: FeedingBunny };
+// The habitat camera looks down from above; while she eats she leans back this much
+// (radians) toward the camera so you see her face instead of the top of her head.
+const INLINE_LEAN = 0.22;
+
+// ---------- day / night ----------
+function useNightModeSetting() {
+  const [night, setNight] = React.useState(() => typeof window !== "undefined" && localStorage.getItem("koda-dark-mode") === "true");
   React.useEffect(() => {
-    const onChange = (e) => setHidden(!!e.detail?.active);
+    const onMode = (e) => setNight(e?.detail && typeof e.detail.isDarkMode === "boolean" ? e.detail.isDarkMode : localStorage.getItem("koda-dark-mode") === "true");
+    window.addEventListener("koda-dark-mode", onMode);
+    return () => window.removeEventListener("koda-dark-mode", onMode);
+  }, []);
+  return night;
+}
+// shared inside the Canvas so every piece of the scene knows if it's night
+const NightContext = React.createContext(false);
+const useNight = () => React.useContext(NightContext);
+
+// Day: warm, peachy pastel garden. Night: the same garden at a dreamy lavender dusk —
+// soft lavender moonlight with a warm peach glow, glowing dandelion wishes and pastel mushrooms.
+const LIGHTS = {
+  day: {
+    background: "#f8e0ad", exposure: 1.15,
+    ambient: 0.72, ambientColor: "#fff4e2",
+    sun: 2.0, sunColor: "#ffeec2",
+    rim: 0.35, rimColor: "#ffcfa0",
+    hemiSky: "#fff0c4", hemiGround: "#8a7a42", hemi: 1.0,
+  },
+  night: {
+    background: "#4a4173", exposure: 1.0,
+    ambient: 0.62, ambientColor: "#d9cdf2",
+    sun: 0.85, sunColor: "#e6dbff",
+    rim: 0.55, rimColor: "#ffc4a3",
+    hemiSky: "#b9a9e3", hemiGround: "#5a4a3a", hemi: 0.75,
+  },
+};
+const NIGHT = {
+  dirtTint: "#b3a3bf",
+  tuft: ["#5f8a5a", "#6f9a66"],
+  fence: "#e6e2f2",
+  fenceCap: "#ddd8ec",
+  firefly: "#ffe9a0",
+  star: "#fff1c9",
+  wish: "#fff6d8",
+};
+
+function readMoodAnimation() {
+  if (typeof window === "undefined") return { active: false };
+  return window.__moodAnimation || { active: !!window.__moodAnimationActive };
+}
+
+function useMoodAnimation() {
+  const [mood, setMood] = React.useState(readMoodAnimation);
+  React.useEffect(() => {
+    const onChange = (e) => setMood(e.detail || readMoodAnimation());
     window.addEventListener("mood-animation", onChange);
     return () => window.removeEventListener("mood-animation", onChange);
   }, []);
-  return hidden ? null : children;
+  return mood;
+}
+
+// Tell MoodBuddy where the bunny is on screen (top of head + feet), so its
+// "nom nom" bubble can sit right above her when she's animating in the habitat.
+const _anchorV = new THREE.Vector3();
+function publishMoodAnchor(camera, gl, box) {
+  const rect = gl.domElement.getBoundingClientRect();
+  const toScreen = (y) => {
+    _anchorV.set((box.min.x + box.max.x) / 2, y, (box.min.z + box.max.z) / 2).project(camera);
+    return [rect.left + ((_anchorV.x + 1) / 2) * rect.width, rect.top + ((1 - _anchorV.y) / 2) * rect.height];
+  };
+  const [x, top] = toScreen(box.max.y);
+  const [, bottom] = toScreen(box.min.y);
+  const prev = window.__moodAnchor;
+  if (prev && Math.abs(prev.x - x) < 0.5 && Math.abs(prev.top - top) < 0.5 && Math.abs(prev.bottom - bottom) < 0.5) return;
+  window.__moodAnchor = { x, top, bottom };
+  window.dispatchEvent(new CustomEvent("mood-anchor", { detail: window.__moodAnchor }));
 }
 
 
@@ -27,13 +99,17 @@ function ContactShadow({ position = [0, 0], radius = 0.4, opacity = 0.18 }) {
 }
 
 const MEADOW_TEX_SIZE = 256;
-function buildMeadowTexture() {
+function buildMeadowTexture(night = false) {
   const canvas = document.createElement("canvas");
   canvas.width = MEADOW_TEX_SIZE;
   canvas.height = MEADOW_TEX_SIZE;
   const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "hsl(68, 52%, 60%)";
+  // night keeps the same meadow pattern, shifted to a soft moonlit sage
+  const H = night ? 38 : 0;
+  const S = night ? 0.5 : 1;
+  const L = night ? 0.66 : 1;
+  ctx.fillStyle = night ? "hsl(104, 24%, 38%)" : "hsl(68, 52%, 60%)";
   ctx.fillRect(0, 0, MEADOW_TEX_SIZE, MEADOW_TEX_SIZE);
 
   for (let i = 0; i < 90; i++) {
@@ -41,11 +117,11 @@ function buildMeadowTexture() {
     const cx = (seed * 17) % MEADOW_TEX_SIZE;
     const cy = (seed * 31) % MEADOW_TEX_SIZE;
     const r = 22 + (seed % 26);
-    const hue = 60 + (seed % 14);
-    const light = 54 + (seed % 10);
+    const hue = 60 + (seed % 14) + H;
+    const light = (54 + (seed % 10)) * L;
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    grad.addColorStop(0, `hsla(${hue}, 52%, ${light}%, 0.5)`);
-    grad.addColorStop(1, `hsla(${hue}, 52%, ${light}%, 0)`);
+    grad.addColorStop(0, `hsla(${hue}, ${52 * S}%, ${light}%, 0.5)`);
+    grad.addColorStop(1, `hsla(${hue}, ${52 * S}%, ${light}%, 0)`);
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -56,12 +132,12 @@ function buildMeadowTexture() {
     const seed = i * 91 + 13;
     const bx = (seed * 7) % MEADOW_TEX_SIZE;
     const by = (seed * 19) % MEADOW_TEX_SIZE;
-    const hue = 64 + (seed % 10);
+    const hue = 64 + (seed % 10) + H;
     const a = seededRand(seed) * Math.PI;
     ctx.save();
     ctx.translate(bx, by);
     ctx.rotate(a);
-    ctx.fillStyle = `hsla(${hue + 6}, 56%, 66%, 0.55)`;
+    ctx.fillStyle = `hsla(${hue + 6}, ${56 * S}%, ${66 * L}%, 0.55)`;
     ctx.beginPath();
     ctx.ellipse(0, 0, 1.2, 3.2, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -72,7 +148,7 @@ function buildMeadowTexture() {
     const seed = i * 97 + 11;
     const cx = (seed * 13) % canvas.width;
     const cy = (seed * 29) % canvas.height;
-    ctx.fillStyle = "hsl(86, 36%, 42%)";
+    ctx.fillStyle = night ? "hsl(120, 20%, 30%)" : "hsl(86, 36%, 42%)";
     for (let l = 0; l < 3; l++) {
       const a = (l / 3) * Math.PI * 2;
       ctx.beginPath();
@@ -116,15 +192,17 @@ function buildMeadowTexture() {
 }
 
 function Ground({ size = 100 }) {
-  const tex = useMemo(() => buildMeadowTexture(), []);
+  const night = useNight();
+  const tex = useMemo(() => buildMeadowTexture(night), [night]);
   const repeats = size / 2.75;
   useEffect(() => {
     tex.repeat.set(repeats, repeats);
+    return () => tex.dispose();
   }, [tex, repeats]);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[size, size]} />
-      <meshStandardMaterial map={tex} />
+      <meshStandardMaterial key={night ? "n" : "d"} map={tex} roughness={1} />
     </mesh>
   );
 }
@@ -266,6 +344,7 @@ const PEN_WIDTH = 7.2;
 const PEN_DEPTH = 6.2;
 
 function DirtPen() {
+  const night = useNight();
   const tex = useMemo(() => buildDirtTexture(), []);
   const mask = useMemo(() => buildDirtAlpha(), []);
   return (
@@ -274,7 +353,7 @@ function DirtPen() {
       <meshStandardMaterial
         map={tex}
         alphaMap={mask}
-        color="#e8cca8"
+        color={night ? NIGHT.dirtTint : "#e8cca8"}
         transparent
         roughness={0.95}
         depthWrite={false}
@@ -302,6 +381,7 @@ const TUFT_RING = Array.from({ length: 54 }).map((_, i) => {
 });
 
 function GrassTufts() {
+  const night = useNight();
   return (
     <>
       {TUFT_RING.map((t, i) => (
@@ -311,7 +391,7 @@ function GrassTufts() {
             return (
               <mesh key={b} position={[Math.cos(a) * 0.04, 0.07, Math.sin(a) * 0.04]} rotation={[0.22 * Math.cos(a), a, 0.22 * Math.sin(a)]}>
                 <coneGeometry args={[0.022, 0.16, 4]} />
-                <meshStandardMaterial color={b % 2 === 0 ? "#8fb14f" : "#a2c063"} roughness={0.9} />
+                <meshStandardMaterial color={night ? NIGHT.tuft[b % 2] : b % 2 === 0 ? "#8fb14f" : "#a2c063"} roughness={0.9} />
               </mesh>
             );
           })}
@@ -354,21 +434,24 @@ const FENCE_GATE = { x: 0, z: PEN_DEPTH / 2, width: 1.4 };
 const FENCE_POSTS = generateFencePerimeter(PEN_WIDTH, PEN_DEPTH, 0.42, FENCE_GATE);
 
 function FencePost({ x, z, angle }) {
+  const night = useNight();
   return (
     <group position={[x, 0, z]} rotation={[0, angle, 0]}>
       <mesh position={[0, 0.28, 0]} castShadow receiveShadow>
         <boxGeometry args={[0.08, 0.56, 0.05]} />
-        <meshStandardMaterial color="#f6f1e4" roughness={0.75} />
+        <meshStandardMaterial color={night ? NIGHT.fence : "#f6f1e4"} roughness={0.85} />
       </mesh>
       <mesh position={[0, 0.58, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
         <coneGeometry args={[0.07, 0.12, 4]} />
-        <meshStandardMaterial color="#efe8d6" roughness={0.75} />
+        <meshStandardMaterial color={night ? NIGHT.fenceCap : "#efe8d6"} roughness={0.85} />
       </mesh>
     </group>
   );
 }
 
 function Fence() {
+  const night = useNight();
+  const rail = night ? NIGHT.fenceCap : "#efe8d6";
   const halfW = PEN_WIDTH / 2;
   const halfD = PEN_DEPTH / 2;
   const railY = [0.18, 0.42];
@@ -384,23 +467,23 @@ function Fence() {
         <React.Fragment key={i}>
           <mesh position={[0, y, -halfD]} castShadow>
             <boxGeometry args={[PEN_WIDTH, 0.05, 0.03]} />
-            <meshStandardMaterial color="#efe8d6" roughness={0.75} />
+            <meshStandardMaterial color={rail} roughness={0.85} />
           </mesh>
           <mesh position={[-frontCenter, y, halfD]} castShadow>
             <boxGeometry args={[frontSeg, 0.05, 0.03]} />
-            <meshStandardMaterial color="#efe8d6" roughness={0.75} />
+            <meshStandardMaterial color={rail} roughness={0.85} />
           </mesh>
           <mesh position={[frontCenter, y, halfD]} castShadow>
             <boxGeometry args={[frontSeg, 0.05, 0.03]} />
-            <meshStandardMaterial color="#efe8d6" roughness={0.75} />
+            <meshStandardMaterial color={rail} roughness={0.85} />
           </mesh>
           <mesh position={[-halfW, y, 0]} rotation={[0, Math.PI / 2, 0]} castShadow>
             <boxGeometry args={[PEN_DEPTH, 0.05, 0.03]} />
-            <meshStandardMaterial color="#efe8d6" roughness={0.75} />
+            <meshStandardMaterial color={rail} roughness={0.85} />
           </mesh>
           <mesh position={[halfW, y, 0]} rotation={[0, Math.PI / 2, 0]} castShadow>
             <boxGeometry args={[PEN_DEPTH, 0.05, 0.03]} />
-            <meshStandardMaterial color="#efe8d6" roughness={0.75} />
+            <meshStandardMaterial color={rail} roughness={0.85} />
           </mesh>
         </React.Fragment>
       ))}
@@ -408,7 +491,7 @@ function Fence() {
         <group key={`gp-${i}`} position={[x, 0, halfD]}>
           <mesh position={[0, 0.38, 0]} castShadow receiveShadow>
             <boxGeometry args={[0.11, 0.76, 0.11]} />
-            <meshStandardMaterial color="#f6f1e4" roughness={0.72} />
+            <meshStandardMaterial color={night ? NIGHT.fence : "#f6f1e4"} roughness={0.85} />
           </mesh>
           <mesh position={[0, 0.8, 0]} castShadow>
             <sphereGeometry args={[0.07, 12, 12]} />
@@ -784,7 +867,7 @@ function buildMoundTexture() {
 const CARROT_PLACEMENTS = [{ x: 0.55, z: 0.55, rotation: 0.5 }];
 
 function Carrot({ x, z, rotation, sourceScene }) {
-  const object = useMemo(() => sourceScene.clone(), [sourceScene]);
+  const object = useMemo(() => makeMatte(sourceScene.clone()), [sourceScene]);
   const offset = useGroundedOffset(object);
   const ref = useRef();
   const swayPhase = useMemo(() => Math.random() * Math.PI * 2, []);
@@ -836,6 +919,7 @@ class CarrotPatchErrorBoundary extends React.Component {
 const FLOWER_COLORS = ["#ffd9e8", "#fff3b0", "#ffffff", "#ffc2d9", "#d9c2ff"];
 
 function Flower({ position, color }) {
+  const night = useNight();
   const petalColor = FLOWER_COLORS[color % FLOWER_COLORS.length];
   return (
     <group position={[position[0], 0.012, position[1]]}>
@@ -848,7 +932,7 @@ function Flower({ position, color }) {
             rotation={[-Math.PI / 2, 0, a]}
           >
             <sphereGeometry args={[0.045, 8, 6]} />
-            <meshStandardMaterial color={petalColor} roughness={0.6} />
+            <meshStandardMaterial color={petalColor} emissive={night ? petalColor : "#000000"} emissiveIntensity={night ? 0.22 : 0} roughness={0.8} />
           </mesh>
         );
       })}
@@ -895,6 +979,7 @@ function Flowers() {
 const MUSHROOM_COLORS = ["#ff9f8f", "#ffc2d9", "#d9a5ff"];
 
 function Mushroom({ position, color, scale = 1, rotation = 0 }) {
+  const night = useNight();
   const capColor = MUSHROOM_COLORS[color % MUSHROOM_COLORS.length];
   return (
     <group position={[position[0], 0, position[1]]} rotation={[0, rotation, 0]} scale={scale}>
@@ -904,7 +989,7 @@ function Mushroom({ position, color, scale = 1, rotation = 0 }) {
       </mesh>
       <mesh position={[0, 0.13, 0]} castShadow>
         <sphereGeometry args={[0.07, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial color={capColor} roughness={0.6} />
+        <meshStandardMaterial color={capColor} emissive={night ? capColor : "#000000"} emissiveIntensity={night ? 0.55 : 0} roughness={0.8} />
       </mesh>
       {[0, 1, 2].map((i) => {
         const a = (i / 3) * Math.PI * 2 + 0.4;
@@ -971,6 +1056,7 @@ const DANDELION_PLACEMENTS = [
 ];
 
 function Dandelion({ position }) {
+  const night = useNight();
   return (
     <group position={[position[0], 0, position[1]]}>
       <mesh position={[0, 0.18, 0]}>
@@ -979,7 +1065,14 @@ function Dandelion({ position }) {
       </mesh>
       <mesh position={[0, 0.38, 0]}>
         <sphereGeometry args={[0.09, 10, 10]} />
-        <meshStandardMaterial color="#fdfdf5" transparent opacity={0.85} roughness={1} />
+        <meshStandardMaterial
+          color={night ? NIGHT.wish : "#fdfdf5"}
+          emissive={night ? NIGHT.wish : "#000000"}
+          emissiveIntensity={night ? 0.7 : 0}
+          transparent
+          opacity={0.85}
+          roughness={1}
+        />
       </mesh>
     </group>
   );
@@ -996,6 +1089,7 @@ function Dandelions() {
 }
 
 function DriftingSeed({ radius, speed, phase }) {
+  const night = useNight();
   const ref = useRef();
   useFrame(({ clock }) => {
     if (!ref.current) return;
@@ -1011,7 +1105,13 @@ function DriftingSeed({ radius, speed, phase }) {
   return (
     <mesh ref={ref}>
       <sphereGeometry args={[0.018, 6, 6]} />
-      <meshStandardMaterial color="#ffffff" transparent opacity={0} />
+      <meshStandardMaterial
+        color={night ? NIGHT.wish : "#ffffff"}
+        emissive={night ? NIGHT.wish : "#000000"}
+        emissiveIntensity={night ? 0.9 : 0}
+        transparent
+        opacity={0}
+      />
     </mesh>
   );
 }
@@ -1120,6 +1220,110 @@ function Butterflies() {
   );
 }
 
+function Fireflies({ count = 14 }) {
+  const ref = useRef();
+  const data = useMemo(
+    () =>
+      Array.from({ length: count }, (_, i) => ({
+        x: (seededRand(i * 3.3 + 1) - 0.5) * 8,
+        y: 0.3 + seededRand(i * 5.1 + 2) * 1.4,
+        z: (seededRand(i * 7.7 + 3) - 0.5) * 7,
+        p: seededRand(i * 9.9) * 6.28,
+      })),
+    [count],
+  );
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const t = clock.getElapsedTime();
+    ref.current.children.forEach((m, i) => {
+      const d = data[i];
+      m.position.set(d.x + Math.sin(t * 0.4 + d.p) * 0.4, d.y + Math.sin(t * 0.7 + d.p * 1.7) * 0.2, d.z + Math.cos(t * 0.35 + d.p) * 0.4);
+      m.material.opacity = 0.35 + Math.abs(Math.sin(t * 2 + d.p)) * 0.6;
+    });
+  });
+  return (
+    <group ref={ref}>
+      {data.map((_, i) => (
+        <mesh key={i}>
+          <sphereGeometry args={[0.035, 8, 6]} />
+          <meshBasicMaterial color={NIGHT.firefly} transparent opacity={0.8} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// twinkling stars pinned to the top of the view (follow the camera, even when it's rotated)
+function Stars() {
+  const group = useRef(null);
+  const shape = useMemo(() => {
+    const outline = new THREE.Shape();
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.PI / 2 + (i * Math.PI) / 5;
+      const r = i % 2 === 0 ? 1 : 0.44;
+      if (i === 0) outline.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+      else outline.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+    }
+    outline.closePath();
+    return outline;
+  }, []);
+  const stars = useMemo(() => Array.from({ length: 13 }, (_, i) => ({
+    x: -0.86 + (i % 5) * 0.4 + seededRand(i * 17 + 2) * 0.13,
+    y: 0.57 + seededRand(i * 23 + 7) * 0.32,
+    radius: i % 3 === 0 ? 5 : 3,
+    phase: seededRand(i + 11) * Math.PI * 2,
+  })), []);
+  useFrame(({ camera, size, clock }) => {
+    if (!group.current || !camera.isOrthographicCamera) return;
+    group.current.position.copy(camera.position);
+    group.current.quaternion.copy(camera.quaternion);
+    const halfWidth = (camera.right - camera.left) / (2 * camera.zoom);
+    const halfHeight = (camera.top - camera.bottom) / (2 * camera.zoom);
+    group.current.children.forEach((mesh, i) => {
+      const star = stars[i];
+      mesh.position.set(star.x * halfWidth, star.y * halfHeight, -0.5);
+      mesh.scale.setScalar((star.radius * halfHeight * 2) / size.height);
+      mesh.material.opacity = 0.65 + Math.sin(clock.getElapsedTime() * 0.8 + star.phase) * 0.2;
+    });
+  });
+  return (
+    <group ref={group}>
+      {stars.map((_, i) => (
+        <mesh key={i} renderOrder={100} frustumCulled={false}>
+          <shapeGeometry args={[shape]} />
+          <meshBasicMaterial color={NIGHT.star} transparent opacity={0.8} depthTest={false} depthWrite={false} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// gl settings are only read once, so keep brightness in sync with day/night
+function ExposureSync({ exposure }) {
+  const { gl } = useThree();
+  useEffect(() => {
+    gl.toneMappingExposure = exposure;
+  }, [gl, exposure]);
+  return null;
+}
+
+// matte finish for GLB models: no glossy/oily highlights (same as the other habitats)
+function makeMatte(root) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    mats.forEach((m) => {
+      if (!m) return;
+      if ("roughness" in m) m.roughness = 1;
+      if ("metalness" in m) m.metalness = 0;
+      if ("clearcoat" in m) m.clearcoat = 0;
+      if ("specularIntensity" in m) m.specularIntensity = 0;
+      m.needsUpdate = true;
+    });
+  });
+  return root;
+}
+
 function PoofRing({ position, onDone }) {
   const ref = useRef();
   const startRef = useRef(null);
@@ -1158,12 +1362,24 @@ function PoofManager({ poofs, onPoofDone }) {
 
 const BUNNY_BASE_YAW = 0;
 
-function IdleBunny({ modelPath, homePosition, onHop, scale = 1 }) {
+function IdleBunny({ modelPath, homePosition, onHop, scale = 1, inline: InlineAnimation = null }) {
   const group = useRef();
   const body = useRef();
+  const { camera, gl } = useThree();
   const { scene } = useGLTF(modelPath);
-  const object = useMemo(() => scene.clone(), [scene]);
+  const object = useMemo(() => makeMatte(scene.clone()), [scene]);
   const offset = useGroundedOffset(object);
+  // Where she is in the world (idle pose), worked out straight from the model and the same
+  // offset/scale used to draw her, so it's right from the first frame (even mid-animation).
+  const anchorBox = useMemo(() => {
+    const b = new THREE.Box3().setFromObject(object);
+    if (b.isEmpty()) return null;
+    const s = typeof scale === "number" ? scale : 1;
+    return new THREE.Box3(
+      new THREE.Vector3(homePosition[0] + offset[0] + b.min.x * s, offset[1] + b.min.y * s, homePosition[1] + offset[2] + b.min.z * s),
+      new THREE.Vector3(homePosition[0] + offset[0] + b.max.x * s, offset[1] + b.max.y * s, homePosition[1] + offset[2] + b.max.z * s),
+    );
+  }, [object, offset, scale, homePosition]);
 
   const nextHop = useRef(1.5 + Math.random() * 2);
   const nextGlance = useRef(1 + Math.random() * 2);
@@ -1171,6 +1387,9 @@ function IdleBunny({ modelPath, homePosition, onHop, scale = 1 }) {
   const glanceOffset = useRef(0);
 
   useFrame(({ clock }) => {
+    // keep MoodBuddy's bubble anchored above her (follows the camera if it's rotated/zoomed)
+    if (anchorBox) publishMoodAnchor(camera, gl, anchorBox);
+
     if (!group.current) return;
     const t = clock.getElapsedTime();
 
@@ -1201,6 +1420,16 @@ function IdleBunny({ modelPath, homePosition, onHop, scale = 1 }) {
     group.current.position.y = offset[1] + hopY;
   });
 
+  if (InlineAnimation) {
+    // e.g. feeding: same spot, offset, scale and facing as the idle bunny
+    return (
+      <InlineAnimation
+        placement={{ homePosition, offset, scale, yaw: BUNNY_BASE_YAW, lean: INLINE_LEAN }}
+        idleModelPath={modelPath}
+      />
+    );
+  }
+
   return (
     <group ref={group} position={[homePosition[0], 0, homePosition[1]]} rotation={[0, BUNNY_BASE_YAW, 0]}>
       <group ref={body}>
@@ -1230,6 +1459,23 @@ const BUNNY_HOME_POSITION = [0, 0.3];
 
 const BUNNY_SCALE = 0.55;
 
+function BunnySlot({ characterModel, onHop }) {
+  const mood = useMoodAnimation();
+  const Inline = mood.active ? INLINE_MOODS[mood.mood] || null : null;
+  if (mood.active && !Inline) return null; // MoodBuddy's overlay plays this one
+  return (
+    <BunnyErrorBoundary position={BUNNY_HOME_POSITION}>
+      <IdleBunny
+        modelPath={characterModel}
+        homePosition={BUNNY_HOME_POSITION}
+        onHop={Inline ? undefined : onHop}
+        scale={BUNNY_SCALE}
+        inline={Inline}
+      />
+    </BunnyErrorBoundary>
+  );
+}
+
 const ISO_DISTANCE = 7.8;
 const ISO_ELEVATION = Math.atan(1 / Math.sqrt(2)) + 0.08;
 const ISO_YAW = 0;
@@ -1241,7 +1487,20 @@ const ISO_POSITION = [
 ];
 
 const BunnyHabitat3D = ({ characterModel, showCharacter = true }) => {
+  const night = useNightModeSetting();
+  const L = night ? LIGHTS.night : LIGHTS.day;
   const [poofs, setPoofs] = useState([]);
+
+  // Let MoodBuddy know which moods this habitat plays in-scene.
+  useEffect(() => {
+    window.__habitatInline = { animal: "bunny", moods: Object.keys(INLINE_MOODS) };
+    window.dispatchEvent(new CustomEvent("habitat-inline", { detail: window.__habitatInline }));
+    return () => {
+      window.__habitatInline = null;
+      window.__moodAnchor = null;
+      window.dispatchEvent(new CustomEvent("habitat-inline", { detail: null }));
+    };
+  }, []);
 
   const addPoof = (position) => {
     setPoofs((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, position }]);
@@ -1257,74 +1516,75 @@ const BunnyHabitat3D = ({ characterModel, showCharacter = true }) => {
         orthographic
         camera={{ position: ISO_POSITION, zoom: ISO_ZOOM, near: 0.1, far: 200 }}
         dpr={[1, 2]}
-        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
+        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: L.exposure }}
       >
-        <color attach="background" args={["#f8e0ad"]} />
-        <fog attach="fog" args={["#f8e0ad", 55, 145]} />
+        <NightContext.Provider value={night}>
+          <ExposureSync exposure={L.exposure} />
+          <color attach="background" args={[L.background]} />
+          <fog attach="fog" args={[L.background, 55, 145]} />
 
-        <OrbitControls
-          target={[0, 0.4, 0]}
-          enableDamping
-          dampingFactor={0.08}
-          enablePan={false}
-          rotateSpeed={0.5}
-          minPolarAngle={0.55}
-          maxPolarAngle={1.05}
-          minZoom={70}
-          maxZoom={230}
-        />
+          <OrbitControls
+            target={[0, 0.4, 0]}
+            enableDamping
+            dampingFactor={0.08}
+            enablePan={false}
+            rotateSpeed={0.5}
+            minPolarAngle={0.55}
+            maxPolarAngle={1.05}
+            minZoom={70}
+            maxZoom={230}
+          />
 
-        <ambientLight intensity={0.72} />
-        <directionalLight
-          position={[5, 8, 3]}
-          intensity={2.0}
-          color="#ffeec2"
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-          shadow-camera-left={-7}
-          shadow-camera-right={7}
-          shadow-camera-top={7}
-          shadow-camera-bottom={-7}
-        />
-        <directionalLight position={[-5, 3, -4]} intensity={0.35} color="#ffcfa0" />
-        <hemisphereLight args={["#fff0c4", "#8a7a42", 1.0]} />
+          <ambientLight intensity={L.ambient} color={L.ambientColor} />
+          <directionalLight
+            position={[5, 8, 3]}
+            intensity={L.sun}
+            color={L.sunColor}
+            castShadow
+            shadow-bias={-0.0004}
+            shadow-mapSize={[2048, 2048]}
+            shadow-camera-left={-7}
+            shadow-camera-right={7}
+            shadow-camera-top={7}
+            shadow-camera-bottom={-7}
+          />
+          <directionalLight position={[-5, 3, -4]} intensity={L.rim} color={L.rimColor} />
+          <hemisphereLight args={[L.hemiSky, L.hemiGround, L.hemi]} />
+          {night && <Stars />}
 
-        <React.Suspense fallback={null}>
-          <Ground />
-          <Dandelions />
-          <DriftingSeeds />
-          <Butterflies />
-          <PoofManager poofs={poofs} onPoofDone={removePoof} />
+          <React.Suspense fallback={null}>
+            <Ground />
+            <Dandelions />
+            <DriftingSeeds />
+            {night ? <Fireflies /> : <Butterflies />}
+            <PoofManager poofs={poofs} onPoofDone={removePoof} />
 
-          <DirtPen />
-          <ContactShadow position={[-1.7, -1.0]} radius={0.62} opacity={0.16} />
-          <ContactShadow position={[1.9, -1.1]} radius={0.78} opacity={0.18} />
-          <GrassTufts />
-          <Fence />
-          <Entrance />
+            <DirtPen />
+            <ContactShadow position={[-1.7, -1.0]} radius={0.62} opacity={0.16} />
+            <ContactShadow position={[1.9, -1.1]} radius={0.78} opacity={0.18} />
+            <GrassTufts />
+            <Fence />
+            <Entrance />
 
-          <Bunting />
-          <HayBale />
-          <BunnyPlayCorner />
+            <Bunting />
+            <HayBale />
+            <BunnyPlayCorner />
 
-          <Signpost />
+            <Signpost />
 
-          <CarrotPatchErrorBoundary>
-            <React.Suspense fallback={null}>
-              <CarrotPatch />
-            </React.Suspense>
-          </CarrotPatchErrorBoundary>
+            <CarrotPatchErrorBoundary>
+              <React.Suspense fallback={null}>
+                <CarrotPatch />
+              </React.Suspense>
+            </CarrotPatchErrorBoundary>
 
-          <ContactShadow position={BUNNY_HOME_POSITION} radius={0.34} opacity={0.2} />
-          <Rocks />
-          <Flowers />
-          <Mushrooms />
-          {showCharacter && (
-            <HideWhenAnimated><BunnyErrorBoundary position={BUNNY_HOME_POSITION}>
-              <IdleBunny modelPath={characterModel} homePosition={BUNNY_HOME_POSITION} onHop={addPoof} scale={BUNNY_SCALE} />
-            </BunnyErrorBoundary></HideWhenAnimated>
-          )}
-        </React.Suspense>
+            <ContactShadow position={BUNNY_HOME_POSITION} radius={0.34} opacity={0.2} />
+            <Rocks />
+            <Flowers />
+            <Mushrooms />
+            {showCharacter && <BunnySlot characterModel={characterModel} onHop={addPoof} />}
+          </React.Suspense>
+        </NightContext.Provider>
       </Canvas>
     </div>
   );
