@@ -19,6 +19,8 @@ const ACTIVITY_OPTIONS = [
   { type: 'mood', label: 'mood' },
 ];
 
+const SCHEDULABLE_TYPES = ['feeding', 'sleep', 'diaper', 'playtime', 'mood'];
+
 const MOOD_OPTIONS = ['tired', 'mad', 'energetic', 'happy', 'quiet', 'other'];
 
 const DAYS_OF_WEEK = [
@@ -132,8 +134,9 @@ const Activities = () => {
       };
     }
     if (type === 'diaper') {
-      return { type: diaperType };
+      return mode === 'schedule' ? {} : { type: diaperType };
     }
+    if (mode === 'schedule') return {};
     return { value: currentValue() };
   };
 
@@ -248,8 +251,8 @@ const Activities = () => {
       let saved = true;
 
       if (mode === 'schedule') {
-        if (!['feeding', 'sleep'].includes(type)) {
-          setSubmitError('only feeding and sleep can be scheduled.');
+        if (!SCHEDULABLE_TYPES.includes(type)) {
+          setSubmitError('that activity can\'t be scheduled.');
           return;
         }
         if (repeat === 'weekly' && repeatDays.length === 0) {
@@ -446,7 +449,7 @@ const Activities = () => {
                   how would you like to log this?
                 </div>
                 <p className="log-form-subtitle">
-                  {canSchedule && ['feeding', 'sleep'].includes(type)
+                  {canSchedule && SCHEDULABLE_TYPES.includes(type)
                     ? `you can log this ${typeLabel} now, or set a daily or weekly reminder.`
                     : `log this ${typeLabel} now.`}
                 </p>
@@ -462,7 +465,7 @@ const Activities = () => {
                   >
                     log activity
                   </button>
-                  {canSchedule && ['feeding', 'sleep'].includes(type) && (
+                  {canSchedule && SCHEDULABLE_TYPES.includes(type) && (
                     <button
                       type="button"
                       className="activity-menu-btn activities-option-row"
@@ -494,7 +497,7 @@ const Activities = () => {
                       <span>{mode === 'schedule' ? 'schedule nap' : 'sleep'}</span>
                     </div>
                     <p className="log-form-subtitle">
-                      {mode === 'schedule' ? 'For how long?' : "track your baby's sleep"}
+                      {mode === 'schedule' ? 'set your expected nap times for your baby' : "track your baby's sleep"}
                     </p>
 
                     {renderTimeFields(mode === 'schedule' ? 'nap starts' : 'fell asleep at', mode === 'schedule' ? 'nap ends' : 'woke up at')}
@@ -594,21 +597,23 @@ const Activities = () => {
                     </div>
                     <p className="log-form-subtitle">track your baby's diaper change</p>
 
-                    <div className="log-field-group">
-                      <label className="log-label">diaper type</label>
-                      <div className="log-option-row">
-                        {['Wet', 'Dirty', 'Mixed'].map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className={`log-option-btn ${diaperType === option ? 'selected' : ''}`}
-                            onClick={() => setDiaperType(option)}
-                          >
-                            {option}
-                          </button>
-                        ))}
+                    {mode !== 'schedule' && (
+                      <div className="log-field-group">
+                        <label className="log-label">diaper type</label>
+                        <div className="log-option-row">
+                          {['Wet', 'Dirty', 'Mixed'].map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              className={`log-option-btn ${diaperType === option ? 'selected' : ''}`}
+                              onClick={() => setDiaperType(option)}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ) : (
                   <div className="log-form-container">
@@ -623,7 +628,7 @@ const Activities = () => {
                     {type === 'sleep' && mode === 'schedule' && (
                       <>
                         <p className="log-form-subtitle" style={{ textAlign: "center", margin: "0 0 12px" }}>
-                         set your expected nap times for your baby
+                          set your expected nap times for your baby
                         </p>
                         {renderTimeFields('expected start', 'expected end')}
                         {sleepError && (
@@ -681,8 +686,6 @@ const Activities = () => {
 
                 {mode === 'schedule' && (
                   <div className="log-form-container">
-                    <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
-                    </div>
                     <div className="log-field-group">
                       <label className="log-label">repeat</label>
                       <div className="log-option-row">
@@ -721,7 +724,7 @@ const Activities = () => {
                     )}
 
                     <div className="log-field-group">
-                      <label className="log-label">{type === 'sleep' || type === 'playtime' ? 'log by' : 'time'}</label>
+                      <label className="log-label">{type === 'feeding' ? 'time' : 'log by'}</label>
                       <div className="log-input-wrapper">
                         <Clock size={20} color="#5a4635" />
                         <input
