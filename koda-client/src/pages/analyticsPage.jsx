@@ -2,20 +2,19 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { FileText, Download, TrendingUp, TrendingDown, Minus, Moon, Milk, Baby } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts';
 import '../styling/global/App.css';
 import '../styling/pages/analyticsPage.css';
 import '../styling/components/chartLegend.css';
 import { getSelectedChildForUser } from '../utils/authStorage';
-import AvatarPortrait3D from '../components/avatar/AvatarPortrait3D';
 import { API_URL } from '../config';
 import Layout from '../components/Layout';
-import { CollapsibleCard, MiniCollapsibleCard } from '../components/CollapsibleCard';
+import { CollapsibleCard } from '../components/CollapsibleCard';
 import { DIAPER_COLORS } from '../constants/diaperColors';
 
 const DIAPER_LEGEND_CLASS = { Wet: 'legend-dot--wet', Dirty: 'legend-dot--dirty', Mixed: 'legend-dot--mixed' };
-const PORTRAIT_MODEL = '/models/characters/frog.glb';
 
 const parseMinutes = (detail) => {
   const match = detail.match(/(\d+)\s*min/);
@@ -26,27 +25,6 @@ const parseOunces = (detail) => {
   const match = detail.match(/(\d+(?:\.\d+)?)\s*oz/);
   return match ? Number(match[1]) : 0;
 };
-const getChildAgeLabel = (child) => {
-  if (!child) return null;
-  if (child.ageLabel) return child.ageLabel;
-  if (typeof child.ageInMonths === 'number') return `${child.ageInMonths} months`;
-  if (typeof child.age === 'number') return `${child.age} months`;
-  if (typeof child.age === 'string') return child.age;
-
-  const birth = child.birthdate || child.dob || child.dateOfBirth;
-  if (birth) {
-    const birthDate = new Date(birth);
-    if (!Number.isNaN(birthDate.getTime())) {
-      const now = new Date();
-      let months = (now.getFullYear() - birthDate.getFullYear()) * 12 + (now.getMonth() - birthDate.getMonth());
-      if (now.getDate() < birthDate.getDate()) months -= 1;
-      return `${Math.max(months, 0)} months`;
-    }
-  }
-
-  return null;
-};
-
 const TREND_DELTA_CLASS = { up: 'analytics-trend-delta--up', down: 'analytics-trend-delta--down', steady: 'analytics-trend-delta--steady', new: 'analytics-trend-delta--new' };
 
 const TrendDelta = ({ change }) => {
@@ -63,15 +41,56 @@ const TrendDelta = ({ change }) => {
 };
 
 const AnalyticsPage = () => {
+  const navigate = useNavigate();
   const selectedChild = getSelectedChildForUser();
-  const ageLabel = getChildAgeLabel(selectedChild);
 
   const [historyItems, setHistoryItems] = useState([]);
+  const [canViewAnalytics, setCanViewAnalytics] = useState(false);
+  const [accessChecked, setAccessChecked] = useState(false);
   const [range, setRange] = useState('day');
+  const [isExportRangeOpen, setIsExportRangeOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
+    if (!isExportRangeOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !exporting) setIsExportRangeOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isExportRangeOpen, exporting]);
+
+  useEffect(() => {
+    let active = true;
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login', { replace: true });
+      return () => { active = false; };
+    }
+
+    axios.get(`${API_URL}/api/auth/me`, { headers: { 'x-auth-token': token } })
+      .then((response) => {
+        if (!active) return;
+        if (response.data?.role === 'parent') {
+          setCanViewAnalytics(true);
+        } else {
+          navigate('/ParentDashboard', { replace: true });
+        }
+      })
+      .catch((error) => {
+        console.error('Could not verify analytics permissions:', error);
+        if (active) navigate('/ParentDashboard', { replace: true });
+      })
+      .finally(() => {
+        if (active) setAccessChecked(true);
+      });
+
+    return () => { active = false; };
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!canViewAnalytics) return undefined;
     const fetchHistory = async () => {
       try {
         const childId = selectedChild?._id;
@@ -117,7 +136,7 @@ const AnalyticsPage = () => {
     };
 
     fetchHistory();
-  }, [selectedChild?._id]);
+  }, [selectedChild?._id, canViewAnalytics]);
   const getWindow = (periodsAgo) => {
     const now = new Date();
     const end = new Date(now);
@@ -270,7 +289,7 @@ const AnalyticsPage = () => {
 
   const diaperTotal = diaperChartData.reduce((total, item) => total + item.value, 0);
 
-  const handleExportReport = async () => {
+  const handleExportReport = async (reportRange) => {
     try {
       setExporting(true);
       const childId = selectedChild?._id;
@@ -283,16 +302,18 @@ const AnalyticsPage = () => {
 
       const response = await axios.post(
         `${API_URL}/api/reports/generate`,
-        { childId, range, type: 'analytics' },
+        { childId, range: reportRange, type: 'analytics' },
         { headers: { 'x-auth-token': token }, responseType: 'blob' }
       );
 
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${childName}-${range}-analysis-report.pdf`;
+      link.download = `${childName}-${reportRange}-analysis-report.pdf`;
       link.click();
       window.URL.revokeObjectURL(url);
+      setRange(reportRange);
+      setIsExportRangeOpen(false);
     } catch (error) {
       console.error('Could not export analysis report', error);
       alert('Unable to create the PDF right now. Please try again.');
@@ -308,35 +329,19 @@ const AnalyticsPage = () => {
     return remainingMinutes === 0 ? `${hours} hr` : `${hours} hr ${remainingMinutes} min`;
   };
 
+  if (!accessChecked || !canViewAnalytics) {
+    return (
+      <Layout>
+        <div className="analytics-content">
+          <p className="empty-msg-light">checking access…</p>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="analytics-content">
-
-        <div className="glass-card analytics-profile-card">
-          <div className="analytics-profile-info-row">
-            <div className="analytics-portrait-frame">
-              <AvatarPortrait3D modelUrl={PORTRAIT_MODEL} />
-            </div>
-            <div>
-              <h3 className="history-section-title card-title-flush">
-                {selectedChild?.name || 'Gracie'}{ageLabel ? ` (${ageLabel})` : ''}
-              </h3>
-              <p className="empty-msg-light">
-                {range === 'week' ? 'weekly report' : 'daily report'}
-              </p>
-            </div>
-          </div>
-
-          <select
-            value={range}
-            onChange={(event) => setRange(event.target.value)}
-            className="analytics-range-select"
-          >
-            <option value="day">daily</option>
-            <option value="week">weekly</option>
-          </select>
-        </div>
-
         {/* headline takeaways - the core of what makes this page different
             from History: a read-out on what changed, not a log of entries */}
         <CollapsibleCard title="key takeaways">
@@ -405,60 +410,58 @@ const AnalyticsPage = () => {
           )}
         </CollapsibleCard>
 
-        <div className="chart-row">
-          <MiniCollapsibleCard title="feeding pattern">
-            {feedingChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={feedingChartData} layout="vertical" margin={{ top: 5, right: 38, bottom: 5, left: 0 }}>
-                  <XAxis type="number" hide />
-                  <YAxis type="category" dataKey="label" width={42} axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={(value) => [`${value} oz`, 'Feeding amount']} />
-                  <Bar dataKey="ounces" fill="#789F75" radius={[0, 6, 6, 0]} barSize={14}>
-                    <LabelList dataKey="ounces" position="right" formatter={(value) => `${value} oz`} fontSize={10} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="empty-msg-light">No feeding amounts recorded.</p>
-            )}
-          </MiniCollapsibleCard>
+        <CollapsibleCard title="feeding pattern">
+          {feedingChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={feedingChartData} layout="vertical" margin={{ top: 5, right: 38, bottom: 5, left: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="label" width={54} axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(value) => [`${value} oz`, 'Feeding amount']} />
+                <Bar dataKey="ounces" fill="#789F75" radius={[0, 6, 6, 0]} barSize={18}>
+                  <LabelList dataKey="ounces" position="right" formatter={(value) => `${value} oz`} fontSize={11} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="empty-msg-light">No feeding amounts recorded.</p>
+          )}
+        </CollapsibleCard>
 
-          <MiniCollapsibleCard title="diaper pattern">
-            {diaperTotal > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height={125}>
-                  <PieChart>
-                    <Pie data={diaperChartData} dataKey="value" nameKey="name" innerRadius={28} outerRadius={45} paddingAngle={2}>
-                      {diaperChartData.map((item, index) => (
-                        <Cell key={item.name} fill={DIAPER_COLORS[index]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [`${value} changes`, 'Diapers']} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div>
-                  {diaperChartData.map((item) => {
-                    const percent = diaperTotal > 0 ? Math.round((item.value / diaperTotal) * 100) : 0;
-                    return (
-                      <div className="legend-row" key={item.name}>
-                        <span className={`legend-dot ${DIAPER_LEGEND_CLASS[item.name]}`} />
-                        <span>{item.name}</span>
-                        <span className="legend-row-percent">{percent}%</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            ) : (
-              <p className="empty-msg-light">No diaper changes recorded.</p>
-            )}
-          </MiniCollapsibleCard>
-        </div>
+        <CollapsibleCard title="diaper pattern">
+          {diaperTotal > 0 ? (
+            <div className="analytics-diaper-chart">
+              <ResponsiveContainer width="100%" height={190}>
+                <PieChart>
+                  <Pie data={diaperChartData} dataKey="value" nameKey="name" innerRadius={48} outerRadius={76} paddingAngle={2}>
+                    {diaperChartData.map((item, index) => (
+                      <Cell key={item.name} fill={DIAPER_COLORS[index]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`${value} changes`, 'Diapers']} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="analytics-diaper-legend">
+                {diaperChartData.map((item) => {
+                  const percent = diaperTotal > 0 ? Math.round((item.value / diaperTotal) * 100) : 0;
+                  return (
+                    <div className="legend-row" key={item.name}>
+                      <span className={`legend-dot ${DIAPER_LEGEND_CLASS[item.name]}`} />
+                      <span>{item.name}</span>
+                      <span className="legend-row-percent">{percent}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="empty-msg-light">No diaper changes recorded.</p>
+          )}
+        </CollapsibleCard>
 
         <button
           type="button"
           className="glass-card save-btn-card analytics-export-btn"
-          onClick={handleExportReport}
+          onClick={() => setIsExportRangeOpen(true)}
           disabled={exporting}
         >
           <Download size={22} />
@@ -466,6 +469,50 @@ const AnalyticsPage = () => {
         </button>
 
       </div>
+      {isExportRangeOpen && (
+        <div
+          className="analytics-export-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !exporting) setIsExportRangeOpen(false);
+          }}
+        >
+          <section
+            className="glass-card analytics-export-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="analytics-export-title"
+          >
+            <h2 id="analytics-export-title" className="history-section-title">choose report period</h2>
+            <p className="empty-msg-light">Select the period for your analysis report.</p>
+            <div className="analytics-export-options">
+              <button
+                type="button"
+                className="glass-card save-btn-card"
+                onClick={() => handleExportReport('day')}
+                disabled={exporting}
+              >
+                daily
+              </button>
+              <button
+                type="button"
+                className="glass-card save-btn-card"
+                onClick={() => handleExportReport('week')}
+                disabled={exporting}
+              >
+                weekly
+              </button>
+            </div>
+            <button
+              type="button"
+              className="analytics-export-cancel"
+              onClick={() => setIsExportRangeOpen(false)}
+              disabled={exporting}
+            >
+              cancel
+            </button>
+          </section>
+        </div>
+      )}
     </Layout>
   );
 };

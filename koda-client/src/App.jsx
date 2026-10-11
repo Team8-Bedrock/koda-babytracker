@@ -12,6 +12,7 @@ import ResetPassword from "./pages/Onboarding/ResetPassword";
 import AccountSettings from './pages/AccountSettings';
 import HistoryPage from './pages/HistoryPage';
 import AnalyticsPage from './pages/analyticsPage';
+import FullLogPage from './pages/FullLogPage';
 import Chat from './pages/Chat';
 import Layout from './components/Layout';
 function App() {
@@ -27,6 +28,7 @@ function App() {
         <Route path="/ParentDashboard" element={<Layout><ParentDashboard /></Layout>} />
         <Route path="/account" element={<AccountSettings />} />
         <Route path="/history" element={<HistoryPage />} />
+        <Route path="/full-log" element={<FullLogPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -37,6 +37,7 @@ const Activities = () => {
   const [step, setStep] = useState(1);
   const [type, setType] = useState('');
   const [mode, setMode] = useState('');
+  const [canSchedule, setCanSchedule] = useState(false);
 
   const [value, setValue] = useState('');
   const [feedingAmount, setFeedingAmount] = useState('');
@@ -49,8 +50,7 @@ const Activities = () => {
   const [moodChoice, setMoodChoice] = useState('');
   const [moodNote, setMoodNote] = useState('');
 
-  const [repeat, setRepeat] = useState('once');
-  const [scheduleDate, setScheduleDate] = useState('');
+  const [repeat, setRepeat] = useState('daily');
   const [scheduleTime, setScheduleTime] = useState('');
   const [repeatDays, setRepeatDays] = useState([]);
 
@@ -59,6 +59,14 @@ const Activities = () => {
   const [submitting, setSubmitting] = useState(false);
   const [duplicateEntry, setDuplicateEntry] = useState(null);
   const [pendingActivity, setPendingActivity] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    axios.get(`${API_URL}/api/auth/me`, { headers: { 'x-auth-token': token } })
+      .then((response) => setCanSchedule(response.data?.role === 'parent'))
+      .catch((error) => console.error('Could not verify scheduling permissions:', error));
+  }, []);
 
   const toggleRepeatDay = (day) => {
     setRepeatDays((prev) =>
@@ -80,8 +88,7 @@ const Activities = () => {
     setEndTime('');
     setQuality('');
     setDiaperType('');
-    setRepeat('once');
-    setScheduleDate('');
+    setRepeat('daily');
     setScheduleTime('');
     setRepeatDays([]);
     setSleepError('');
@@ -90,7 +97,7 @@ const Activities = () => {
 
   const buildActivityDetails = () => {
     if (type === 'sleep') {
-      return { startTime, endTime, quality };
+      return mode === 'schedule' ? {} : { startTime, endTime, quality };
     }
     if (type === 'feeding') {
       return {
@@ -201,12 +208,20 @@ const Activities = () => {
       let saved = true;
 
       if (mode === 'schedule') {
+        if (!['feeding', 'sleep'].includes(type)) {
+          setSubmitError('only feeding and sleep can be scheduled.');
+          return;
+        }
+        if (repeat === 'weekly' && repeatDays.length === 0) {
+          setSubmitError('choose at least one day for a weekly schedule.');
+          return;
+        }
         await axios.post(`${API_URL}/api/schedule`, {
           childId,
           activityType: type,
           repeat,
           time: scheduleTime,
-          ...(repeat === 'once' ? { date: scheduleDate } : {}),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           ...(repeat === 'weekly' ? { daysOfWeek: repeatDays } : {}),
           details: buildActivityDetails(),
         }, requestConfig);
@@ -359,7 +374,9 @@ const Activities = () => {
                   how would you like to log this?
                 </div>
                 <p className="log-form-subtitle">
-                  you can log this {typeLabel} now, or set it up as a recurring schedule.
+                  {canSchedule && ['feeding', 'sleep'].includes(type)
+                    ? `you can log this ${typeLabel} now, or set a daily or weekly reminder.`
+                    : `log this ${typeLabel} now.`}
                 </p>
 
                 <div className="mode-select-list">
@@ -373,16 +390,18 @@ const Activities = () => {
                   >
                     log activity
                   </button>
-                  <button
-                    type="button"
-                    className="activity-menu-btn activities-option-row"
-                    onClick={() => {
-                      setMode('schedule');
-                      setStep(3);
-                    }}
-                  >
-                    schedule activity
-                  </button>
+                  {canSchedule && ['feeding', 'sleep'].includes(type) && (
+                    <button
+                      type="button"
+                      className="activity-menu-btn activities-option-row"
+                      onClick={() => {
+                        setMode('schedule');
+                        setStep(3);
+                      }}
+                    >
+                      schedule activity
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -396,7 +415,7 @@ const Activities = () => {
             <>
               <div className="glass-card activities-glass-card">
 
-                {type === 'sleep' ? (
+                {type === 'sleep' && mode !== 'schedule' ? (
                   <div className="log-form-container">
                     <div className="log-form-title hm-title" style={{ justifyContent: "center", textAlign: "center", fontSize: "1.35rem", margin: "0 0 6px" }}>
                       <Moon size={28} color="#4a3a26" />
@@ -614,7 +633,6 @@ const Activities = () => {
                       <label className="log-label">repeat</label>
                       <div className="log-option-row">
                         {[
-                          { key: 'once', label: 'once' },
                           { key: 'daily', label: 'daily' },
                           { key: 'weekly', label: 'weekly' },
                         ].map(({ key, label }) => (
@@ -629,22 +647,6 @@ const Activities = () => {
                         ))}
                       </div>
                     </div>
-
-                    {repeat === 'once' && (
-                      <div className="log-field-group">
-                        <label className="log-label">date</label>
-                        <div className="log-input-wrapper">
-                          <input
-                            type="date"
-                            value={scheduleDate}
-                            onChange={(e) => setScheduleDate(e.target.value)}
-                            className="log-input"
-                            style={{ border: "none", outline: "none", boxShadow: "none", background: "transparent", width: "100%" }}
-                            required
-                          />
-                        </div>
-                      </div>
-                    )}
 
                     {repeat === 'weekly' && (
                       <div className="log-field-group">

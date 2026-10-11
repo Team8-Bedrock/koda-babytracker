@@ -67,28 +67,35 @@ Ensures full application functionality even without an active internet connectio
 
 
 ### Feature 3: AI Anomaly Detection and Analysis
-**Description:**  
-Utilizes an embedded AI engine to analyze at least one week of structured activity data, identifying routine deviations, behavioral shifts, and potential health patterns (such as irregular sleep cycles or missed feedings). Alerts are dispatched to primary parents while maintaining clear legal disclaimers that insights do not substitute for medical advice.
+**Description:**
+Uses the child's logged feeding and sleep history to establish a routine baseline. After at least one week of prior logging, the dashboard can flag recent feed amounts, feeding intervals, or sleep durations that differ substantially from comparable recent entries. This is a statistical pattern estimate, not a diagnosis or medical advice. Caregivers who can access the child can also see the dashboard alert.
 
 **How to Use:**
 1. Maintain consistent daily logs for at least 7 days to establish your child's baseline routine.
-2. Tap the **Analytics (Chart)** icon on the bottom navigation bar (Parent access only).
-3. View the **Status Evaluation** panel and graphical summaries to review identified behavioral trends or routine changes.
-4. If an irregular pattern is detected, review the notification alert on your dashboard for recommended topics to discuss with your pediatrician.
+2. Continue logging feedings and sleep. Only those activity types are checked for routine deviations.
+3. Review any **AI routine check** alert shown on the dashboard. The alert describes the entry that differed from the recent pattern; it does not recommend or diagnose a medical condition.
 
-
-### Feature 4: HIPAA-Compliant Report and Exporting PDF
-**Description:**  
-Compiles raw activity logs, visual trend charts, and AI summaries into a professionally formatted, encrypted PDF report. Designed specifically to adhere to HIPAA technical safeguards, allowing parents to securely share verified child health data with pediatricians and medical providers.
+### Feature 4: Feeding and Sleep Reminders
+**Description:**
+Parents can create repeating feeding or sleep reminders. A reminder appears on the dashboard for both parents and linked caregivers when its scheduled time is within 30 minutes. Reminders do not create an activity log automatically; the caregiver or parent still logs the activity when it happens. Caregivers cannot create or view the schedule list.
 
 **How to Use:**
-1. Tap the **Analytics** icon on the bottom navigation bar or access **Log History** from the dashboard.
+1. As a parent, open **Log Activity** and select **Feeding** or **Sleeping**.
+2. Choose **Schedule Activity**, set a time, then choose **Daily** or **Weekly**. For a weekly reminder, select one or more days.
+3. Save the schedule. The dashboard shows its reminder shortly before the scheduled time.
+
+### Feature 5: Report and Exporting PDF
+**Description:**  
+Compiles activity logs, visual trend charts, and a summary into a PDF report for parents to download and share as they choose.
+
+**How to Use:**
+1. Parents can open **Analytics** to review and export a report, or access **Log History** to review entries.
 2. Select the desired date range for the report (e.g., daily, weekly, or custom date range).
 3. Scroll to the bottom of the screen and tap **Share/Export PDF**.
-4. Save the client-side encrypted PDF to your device or share it directly with your pediatrician via secure channels.
+4. Download the PDF and share it using a channel appropriate for your family's privacy needs.
 
 
-### Feature 5: Multi-User Access and Management
+### Feature 6: Multi-User Access and Management
 **Description:**  
 Enables Primary Parent account admins to grant, manage, or revoke access for secondary caregivers (such as nannies, babysitters, and extended family). Includes role-based permission controls and a secure in-app messaging feature for direct communication between parents and active caregivers.
 
@@ -99,7 +106,7 @@ Enables Primary Parent account admins to grant, manage, or revoke access for sec
 4. To communicate with linked caregivers, tap the **Chat** icon on the bottom navigation bar to open the encrypted family messaging room.
 
 
-### Feature 6: Duplicate Entries Detection
+### Feature 7: Duplicate Entries Detection
 **Description:**  
 Monitors incoming activity logs across all linked parent and caregiver accounts in real time. If a log matches an existing entry for the same child and activity type within a 15-minute window, an interactive pop-up dialog triggers to prevent redundant database records.
 

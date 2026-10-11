@@ -8,6 +8,7 @@ const Diaper = require('../models/diaper');
 const Child = require('../models/Child');
 const OfflineActivity = require('../models/OfflineActivity');
 const User = require('../models/user');
+const Schedule = require('../models/Schedule');
 const mongoose = require('mongoose');
 
 const Mood = mongoose.models.Mood || mongoose.model('Mood', new mongoose.Schema({
@@ -22,16 +23,6 @@ const Playtime = mongoose.models.Playtime || mongoose.model('Playtime', new mong
     value: { type: String, default: '' },
     timestamp: { type: Date, default: Date.now }
 }));
-const Schedule = mongoose.models.Schedule || mongoose.model('Schedule', new mongoose.Schema({
-    childId: { type: mongoose.Schema.Types.ObjectId, ref: 'Child', required: true },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    activityType: { type: String, required: true },
-    repeat: { type: String, enum: ['once', 'daily', 'weekly'], default: 'once' },
-    time: { type: String, required: true },
-    date: String,
-    daysOfWeek: [String],
-    details: { type: Object, default: {} }
-}, { timestamps: true }));
 const { drawSleepChart, drawFeedingChart, drawDiaperSummary, drawReportHeader, drawChildInformation, drawActivitySummary, drawAtAGlance, drawChartsPanel, drawActivityDetails } = require('../reports/pdfReport');
 
 const authMiddleware = (req, res, next) => {
@@ -55,6 +46,164 @@ const findAuthorizedChild = (childId, userId) => Child.findOne({
         { caregiverIds: userId }
     ]
 });
+
+const requireParent = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.user.id).select('role');
+        if (!user || user.role !== 'parent') {
+            return res.status(403).json({ error: 'Only parent accounts can access this feature.' });
+        }
+        return next();
+    } catch (err) {
+        console.error('Could not verify parent permissions:', err);
+        return res.status(500).json({ error: 'Could not verify account permissions.' });
+    }
+};
+
+const median = (values) => {
+    if (!values.length) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2
+        ? sorted[middle]
+        : (sorted[middle - 1] + sorted[middle]) / 2;
+};
+
+const buildAnomalyAlerts = (feedings, sleeps) => {
+    const entries = [
+        ...feedings.map((entry) => ({ ...entry.toObject(), activityType: 'feeding' })),
+        ...sleeps.map((entry) => ({ ...entry.toObject(), activityType: 'sleep' }))
+    ].sort((a, b) => new Date(a.timestamp || a.startTime) - new Date(b.timestamp || b.startTime));
+    const alerts = [];
+    const dayMs = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    entries.forEach((entry, index) => {
+        const entryTime = new Date(entry.timestamp || entry.startTime);
+        const timeMs = entryTime.getTime();
+        if (!Number.isFinite(timeMs) || now - timeMs > dayMs || timeMs > now) return;
+
+        const earlier = entries.slice(0, index);
+        if (!earlier.some((item) => timeMs - new Date(item.timestamp || item.startTime).getTime() >= 7 * dayMs)) {
+            return;
+        }
+
+        const reasonParts = [];
+        if (entry.activityType === 'feeding') {
+            const priorFeedings = earlier
+                .filter((item) => item.activityType === 'feeding')
+                .slice(-8);
+            if (priorFeedings.length >= 5) {
+                const intervals = priorFeedings.slice(1).map((item, itemIndex) =>
+                    (new Date(item.timestamp).getTime() - new Date(priorFeedings[itemIndex].timestamp).getTime()) / 60000
+                ).filter((minutes) => minutes > 0);
+                const previousInterval = (timeMs - new Date(priorFeedings[priorFeedings.length - 1].timestamp).getTime()) / 60000;
+                const typicalInterval = median(intervals);
+                if (typicalInterval > 0 && (previousInterval > typicalInterval * 2 || previousInterval < typicalInterval * 0.35)) {
+                    reasonParts.push('the time since the previous feed differs from the recent routine');
+                }
+            }
+
+            const comparableAmounts = earlier
+                .filter((item) => item.activityType === 'feeding' && item.type === entry.type && Number(item.amount) > 0)
+                .slice(-8)
+                .map((item) => Number(item.amount));
+            const amount = Number(entry.amount);
+            if (comparableAmounts.length >= 4 && amount > 0) {
+                const typicalAmount = median(comparableAmounts);
+                if (amount >= typicalAmount * 1.75 || amount <= typicalAmount * 0.5) {
+                    reasonParts.push(`the amount (${amount} oz) differs from the usual ${typicalAmount} oz`);
+                }
+            }
+        } else {
+            const comparableSleeps = earlier
+                .filter((item) => item.activityType === 'sleep' && (!entry.type || item.type === entry.type) && Number(item.duration) > 0)
+                .slice(-8)
+                .map((item) => Number(item.duration));
+            const duration = Number(entry.duration);
+            if (comparableSleeps.length >= 4 && duration > 0) {
+                const typicalDuration = median(comparableSleeps);
+                if (duration >= typicalDuration * 1.75 || duration <= typicalDuration * 0.5) {
+                    reasonParts.push(`the sleep duration (${duration} min) differs from the usual ${Math.round(typicalDuration)} min`);
+                }
+            }
+        }
+
+        if (reasonParts.length) {
+            alerts.push({
+                id: String(entry._id),
+                activityType: entry.activityType,
+                timestamp: entry.timestamp || entry.startTime,
+                message: reasonParts.join('; ')
+            });
+        }
+    });
+
+    return alerts.slice(-5).reverse();
+};
+
+const getDatePartsInTimezone = (date, timezone) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hourCycle: 'h23'
+    }).formatToParts(date);
+    return Object.fromEntries(parts.map((part) => [part.type, part.value]));
+};
+
+const zonedTimeToUtc = (year, month, day, hours, minutes, timezone) => {
+    const wallTime = Date.UTC(year, month - 1, day, hours, minutes);
+    const localParts = getDatePartsInTimezone(new Date(wallTime), timezone);
+    const representedLocalTime = Date.UTC(
+        Number(localParts.year),
+        Number(localParts.month) - 1,
+        Number(localParts.day),
+        Number(localParts.hour),
+        Number(localParts.minute)
+    );
+    return wallTime - (representedLocalTime - wallTime);
+};
+
+const getReminderOccurrences = (schedules, fallbackTimezone, now = new Date()) => {
+    const dueBy = now.getTime() + 30 * 60000;
+    const reminders = [];
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    schedules.forEach((schedule) => {
+        const timezone = schedule.timezone || fallbackTimezone;
+        if (!timezone) throw new Error('A valid local timezone is required.');
+        const localNow = getDatePartsInTimezone(now, timezone);
+        const todayStart = Date.UTC(Number(localNow.year), Number(localNow.month) - 1, Number(localNow.day));
+        if (!['daily', 'weekly'].includes(schedule.repeat)) return;
+        const [hours, minutes] = schedule.time.split(':').map(Number);
+        for (let dayOffset = 0; dayOffset <= 7; dayOffset += 1) {
+            const localDate = new Date(todayStart + dayOffset * 24 * 60 * 60000);
+            if (schedule.repeat === 'weekly' && !schedule.daysOfWeek.includes(dayNames[localDate.getUTCDay()])) continue;
+            const occurrence = zonedTimeToUtc(
+                localDate.getUTCFullYear(),
+                localDate.getUTCMonth() + 1,
+                localDate.getUTCDate(),
+                hours,
+                minutes,
+                timezone
+            );
+            if (occurrence >= now.getTime() && occurrence <= dueBy) {
+                reminders.push({
+                    activityType: schedule.activityType,
+                    time: schedule.time,
+                    occursAt: new Date(occurrence)
+                });
+                break;
+            }
+        }
+    });
+
+    return reminders.sort((a, b) => a.occursAt - b.occursAt);
+};
 
 const getRangeWindow = (range) => {
     const now = new Date();
@@ -719,14 +868,21 @@ router.get('/activities', authMiddleware, async (req, res) => {
             .populate('loggedBy', 'username role')
             .sort({ timestamp: -1 });
 
-        res.json({ feedings, sleeps, diapers, moods, playtimes });
+        res.json({
+            feedings,
+            sleeps,
+            diapers,
+            moods,
+            playtimes,
+            anomalyAlerts: buildAnomalyAlerts(feedings, sleeps)
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
 // reports
-router.post('/reports/generate', authMiddleware, async (req, res) => {
+router.post('/reports/generate', authMiddleware, requireParent, async (req, res) => {
     try {
         const { childId } = req.body;
         const range = req.body.range || 'day';
@@ -1212,15 +1368,38 @@ const makeSimpleLogRoute = (Model) => async (req, res) => {
 router.post('/mood', authMiddleware, makeSimpleLogRoute(Mood));
 router.post('/playtime', authMiddleware, makeSimpleLogRoute(Playtime));
 
-router.post('/schedule', authMiddleware, async (req, res) => {
+router.post('/schedule', authMiddleware, requireParent, async (req, res) => {
     try {
-        const { childId, activityType, repeat, time, date, daysOfWeek, details } = req.body;
+        const { childId, activityType, repeat, time, timezone, daysOfWeek, details } = req.body;
+        if (!['feeding', 'sleep'].includes(activityType)) {
+            return res.status(400).json({ error: 'Only feeding and sleep can be scheduled.' });
+        }
+        if (!['daily', 'weekly'].includes(repeat)) {
+            return res.status(400).json({ error: 'Schedules must repeat daily or weekly.' });
+        }
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time || '')) {
+            return res.status(400).json({ error: 'Enter a valid schedule time.' });
+        }
+        if (typeof timezone !== 'string' || !timezone.trim()) {
+            return res.status(400).json({ error: 'A timezone is required for schedule reminders.' });
+        }
+        try {
+            new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+        } catch {
+            return res.status(400).json({ error: 'Enter a valid timezone for schedule reminders.' });
+        }
+        if (repeat === 'weekly' && (!Array.isArray(daysOfWeek) || daysOfWeek.length === 0)) {
+            return res.status(400).json({ error: 'Choose at least one day for a weekly schedule.' });
+        }
         const child = await findAuthorizedChild(childId, req.user.id);
         if (!child) {
             return res.status(404).json({ error: "Child profile not found or access denied" });
         }
         const schedule = await Schedule.create({
-            childId, createdBy: req.user.id, activityType, repeat, time, date, daysOfWeek, details
+            childId, createdBy: req.user.id, activityType, repeat, time,
+            timezone,
+            daysOfWeek: repeat === 'weekly' ? daysOfWeek : [],
+            details: details || {}
         });
         res.status(201).json(schedule);
     } catch (err) {
@@ -1228,14 +1407,38 @@ router.post('/schedule', authMiddleware, async (req, res) => {
     }
 });
 
-router.get('/schedule', authMiddleware, async (req, res) => {
+router.get('/schedule/reminders', authMiddleware, async (req, res) => {
+    try {
+        const { childId } = req.query;
+        if (!childId) {
+            return res.status(400).json({ error: 'childId query parameter is required.' });
+        }
+        const child = await findAuthorizedChild(childId, req.user.id);
+        if (!child) {
+            return res.status(404).json({ error: "Child profile not found or access denied" });
+        }
+        const schedules = await Schedule.find({
+            childId,
+            activityType: { $in: ['feeding', 'sleep'] }
+        }).select('activityType repeat time daysOfWeek timezone');
+        const reminders = getReminderOccurrences(schedules, req.query.timezone);
+        return res.json({ reminders });
+    } catch (err) {
+        return res.status(400).json({ error: err.message });
+    }
+});
+
+router.get('/schedule', authMiddleware, requireParent, async (req, res) => {
     try {
         const { childId } = req.query;
         const child = await findAuthorizedChild(childId, req.user.id);
         if (!child) {
             return res.status(404).json({ error: "Child profile not found or access denied" });
         }
-        const schedules = await Schedule.find({ childId }).sort({ createdAt: -1 });
+        const schedules = await Schedule.find({
+            childId,
+            activityType: { $in: ['feeding', 'sleep'] }
+        }).sort({ createdAt: -1 });
         res.json(schedules);
     } catch (err) {
         res.status(500).json({ error: err.message });

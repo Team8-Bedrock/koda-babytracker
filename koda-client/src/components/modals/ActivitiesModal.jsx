@@ -66,7 +66,7 @@ const ActivitiesModal = ({ activities, onClose }) => {
         <p className="hm-empty">No activities yet. Tap the + to get started!</p>
       )}
 
-      <button type="button" className="hm-link-btn" onClick={() => navigate("/history")}>
+      <button type="button" className="hm-link-btn" onClick={() => navigate("/full-log")}>
         view full log →
       </button>
     </HabitatModal>

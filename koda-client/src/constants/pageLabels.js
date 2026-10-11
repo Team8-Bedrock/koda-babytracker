@@ -2,6 +2,7 @@ export const PAGE_LABELS = {
   "/parentdashboard": "",
   "/add-activity": "log activity",
   "/history": "log history",
+  "/full-log": "full log",
   "/analytics": "analytics",
   "/chat": "chat",
   "/account": "settings",
