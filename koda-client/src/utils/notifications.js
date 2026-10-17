@@ -40,7 +40,7 @@ export const addNotification = ({ id, groupId, title, message, path, count = 1 }
       id: id || groupId || `${Date.now()}-${Math.random()}`,
       groupId,
       title,
-      message,
+      message: groupId ? `${title} — ${message}` : message,
       path,
       count,
     });

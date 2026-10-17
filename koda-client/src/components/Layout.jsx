@@ -101,7 +101,7 @@ const Layout = ({ children }) => {
           const senderName = latestMessage.senderId?.username || "Family chat";
             addNotification({
               groupId: `chat:${childId}`,
-              title: `${senderName} sent new messages`,
+              title: senderName,
               path: "/chat",
               message: `${incomingMessages.length} new ${incomingMessages.length === 1 ? "message" : "messages"}`,
               count: incomingMessages.length,
