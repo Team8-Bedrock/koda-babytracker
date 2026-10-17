@@ -74,6 +74,7 @@ function Chat() {
     });
 
     const photoInputRef = useRef(null);
+    const messageInputRef = useRef(null);
     const recorderRef = useRef(null);
     const recordingTimerRef = useRef(null);
     const messagesEndRef = useRef(null);
@@ -353,6 +354,12 @@ function Chat() {
     const canVoice = canChat && chatPermissions.voice !== false;
     const canUrgent = canChat && chatPermissions.urgent !== false;
 
+    useEffect(() => {
+        if (!sending && canChat) {
+            messageInputRef.current?.focus();
+        }
+    }, [sending, canChat]);
+
     const latestUrgent = [...messages].reverse().find(
         (message) =>
             message.urgent &&
@@ -447,6 +454,7 @@ function Chat() {
 
                 <form className="chat-composer" onSubmit={sendMessage}>
                     <input
+                        ref={messageInputRef}
                         className="chat-text-input"
                         type="text"
                         value={text}
