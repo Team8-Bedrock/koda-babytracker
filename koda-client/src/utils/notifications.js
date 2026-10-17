@@ -16,15 +16,37 @@ export const getNotifications = () => {
   }
 };
 
-export const addNotification = ({ id, title, message, path }) => {
+export const addNotification = ({ id, groupId, title, message, path, count = 1 }) => {
   const key = getKey();
   if (!key) return;
   const current = getNotifications();
   if (id && current.some((item) => item.id === id)) return;
-  localStorage.setItem(key, JSON.stringify([
-    ...current,
-    { id: id || `${Date.now()}-${Math.random()}`, title, message, path },
-  ]));
+  const groupIndex = groupId
+    ? current.findIndex((item) => item.groupId === groupId)
+    : -1;
+  const next = [...current];
+
+  if (groupIndex >= 0) {
+    const existing = next[groupIndex];
+    const total = (existing.count || 1) + count;
+    next[groupIndex] = {
+      ...existing,
+      title,
+      message: `${total} new ${total === 1 ? "message" : "messages"}`,
+      count: total,
+    };
+  } else {
+    next.push({
+      id: id || groupId || `${Date.now()}-${Math.random()}`,
+      groupId,
+      title,
+      message,
+      path,
+      count,
+    });
+  }
+
+  localStorage.setItem(key, JSON.stringify(next));
   window.dispatchEvent(new Event("koda-notifications-updated"));
 };
 

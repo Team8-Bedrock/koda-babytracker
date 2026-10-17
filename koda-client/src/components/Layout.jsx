@@ -89,25 +89,25 @@ const Layout = ({ children }) => {
         }
         const seenIds = new Set(Array.isArray(seen) ? seen : []);
 
-        messages
+        const incomingMessages = messages
           .filter((message) => {
             const senderId = message.senderId?._id || message.senderId;
             const isIncoming = String(senderId) !== String(currentUserId);
             return isIncoming && !seenIds.has(message._id);
-          })
-          .forEach((message) => {
-            addNotification({
-              id: `chat:${childId}:${message._id}`,
-              title: `${message.senderId?.username || "Family chat"} sent a message`,
-              path: "/chat",
-              message: message.kind === "photo"
-                ? "Sent a photo"
-                : message.kind === "voice"
-                  ? "Sent a voice message"
-                  : message.text || "Sent a message",
-            });
-            seenIds.add(message._id);
           });
+
+        if (incomingMessages.length > 0) {
+          const latestMessage = incomingMessages[incomingMessages.length - 1];
+          const senderName = latestMessage.senderId?.username || "Family chat";
+            addNotification({
+              groupId: `chat:${childId}`,
+              title: `${senderName} sent new messages`,
+              path: "/chat",
+              message: `${incomingMessages.length} new ${incomingMessages.length === 1 ? "message" : "messages"}`,
+              count: incomingMessages.length,
+            });
+          incomingMessages.forEach((message) => seenIds.add(message._id));
+        }
 
         localStorage.setItem(seenKey, JSON.stringify([...seenIds].slice(-500)));
       } catch (error) {
