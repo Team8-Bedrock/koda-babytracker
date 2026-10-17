@@ -10,12 +10,13 @@ import {
   ChevronDown,
   CheckCircle2,
 } from "lucide-react";
-import { getSelectedChildForUser, setSelectedChildForUser } from "../utils/authStorage";
+import { getCurrentUserId, getSelectedChildForUser, setSelectedChildForUser } from "../utils/authStorage";
 import { getPageLabel, getPillFontSize } from "../constants/pageLabels";
 import { API_URL } from "../config";
 import HabitatBackground from "./HabitatBackground";
 import NavIconButton from "./NavIconButton";
 import MoodBuddy from "./MoodBuddy";
+import { addNotification, getNotifications, removeNotification } from "../utils/notifications";
 import "../styling/global/layout.css";
 
 const Layout = ({ children }) => {
@@ -26,7 +27,10 @@ const Layout = ({ children }) => {
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [childOptions, setChildOptions] = useState([]);
   const [headerLabel, setHeaderLabel] = useState("");
+  const [notifications, setNotifications] = useState(getNotifications);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const switcherRef = useRef(null);
+  const notificationsRef = useRef(null);
   const isActivityLogPage = location.pathname.toLowerCase() === "/add-activity";
 
   useEffect(() => {
@@ -41,6 +45,82 @@ const Layout = ({ children }) => {
       .then((data) => setChildOptions(Array.isArray(data) ? data : []))
       .catch(() => setChildOptions([]));
   }, []);
+
+  useEffect(() => {
+    const update = () => setNotifications(getNotifications());
+    window.addEventListener("koda-notifications-updated", update);
+    window.addEventListener("storage", update);
+    return () => {
+      window.removeEventListener("koda-notifications-updated", update);
+      window.removeEventListener("storage", update);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+    const close = (event) => {
+      if (!notificationsRef.current?.contains(event.target)) setNotificationsOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [notificationsOpen]);
+
+  useEffect(() => {
+    const childId = selectedChild?._id;
+    const token = localStorage.getItem("token");
+    if (!childId || !token) return undefined;
+    let active = true;
+    const checkChat = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/chat/${childId}/messages`, {
+          headers: { "x-auth-token": token },
+        });
+        if (!response.ok) return;
+        const messages = await response.json();
+        if (!active || !Array.isArray(messages)) return;
+        const currentUserId = getCurrentUserId();
+        const seenKey = `chatNotificationsSeen:${currentUserId}:${childId}`;
+        let seen = [];
+        try {
+          const savedSeen = JSON.parse(localStorage.getItem(seenKey) || "[]");
+          seen = Array.isArray(savedSeen) ? savedSeen : [];
+        } catch (error) {
+          console.error("Could not read seen chat notifications:", error);
+        }
+        const seenIds = new Set(Array.isArray(seen) ? seen : []);
+
+        messages
+          .filter((message) => {
+            const senderId = message.senderId?._id || message.senderId;
+            const isIncoming = String(senderId) !== String(currentUserId);
+            return isIncoming && !seenIds.has(message._id);
+          })
+          .forEach((message) => {
+            addNotification({
+              id: `chat:${childId}:${message._id}`,
+              title: `${message.senderId?.username || "Family chat"} sent a message`,
+              path: "/chat",
+              message: message.kind === "photo"
+                ? "Sent a photo"
+                : message.kind === "voice"
+                  ? "Sent a voice message"
+                  : message.text || "Sent a message",
+            });
+            seenIds.add(message._id);
+          });
+
+        localStorage.setItem(seenKey, JSON.stringify([...seenIds].slice(-500)));
+      } catch (error) {
+        console.error("Could not check chat notifications:", error);
+      }
+    };
+    checkChat();
+    const interval = setInterval(checkChat, 8000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [selectedChild?._id]);
 
   useEffect(() => {
     if (!isSwitcherOpen) return;
@@ -66,6 +146,17 @@ const Layout = ({ children }) => {
     setSelectedChildForUser(child);
     setIsSwitcherOpen(false);
     window.location.reload();
+  };
+
+  const handleNotificationPress = (notification) => {
+    setNotifications((current) =>
+      current.filter((item) => item.id !== notification.id)
+    );
+    removeNotification(notification.id);
+    if (notification.path) {
+      setNotificationsOpen(false);
+      navigate(notification.path);
+    }
   };
 
   return (
@@ -129,13 +220,33 @@ const Layout = ({ children }) => {
           </div>
         )}
 
-        <NavIconButton
-          icon={Bell}
-          size={20}
-          strokeWidth={1.6}
-          onClick={() => { }}
-          className="header-bell-btn"
-        />
+        <div className="header-notifications" ref={notificationsRef}>
+          <NavIconButton
+            icon={Bell}
+            size={20}
+            strokeWidth={1.6}
+            onClick={() => setNotificationsOpen((open) => !open)}
+            aria-label="Open notifications"
+            className="header-bell-btn"
+          />
+          {notifications.length > 0 && <span className="header-notification-dot" />}
+          {notificationsOpen && (
+            <div className="notifications-menu" role="region" aria-label="Notifications">
+              <h2>notifications</h2>
+              {notifications.length ? notifications.map((notification) => (
+                <button
+                  type="button"
+                  className="notification-item"
+                  key={notification.id}
+                  onClick={() => handleNotificationPress(notification)}
+                >
+                  <strong>{notification.title}</strong>
+                  <span>{notification.message}</span>
+                </button>
+              )) : <p className="notifications-empty">no new notifications</p>}
+            </div>
+          )}
+        </div>
       </header>
 
 
