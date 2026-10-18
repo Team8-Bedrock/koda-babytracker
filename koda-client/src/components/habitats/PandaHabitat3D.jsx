@@ -16,6 +16,7 @@ import QuietPanda from "../animations/panda/QuietPanda";
 import OtherPanda from "../animations/panda/OtherPanda";
 import PlaytimePanda from "../animations/panda/PlaytimePanda";
 import DiaperPanda from "../animations/panda/DiaperPanda";
+import PetPanda from "../animations/panda/PetPanda";
 
 function useNightMode() {
   const [night, setNight] = React.useState(() => typeof window !== "undefined" && localStorage.getItem("koda-dark-mode") === "true");
@@ -63,9 +64,6 @@ function NightFireflies({ area, count, color, size }) {
   );
 }
 
-// Panda night: its own look, built from the panda's daytime theme —
-// a jade-green moonlit bamboo grove, softly glowing pink blossoms and lotus,
-// silvery water, peach-glowing stone lanterns and pink sparkle stars.
 const NIGHT = {
   background: "#24504f",
   fog: "#24504f",
@@ -130,6 +128,8 @@ const INLINE_MOODS = {
 const PANDA_MOOD_MODELS = ["angry", "crying", "feeding", "hungry", "sleepy", "sleeping"].map((name) => `/models/characters/panda/${name}.glb`);
 const INLINE_LEAN = 0.1;
 const BUBBLE_LIFT = 0.02;
+const PET_HOLD = 2.2;
+const PET_LINGER = 1.2;
 
 function readMoodAnimation() {
   if (typeof window === "undefined") return { active: false };
@@ -164,6 +164,8 @@ function publishMoodAnchor(camera, gl, topWorld, bottomWorld) {
 const PANDA_HEIGHT = 0.3;
 const PANDA_POSITION = [0.02, 0.74];
 const PANDA_MODEL_URL = "/models/characters/panda/panda.glb";
+
+const isPandaModel = (url) => typeof url === "string" && url.includes("/models/characters/panda/");
 
 function seededRand(seed) {
   const x = Math.sin(seed * 12.9898) * 43758.5453;
@@ -211,7 +213,6 @@ function buildMossFloorTexture(night = false) {
   canvas.width = FLOOR_TEX_SIZE;
   canvas.height = FLOOR_TEX_SIZE;
   const ctx = canvas.getContext("2d");
-  // night: same shapes, cool moonlit teal instead of bright green
   const hueShift = night ? 14 : 0;
   const sat = night ? 0.62 : 1;
   const lightScale = night ? 0.74 : 1;
@@ -490,7 +491,6 @@ const POND_BORDER_ROCKS = (() => {
   return rocks;
 })();
 
-// Seamless, softly broken highlights: the whole texture moves downward.
 function buildWaterfallTexture(P) {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
@@ -522,7 +522,6 @@ function buildWaterfallTexture(P) {
   return tex;
 }
 
-// One continuous ribbon: stream, rounded crest, free fall, then a pond apron.
 function buildWaterfallGeometry() {
   const curve = new THREE.CatmullRomCurve3([
     new THREE.Vector3(0, 0.86, -0.24),
@@ -559,8 +558,6 @@ function buildWaterfallGeometry() {
   return geometry;
 }
 
-// The little cliff behind the waterfall, built from the same mossy rocks as the pond edge
-// so it matches the rest of the habitat. Big rocks at the bottom, smaller ones stacked up.
 const CLIFF_ROCKS = [
   { position: [-0.34, 0.16, 0.0], scale: 0.19, rotation: 0.3 },
   { position: [0.34, 0.15, 0.01], scale: 0.18, rotation: 1.4 },
@@ -597,7 +594,6 @@ function Waterfall() {
   useFrame((_, rawDelta) => {
     time.current += Math.min(rawDelta, 0.05);
     const t = time.current;
-    // Positive V offset carries features from the crest toward the pond.
     tex.offset.y = (t * 0.65) % 1;
     const positions = geometry.attributes.position;
     for (let i = 0; i < positions.count; i++) {
@@ -947,7 +943,7 @@ function FlowerFlecks() {
   );
 }
 
-function Panda({ modelUrl, position = PANDA_POSITION, onMunch, inline: InlineAnimation = null, variant }) {
+function Panda({ modelUrl, position = PANDA_POSITION, onMunch, inline: InlineAnimation = null, variant, inlineProps }) {
   const group = useRef(null);
   const frame = useRef(null);
   const { camera, gl } = useThree();
@@ -1043,6 +1039,7 @@ function Panda({ modelUrl, position = PANDA_POSITION, onMunch, inline: InlineAni
     return (
       <group ref={frame}>
         <InlineAnimation
+          {...inlineProps}
           placement={{ homePosition: position, offset, scale, yaw: 0, lean: INLINE_LEAN }}
           idleModelPath={modelUrl}
           variant={variant}
@@ -1062,24 +1059,94 @@ function Panda({ modelUrl, position = PANDA_POSITION, onMunch, inline: InlineAni
   );
 }
 
-function PandaSlot({ onMunch }) {
+function headHit(clientX, clientY) {
+  const a = window.__moodAnchor;
+  if (!a) return null;
+  const height = a.bottom - a.top;
+  const halfWidth = height * 0.34;
+  const bottom = a.top + height * 0.5;
+  if (clientX < a.x - halfWidth || clientX > a.x + halfWidth || clientY < a.top - height * 0.04 || clientY > bottom) return null;
+  return THREE.MathUtils.clamp((clientX - a.x) / (halfWidth * 0.8), -1, 1);
+}
+
+function usePetTouch(enabled, onPet, onRelease) {
+  const handlers = useRef({ onPet, onRelease });
+  handlers.current = { onPet, onRelease };
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let activeId = null;
+    const down = (e) => {
+      const x = headHit(e.clientX, e.clientY);
+      if (x === null) return;
+      activeId = e.pointerId;
+      handlers.current.onPet(x, true);
+      if (e.cancelable && e.pointerType !== "mouse") e.preventDefault();
+    };
+    const move = (e) => {
+      if (activeId === null) {
+        if (e.pointerType === "mouse") document.body.style.cursor = headHit(e.clientX, e.clientY) === null ? "" : "grab";
+        return;
+      }
+      if (e.pointerId !== activeId) return;
+      const a = window.__moodAnchor;
+      const x = a ? THREE.MathUtils.clamp((e.clientX - a.x) / ((a.bottom - a.top) * 0.27), -1, 1) : 0;
+      handlers.current.onPet(x, false);
+    };
+    const up = (e) => {
+      if (activeId === null || e.pointerId !== activeId) return;
+      activeId = null;
+      handlers.current.onRelease();
+    };
+    window.addEventListener("pointerdown", down, { capture: true, passive: false });
+    window.addEventListener("pointermove", move, { capture: true });
+    window.addEventListener("pointerup", up, { capture: true });
+    window.addEventListener("pointercancel", up, { capture: true });
+    return () => {
+      window.removeEventListener("pointerdown", down, { capture: true });
+      window.removeEventListener("pointermove", move, { capture: true });
+      window.removeEventListener("pointerup", up, { capture: true });
+      window.removeEventListener("pointercancel", up, { capture: true });
+      document.body.style.cursor = "";
+    };
+  }, [enabled]);
+}
+
+function PandaSlot({ model = PANDA_MODEL_URL, onMunch }) {
   const mood = useMoodAnimation();
-  const Inline = mood.active ? INLINE_MOODS[mood.mood] || null : null;
+  const [petting, setPetting] = React.useState(false);
+  const pet = useRef({ until: 0, x: null });
+  const canInline = isPandaModel(model);
+  const Mood = mood.active && canInline ? INLINE_MOODS[mood.mood] || null : null;
+  const Inline = petting && canInline ? PetPanda : Mood;
+
+  const handlePet = (x, first) => {
+    const now = performance.now() / 1000;
+    pet.current = first ? { until: Infinity, x: null, downAt: now } : { ...pet.current, until: Infinity, x };
+    if (!petting) setPetting(true);
+  };
+  const handleRelease = () => {
+    const now = performance.now() / 1000;
+    const downAt = pet.current.downAt ?? now;
+    pet.current = { until: Math.max(downAt + PET_HOLD, now + PET_LINGER), x: null };
+  };
+  const handleDone = () => setPetting(false);
+  usePetTouch(canInline, handlePet, handleRelease);
+
   if (mood.active && !Inline) return null;
   return (
-    <PandaErrorBoundary position={PANDA_POSITION} onMunch={Inline ? undefined : onMunch}>
+    <PandaErrorBoundary position={PANDA_POSITION} onMunch={onMunch}>
       <Panda
-        key={Inline ? `${mood.mood}-${mood.variant || ""}` : "idle"}
-        modelUrl={PANDA_MODEL_URL}
+        key={petting && canInline ? (mood.active && mood.mood === "angry" ? "refuse" : "pet") : Mood ? `${mood.mood}-${mood.variant || ""}` : "idle"}
+        modelUrl={model}
         position={PANDA_POSITION}
-        onMunch={Inline ? undefined : onMunch}
+        onMunch={onMunch}
         inline={Inline}
         variant={mood.variant}
+        inlineProps={petting && canInline ? { pet, onDone: handleDone, refuse: mood.active && mood.mood === "angry" } : undefined}
       />
     </PandaErrorBoundary>
   );
 }
-
 class PandaErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -1131,7 +1198,6 @@ function LeafPuff({ position, onDone }) {
   );
 }
 
-// Same twinkling yellow stars as the bear habitat.
 function YellowStars() {
   const group = useRef(null);
   const shape = useMemo(() => {
@@ -1178,7 +1244,6 @@ function YellowStars() {
   );
 }
 
-// gl settings are only read once, so keep brightness in sync with night mode
 function ExposureSync({ exposure }) {
   const { gl } = useThree();
   useEffect(() => {
@@ -1263,7 +1328,7 @@ export function PandaHabitat3D({ showPanda = true } = {}) {
           {puffs.map((p) => (
             <LeafPuff key={p.id} position={p.position} onDone={() => removePuff(p.id)} />
           ))}
-          {showPanda && <PandaSlot onMunch={addPuff} />}
+          {showPanda && <PandaSlot model={PANDA_MODEL_URL} onMunch={addPuff} />}
         </group>
       </Suspense>
     </Canvas>

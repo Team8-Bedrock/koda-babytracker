@@ -21,7 +21,7 @@ const ACTIVITY_OPTIONS = [
 
 const SCHEDULABLE_TYPES = ['feeding', 'sleep', 'diaper', 'playtime', 'mood'];
 
-const MOOD_OPTIONS = ['tired', 'mad', 'energetic', 'happy', 'quiet', 'other'];
+const MOOD_OPTIONS = ['tired', 'mad', 'sad', 'energetic', 'happy', 'quiet', 'other'];
 
 const DAYS_OF_WEEK = [
   { key: 'Sunday', short: 'Su' },
@@ -656,13 +656,14 @@ const Activities = () => {
                     {mode !== 'schedule' && type === 'mood' && (
                       <div className="log-field-group">
                         <label className="log-label">how are they feeling?</label>
-                        <div className="log-option-row" style={{ flexWrap: 'wrap' }}>
+                        <div className="log-option-row" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}>
                           {MOOD_OPTIONS.map((option) => (
                             <button
                               key={option}
                               type="button"
                               className={`log-option-btn ${moodChoice === option ? 'selected' : ''}`}
                               onClick={() => setMoodChoice(option)}
+                              style={{ flex: '0 0 calc((100% - 20px) / 3)', minWidth: 0, margin: 0 }}
                             >
                               {option}
                             </button>

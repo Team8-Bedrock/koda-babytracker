@@ -1,12 +1,781 @@
-import React, { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import React, { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
+import { useGLTF, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import FeedingKoala from "../animations/koala/FeedingKoala";
+import AngryKoala from "../animations/koala/AngryKoala";
+import CryingKoala from "../animations/koala/CryingKoala";
+import HungryKoala from "../animations/koala/HungryKoala";
+import SleepyKoala from "../animations/koala/SleepyKoala";
+import SleepingKoala from "../animations/koala/SleepingKoala";
+import WokeKoala from "../animations/koala/WokeKoala";
+import HappyKoala from "../animations/koala/HappyKoala";
+import EnergeticKoala from "../animations/koala/EnergeticKoala";
+import QuietKoala from "../animations/koala/QuietKoala";
+import OtherKoala from "../animations/koala/OtherKoala";
+import PlaytimeKoala from "../animations/koala/PlaytimeKoala";
+import DiaperKoala from "../animations/koala/DiaperKoala";
+import PetKoala from "../animations/koala/PetKoala";
+import { KoalaMood, KoalaIdleRig } from "../animations/koala/koalaRig";
 
-const INLINE_MOODS = { feeding: FeedingKoala };
+const INLINE_MOODS = {
+  feeding: FeedingKoala,
+  angry: AngryKoala,
+  crying: CryingKoala,
+  hungry: HungryKoala,
+  sleepy: SleepyKoala,
+  sleeping: SleepingKoala,
+  woke: WokeKoala,
+  groggy: WokeKoala,
+  happy: HappyKoala,
+  energetic: EnergeticKoala,
+  quiet: QuietKoala,
+  other: OtherKoala,
+  playtime: PlaytimeKoala,
+  diaper: DiaperKoala,
+};
 const INLINE_LEAN = 0.1;
-const BUBBLE_LIFT = 0;
+const PET_HOLD = 2.2;
+const PET_LINGER = 1.2;
+const BUBBLE_LIFT = -0.05;
+
+const KOALA_MODEL_PATH = "/models/characters/koala/koala.glb";
+const KOALA_HEIGHT = 1.3;
+const DECK_Y = 0;
+const DECK_RADIUS = 2.15;
+const DECK_THICK = 0.12;
+const CUSHION_TOP = DECK_Y + 0.13;
+const KOALA_POSITION = [0.15, 0.45];
+const KOALA_PERCH_Y = CUSHION_TOP;
+const TRUNK_AT = [-0.35, -1.25];
+const TRUNK_RADIUS = 0.62;
+const HUT_AT = [1.15, -0.85];
+const DOOR_SCALE = 1.35;
+
+const LIGHTS = {
+  day: {
+    exposure: 1.05,
+    ambient: 0.75, ambientColor: "#ffe9dc",
+    sun: 1.75, sunColor: "#ffd6b0",
+    rim: 0.65, rimColor: "#c9b8ff",
+    hemiSky: "#ffe1d0", hemiGround: "#6f6a9a", hemi: 0.8,
+    fog: "#e8cfe0",
+  },
+  night: {
+    exposure: 1.0,
+    ambient: 0.45, ambientColor: "#b9b3ea",
+    sun: 0.55, sunColor: "#c8c4ff",
+    rim: 0.45, rimColor: "#8fa8ff",
+    hemiSky: "#6c6aa8", hemiGround: "#1e1c3a", hemi: 0.6,
+    fog: "#2b2950",
+  },
+};
+
+const PALETTE = {
+  day: {
+    skyTop: "#b3b4ee",
+    skyMid: "#f3c2d6",
+    skyLow: "#ffd8bc",
+    cloud: "#fff4f0",
+    cloudShade: "#f1d8e6",
+    farCanopy: ["#c9bfe0", "#d6c3dc", "#bfb6dc"],
+    canopy: ["#7fb0a6", "#94c2b2", "#6c9d98", "#a9cfbb"],
+    canopyShade: "#5a8487",
+    trunk: "#b88c6c",
+    trunkDark: "#946a52",
+    trunkPatch: "#e3b8a0",
+    plank: ["#d9a066", "#cf9459", "#e2ad74"],
+    plankDark: "#a8703f",
+    rail: "#b98149",
+    rope: "#e8cfa0",
+    hutWall: "#f3dcb8",
+    hutTrim: "#c98f5a",
+    roof: ["#e8857a", "#f09a8c"],
+    door: "#7f9fd0",
+    window: "#ffe6a6",
+    cushion: "#f2a6b8",
+    cushionTrim: "#ffffff",
+    lantern: ["#ffb38a", "#ffe08a", "#f7a6c4"],
+    bulb: "#fff1b8",
+    pot: "#e48f6e",
+    plant: "#7fb39a",
+    hammock: "#a8c6f0",
+    basket: "#c99a5c",
+    leafSnack: "#86b8a0",
+    flower: ["#ffd0e0", "#fff2a8", "#c8d8ff"],
+    leafFall: ["#9cc4b4", "#f0c0a8", "#d8c4ec"],
+  },
+  night: {
+    skyTop: "#1d1b45",
+    skyMid: "#3b3470",
+    skyLow: "#5f4a86",
+    cloud: "#4a4580",
+    cloudShade: "#3b3870",
+    farCanopy: ["#3a3768", "#433e72", "#35336a"],
+    canopy: ["#355a68", "#3f6872", "#2e505e", "#4a7478"],
+    canopyShade: "#253f4c",
+    trunk: "#6a5260",
+    trunkDark: "#523f4e",
+    trunkPatch: "#8a6e7a",
+    plank: ["#8a6650", "#7f5d48", "#94705a"],
+    plankDark: "#5e4436",
+    rail: "#73584a",
+    rope: "#a89a86",
+    hutWall: "#a8988a",
+    hutTrim: "#7a5e4c",
+    roof: ["#a85a62", "#b5666c"],
+    door: "#4f5f90",
+    window: "#ffd98a",
+    cushion: "#c27a90",
+    cushionTrim: "#e6e0f0",
+    lantern: ["#ffb38a", "#ffe08a", "#f7a6c4"],
+    bulb: "#fff1b8",
+    pot: "#9a5e4e",
+    plant: "#3f6a62",
+    hammock: "#6a80b0",
+    basket: "#7f6448",
+    leafSnack: "#4a7468",
+    flower: ["#ffd0e0", "#fff2a8", "#c8d8ff"],
+    leafFall: ["#6a8a8a", "#a88a80", "#9a8ab4"],
+  },
+};
+
+const STAR_COLOR = "#fff1c9";
+const FIREFLY_COLOR = "#ffe9a0";
+
+const usePalette = () => (useNight() ? PALETTE.night : PALETTE.day);
+
+const flat = (color, extra = {}) => ({ color, roughness: 1, metalness: 0, flatShading: true, ...extra });
+
+function Sky() {
+  const p = usePalette();
+  const geo = useMemo(() => {
+    const g = new THREE.SphereGeometry(60, 24, 16);
+    const pos = g.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const top = new THREE.Color(p.skyTop);
+    const mid = new THREE.Color(p.skyMid);
+    const low = new THREE.Color(p.skyLow);
+    const c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const h = pos.getY(i) / 60;
+      if (h > -0.42) c.copy(mid).lerp(top, THREE.MathUtils.smoothstep(h, -0.42, -0.05));
+      else c.copy(low).lerp(mid, THREE.MathUtils.smoothstep(h, -0.85, -0.42));
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    return g;
+  }, [p]);
+  return (
+    <mesh geometry={geo}>
+      <meshBasicMaterial vertexColors side={THREE.BackSide} fog={false} depthWrite={false} />
+    </mesh>
+  );
+}
+
+function puffCluster(seed, count, spread, size) {
+  return Array.from({ length: count }, (_, i) => {
+    const a = seededRand(seed + i * 3.3) * Math.PI * 2;
+    const r = seededRand(seed + i * 5.1) * spread;
+    const s = size * (0.6 + seededRand(seed + i * 7.7) * 0.6);
+    return {
+      x: Math.cos(a) * r,
+      y: (seededRand(seed + i * 9.9) - 0.4) * spread * 0.55,
+      z: Math.sin(a) * r * 0.6,
+      s,
+      geo: jitterGeometry(new THREE.IcosahedronGeometry(s, 0), s * 0.22, seed * 13 + i),
+      k: i,
+    };
+  });
+}
+
+function Clouds() {
+  const p = usePalette();
+  const clouds = useMemo(
+    () =>
+      [
+        { at: [-6, 4.2, -7], seed: 3, speed: 0.05 },
+        { at: [4, 5.4, -9], seed: 9, speed: 0.04 },
+        { at: [8, 2.6, -6], seed: 15, speed: 0.06 },
+        { at: [-9, 1.8, -8], seed: 21, speed: 0.045 },
+        { at: [1, 3.0, -10], seed: 27, speed: 0.035 },
+      ].map((c) => ({ ...c, puffs: puffCluster(c.seed, 6, 1.1, 0.7) })),
+    [],
+  );
+  const refs = useRef([]);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    refs.current.forEach((g, i) => {
+      if (!g) return;
+      const c = clouds[i];
+      g.position.x = ((c.at[0] + t * c.speed * 6 + 14) % 28) - 14;
+    });
+  });
+  return clouds.map((c, i) => (
+    <group key={i} ref={(el) => (refs.current[i] = el)} position={c.at}>
+      {c.puffs.map((pf) => (
+        <mesh key={pf.k} geometry={pf.geo} position={[pf.x, pf.y * 0.5, pf.z]} scale={[1.3, 0.75, 1]}>
+          <meshStandardMaterial {...flat(pf.k % 3 ? p.cloud : p.cloudShade, { fog: false })} />
+        </mesh>
+      ))}
+    </group>
+  ));
+}
+
+function FarCanopy() {
+  const p = usePalette();
+  const blobs = useMemo(() => {
+    const list = [];
+    for (let i = 0; i < 18; i++) {
+      const x = -13 + i * 1.6 + (seededRand(i * 2.1) - 0.5) * 0.8;
+      list.push({ x, y: -1.4 + seededRand(i * 3.7) * 2.2, z: -9.5 - seededRand(i * 5.3) * 3, s: 1.3 + seededRand(i * 7.1) * 1.0, k: i, geo: jitterGeometry(new THREE.IcosahedronGeometry(1, 0), 0.25, i * 17) });
+    }
+    return list;
+  }, []);
+  return blobs.map((b) => (
+    <mesh key={b.k} geometry={b.geo} position={[b.x, b.y, b.z]} scale={[b.s * 1.2, b.s, b.s]}>
+      <meshStandardMaterial {...flat(p.farCanopy[b.k % p.farCanopy.length])} />
+    </mesh>
+  ));
+}
+
+function LeafCloud({ at, seed, count = 7, spread = 0.9, size = 0.55 }) {
+  const p = usePalette();
+  const puffs = useMemo(() => puffCluster(seed, count, spread, size), [seed, count, spread, size]);
+  const ref = useRef();
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.5 + seed) * 0.02;
+  });
+  return (
+    <group ref={ref} position={at}>
+      {puffs.map((pf) => (
+        <mesh key={pf.k} geometry={pf.geo} position={[pf.x, pf.y, pf.z]} castShadow receiveShadow>
+          <meshStandardMaterial {...flat(pf.k === 0 ? p.canopyShade : p.canopy[(pf.k + seed) % p.canopy.length])} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function GiantTrunk() {
+  const p = usePalette();
+  const geo = useMemo(() => {
+    const h = 16;
+    const g = new THREE.CylinderGeometry(TRUNK_RADIUS * 0.82, TRUNK_RADIUS * 1.15, h, 9, 10);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      pos.setX(i, pos.getX(i) + Math.sin(y * 0.35) * 0.12);
+      pos.setZ(i, pos.getZ(i) + Math.cos(y * 0.28) * 0.08);
+    }
+    const geo2 = g.toNonIndexed();
+    const pp = geo2.attributes.position;
+    const colors = new Float32Array(pp.count * 3);
+    const c = new THREE.Color();
+    for (let i = 0; i < pp.count; i += 3) {
+      const f = i / 3;
+      const r = seededRand(f * 1.7 + 3);
+      c.set(r > 0.82 ? p.trunkPatch : r > 0.55 ? p.trunkDark : p.trunk);
+      for (let k = 0; k < 3; k++) {
+        colors[(i + k) * 3] = c.r;
+        colors[(i + k) * 3 + 1] = c.g;
+        colors[(i + k) * 3 + 2] = c.b;
+      }
+    }
+    geo2.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geo2.computeVertexNormals();
+    return geo2;
+  }, [p]);
+  const branches = [
+    { y: 2.6, a: 0.4, len: 2.4, tilt: 0.75 },
+    { y: 3.3, a: 2.6, len: 2.1, tilt: 0.7 },
+    { y: -1.6, a: 3.7, len: 2.0, tilt: 0.95 },
+    { y: -2.3, a: 0.9, len: 2.3, tilt: 1.0 },
+  ];
+  return (
+    <group position={[TRUNK_AT[0], 0, TRUNK_AT[1]]}>
+      <mesh geometry={geo} position={[0, 1.5, 0]} castShadow receiveShadow>
+        <meshStandardMaterial vertexColors roughness={1} metalness={0} flatShading />
+      </mesh>
+      {branches.map((b, i) => (
+        <group key={i} position={[0, b.y, 0]} rotation={[0, b.a, 0]}>
+          <mesh position={[b.len / 2 * Math.sin(b.tilt), b.len / 2 * Math.cos(b.tilt), 0]} rotation={[0, 0, -b.tilt]} castShadow>
+            <cylinderGeometry args={[0.09, 0.2, b.len, 6]} />
+            <meshStandardMaterial {...flat(p.trunk)} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function Canopy() {
+  const t = TRUNK_AT;
+  return (
+    <>
+      <LeafCloud at={[t[0] + 1.6, 4.2, t[1] + 0.6]} seed={3} count={9} spread={1.3} size={0.75} />
+      <LeafCloud at={[t[0] - 1.8, 4.6, t[1] - 0.4]} seed={7} count={9} spread={1.3} size={0.75} />
+      <LeafCloud at={[t[0] + 0.1, 5.6, t[1] - 0.6]} seed={11} count={10} spread={1.6} size={0.85} />
+      <LeafCloud at={[t[0] - 3.4, 3.0, t[1] + 0.4]} seed={15} count={7} spread={1.0} size={0.6} />
+      <LeafCloud at={[t[0] + 3.6, 3.4, t[1] - 0.3]} seed={19} count={7} spread={1.0} size={0.6} />
+      <LeafCloud at={[t[0] - 1.9, -2.2, t[1] + 0.9]} seed={23} count={8} spread={1.2} size={0.7} />
+      <LeafCloud at={[t[0] + 2.4, -2.6, t[1] + 1.6]} seed={27} count={8} spread={1.2} size={0.7} />
+      <LeafCloud at={[t[0] + 0.4, -3.4, t[1] + 2.9]} seed={31} count={9} spread={1.5} size={0.8} />
+      <LeafCloud at={[t[0] - 3.0, -3.0, t[1] + 2.6]} seed={35} count={7} spread={1.1} size={0.7} />
+      <LeafCloud at={[t[0] + 3.8, -2.0, t[1] + 3.2]} seed={39} count={6} spread={1.0} size={0.6} />
+    </>
+  );
+}
+
+function Deck() {
+  const p = usePalette();
+  const planks = useMemo(() => {
+    const list = [];
+    const width = 0.3;
+    for (let i = -7; i <= 7; i++) {
+      const x = i * width;
+      const half = Math.sqrt(Math.max(0, DECK_RADIUS * DECK_RADIUS - x * x));
+      if (half < 0.2) continue;
+      list.push({ x, len: half * 2, c: (i + 7) % 3, tilt: (seededRand(i * 3.3) - 0.5) * 0.01 });
+    }
+    return list;
+  }, []);
+  const posts = useMemo(() => Array.from({ length: 14 }, (_, i) => (i / 14) * Math.PI * 2).filter((a) => {
+    const x = Math.cos(a) * (DECK_RADIUS - 0.08);
+    const z = Math.sin(a) * (DECK_RADIUS - 0.08);
+    return !(z > 1.2 && Math.abs(x) < 0.9) && !(x < -1.3 && z < 0.5 && z > -1.2);
+  }), []);
+  const ropeCurve = useMemo(() => {
+    const pts = posts.map((a) => new THREE.Vector3(Math.cos(a) * (DECK_RADIUS - 0.08), DECK_Y + 0.5, Math.sin(a) * (DECK_RADIUS - 0.08)));
+    return pts;
+  }, [posts]);
+  return (
+    <group>
+      <mesh position={[0, DECK_Y - DECK_THICK - 0.05, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[DECK_RADIUS * 0.98, DECK_RADIUS * 0.9, 0.12, 14]} />
+        <meshStandardMaterial {...flat(p.plankDark)} />
+      </mesh>
+      {planks.map((pl, i) => (
+        <mesh key={i} position={[pl.x, DECK_Y - DECK_THICK / 2, 0]} rotation={[pl.tilt, 0, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.28, DECK_THICK, pl.len]} />
+          <meshStandardMaterial {...flat(p.plank[pl.c])} />
+        </mesh>
+      ))}
+      {[0.5, 2.1, 3.7, 5.3].map((a, i) => (
+        <mesh key={`beam${i}`} position={[Math.cos(a) * 1.1, DECK_Y - 0.9, Math.sin(a) * 1.1 + TRUNK_AT[1] * 0.2]} rotation={[Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6]} castShadow>
+          <cylinderGeometry args={[0.06, 0.07, 1.8, 5]} />
+          <meshStandardMaterial {...flat(p.rail)} />
+        </mesh>
+      ))}
+      {posts.map((a, i) => (
+        <mesh key={`post${i}`} position={[Math.cos(a) * (DECK_RADIUS - 0.08), DECK_Y + 0.26, Math.sin(a) * (DECK_RADIUS - 0.08)]} castShadow>
+          <cylinderGeometry args={[0.04, 0.05, 0.56, 6]} />
+          <meshStandardMaterial {...flat(p.rail)} />
+        </mesh>
+      ))}
+      {ropeCurve.slice(0, -1).map((a, i) => {
+        const b = ropeCurve[i + 1];
+        if (a.distanceTo(b) > 1.4) return null;
+        const mid = a.clone().add(b).multiplyScalar(0.5);
+        mid.y -= 0.06;
+        const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+        return (
+          <mesh key={`rope${i}`} castShadow>
+            <tubeGeometry args={[curve, 8, 0.014, 4, false]} />
+            <meshStandardMaterial {...flat(p.rope)} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function Cushion() {
+  const p = usePalette();
+  return (
+    <group position={[KOALA_POSITION[0], DECK_Y, KOALA_POSITION[1]]}>
+      <mesh position={[0, 0.065, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.62, 0.66, 0.13, 12]} />
+        <meshStandardMaterial {...flat(p.cushion)} />
+      </mesh>
+      <mesh position={[0, 0.132, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.44, 0.48, 12]} />
+        <meshStandardMaterial {...flat(p.cushionTrim)} />
+      </mesh>
+      {[0, 1, 2, 3].map((i) => (
+        <mesh key={i} position={[Math.cos(i * 1.57 + 0.4) * 0.64, 0.05, Math.sin(i * 1.57 + 0.4) * 0.64]}>
+          <icosahedronGeometry args={[0.05, 0]} />
+          <meshStandardMaterial {...flat(p.cushionTrim)} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Hut() {
+  const p = usePalette();
+  const night = useNight();
+  const roof = useMemo(() => {
+    const g = new THREE.ConeGeometry(0.95, 0.75, 4, 1);
+    g.rotateY(Math.PI / 4);
+    return g;
+  }, []);
+  return (
+    <group position={[HUT_AT[0], DECK_Y, HUT_AT[1]]} rotation={[0, -0.55, 0]}>
+      <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.05, 0.9, 0.95]} />
+        <meshStandardMaterial {...flat(p.hutWall)} />
+      </mesh>
+      {[-0.52, 0.52].map((x, i) => (
+        <mesh key={i} position={[x, 0.45, 0.47]} castShadow>
+          <boxGeometry args={[0.07, 0.92, 0.06]} />
+          <meshStandardMaterial {...flat(p.hutTrim)} />
+        </mesh>
+      ))}
+      <mesh geometry={roof} position={[0, 1.27, 0]} castShadow>
+        <meshStandardMaterial {...flat(p.roof[0])} />
+      </mesh>
+      <mesh position={[0, 1.02, 0]} castShadow>
+        <boxGeometry args={[1.24, 0.06, 1.14]} />
+        <meshStandardMaterial {...flat(p.roof[1])} />
+      </mesh>
+      <group position={[-0.18, 0, 0.48]} scale={DOOR_SCALE}>
+        <mesh position={[0, 0.32, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.2, 0.2, 0.02, 12, 1, false, -Math.PI / 2, Math.PI]} />
+          <meshStandardMaterial {...flat(p.door)} />
+        </mesh>
+        <mesh position={[0, 0.16, 0]}>
+          <boxGeometry args={[0.4, 0.32, 0.02]} />
+          <meshStandardMaterial {...flat(p.door)} />
+        </mesh>
+        <mesh position={[0.12, 0.2, 0.02]}>
+          <sphereGeometry args={[0.025, 8, 6]} />
+          <meshStandardMaterial {...flat(p.hutTrim)} />
+        </mesh>
+      </group>
+      <mesh position={[0.28, 0.55, 0.481]}>
+        <circleGeometry args={[0.13, 10]} />
+        <meshStandardMaterial {...flat(p.window, { emissive: p.window, emissiveIntensity: night ? 1.1 : 0.25 })} />
+      </mesh>
+      <mesh position={[0.28, 0.55, 0.483]}>
+        <ringGeometry args={[0.12, 0.155, 10]} />
+        <meshStandardMaterial {...flat(p.hutTrim)} />
+      </mesh>
+      {night && <pointLight position={[0.28, 0.6, 0.8]} color={p.window} intensity={1.2} distance={2.2} decay={2} />}
+      <mesh position={[0.36, 0.06, 0.62]} castShadow>
+        <cylinderGeometry args={[0.1, 0.08, 0.14, 7]} />
+        <meshStandardMaterial {...flat(p.pot)} />
+      </mesh>
+      <mesh position={[0.36, 0.22, 0.62]} castShadow>
+        <icosahedronGeometry args={[0.14, 0]} />
+        <meshStandardMaterial {...flat(p.plant)} />
+      </mesh>
+    </group>
+  );
+}
+
+function Hammock() {
+  const p = usePalette();
+  const ref = useRef();
+  const geo = useMemo(() => {
+    const g = new THREE.PlaneGeometry(1.2, 0.42, 12, 4);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i) / 0.6;
+      pos.setZ(i, -(1 - x * x) * 0.22);
+    }
+    g.rotateX(-Math.PI / 2);
+    g.computeVertexNormals();
+    return g;
+  }, []);
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.9) * 0.08;
+  });
+  return (
+    <group position={[-1.25, DECK_Y + 0.55, 0.15]} rotation={[0, 1.2, 0]}>
+      {[-0.68, 0.68].map((x, i) => (
+        <mesh key={i} position={[x, -0.27, 0]} castShadow>
+          <cylinderGeometry args={[0.035, 0.045, 0.55, 6]} />
+          <meshStandardMaterial {...flat(p.rail)} />
+        </mesh>
+      ))}
+      <group ref={ref}>
+        <mesh geometry={geo} castShadow receiveShadow>
+          <meshStandardMaterial {...flat(p.hammock, { side: THREE.DoubleSide })} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+function RopeBridge() {
+  const p = usePalette();
+  const start = new THREE.Vector3(-DECK_RADIUS * 0.88, DECK_Y - 0.02, -0.55);
+  const end = new THREE.Vector3(LOOKOUT.at[0] + LOOKOUT.r * 0.7, LOOKOUT.y + 0.02, LOOKOUT.at[1] + LOOKOUT.r * 0.5);
+  const slats = useMemo(() => Array.from({ length: 14 }, (_, i) => i / 13), []);
+  const dir = end.clone().sub(start);
+  const yaw = Math.atan2(-dir.z, dir.x);
+  const sagAt = (t) => start.clone().lerp(end, t).add(new THREE.Vector3(0, -Math.sin(t * Math.PI) * 0.35, 0));
+  const ropes = useMemo(
+    () =>
+      [-0.24, 0.24].map((side) => {
+        const pts = Array.from({ length: 12 }, (_, i) => {
+          const t = i / 11;
+          const v = sagAt(t);
+          v.add(new THREE.Vector3(Math.sin(yaw) * side, 0.42 - Math.sin(t * Math.PI) * 0.1, Math.cos(yaw) * side));
+          return v;
+        });
+        return new THREE.CatmullRomCurve3(pts);
+      }),
+    [],
+  );
+  return (
+    <group>
+      {slats.map((t, i) => {
+        const v = sagAt(t);
+        return (
+          <mesh key={i} position={v} rotation={[0, yaw, 0]} castShadow>
+            <boxGeometry args={[0.16, 0.04, 0.5]} />
+            <meshStandardMaterial {...flat(p.plank[i % 3])} />
+          </mesh>
+        );
+      })}
+      {ropes.map((c, i) => (
+        <mesh key={`r${i}`}>
+          <tubeGeometry args={[c, 24, 0.014, 4, false]} />
+          <meshStandardMaterial {...flat(p.rope)} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+const LOOKOUT = { at: [-3.7, -2.6], y: 0.35, r: 0.85 };
+
+function Lookout() {
+  const p = usePalette();
+  const night = useNight();
+  return (
+    <group position={[LOOKOUT.at[0], LOOKOUT.y, LOOKOUT.at[1]]}>
+      <mesh position={[0, -3.5, 0]} castShadow>
+        <cylinderGeometry args={[0.32, 0.45, 7, 7]} />
+        <meshStandardMaterial {...flat(p.trunk)} />
+      </mesh>
+      <mesh position={[0, -0.06, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[LOOKOUT.r, LOOKOUT.r * 0.92, 0.12, 10]} />
+        <meshStandardMaterial {...flat(p.plank[1])} />
+      </mesh>
+      {[0.3, 1.5, 2.7, 3.9, 5.1].map((a, i) => (
+        <mesh key={i} position={[Math.cos(a) * (LOOKOUT.r - 0.06), 0.22, Math.sin(a) * (LOOKOUT.r - 0.06)]} castShadow>
+          <cylinderGeometry args={[0.035, 0.04, 0.44, 5]} />
+          <meshStandardMaterial {...flat(p.rail)} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.95, 0]} castShadow>
+        <coneGeometry args={[LOOKOUT.r * 1.05, 0.55, 8]} />
+        <meshStandardMaterial {...flat(p.roof[1])} />
+      </mesh>
+      <mesh position={[0, 0.45, 0]}>
+        <cylinderGeometry args={[0.04, 0.04, 0.9, 5]} />
+        <meshStandardMaterial {...flat(p.rail)} />
+      </mesh>
+      <mesh position={[0.3, 0.45, 0.3]}>
+        <icosahedronGeometry args={[0.1, 1]} />
+        <meshStandardMaterial color={p.lantern[1]} emissive={p.lantern[1]} emissiveIntensity={night ? 1.2 : 0.35} roughness={1} flatShading toneMapped={false} />
+      </mesh>
+      {night && <pointLight position={[0.3, 0.45, 0.3]} color={p.lantern[1]} intensity={0.8} distance={2} decay={2} />}
+      <LeafCloud at={[-0.6, 1.4, -0.5]} seed={51} count={6} spread={0.8} size={0.5} />
+    </group>
+  );
+}
+
+function RopeLadder() {
+  const p = usePalette();
+  const ref = useRef();
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.8) * 0.04;
+  });
+  return (
+    <group ref={ref} position={[1.2, DECK_Y - 0.05, 1.68]} rotation={[0, -0.6, 0]}>
+      {[-0.17, 0.17].map((x, i) => (
+        <mesh key={i} position={[x, -0.9, 0]}>
+          <cylinderGeometry args={[0.012, 0.012, 1.8, 4]} />
+          <meshStandardMaterial {...flat(p.rope)} />
+        </mesh>
+      ))}
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <mesh key={`rung${i}`} position={[0, -0.18 - i * 0.28, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.02, 0.02, 0.38, 5]} />
+          <meshStandardMaterial {...flat(p.plank[i % 3])} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function hangPoint(a, b, t, sag) {
+  return a.clone().lerp(b, t).add(new THREE.Vector3(0, -Math.sin(t * Math.PI) * sag, 0));
+}
+
+function StringLights() {
+  const p = usePalette();
+  const night = useNight();
+  const strands = useMemo(
+    () => [
+      [new THREE.Vector3(TRUNK_AT[0] + 0.5, DECK_Y + 2.1, TRUNK_AT[1] + 0.4), new THREE.Vector3(HUT_AT[0] - 0.2, DECK_Y + 1.25, HUT_AT[1] + 0.5), 0.35, 9],
+      [new THREE.Vector3(TRUNK_AT[0] - 0.4, DECK_Y + 2.0, TRUNK_AT[1] + 0.45), new THREE.Vector3(-1.85, DECK_Y + 0.55, 0.95), 0.3, 9],
+    ],
+    [],
+  );
+  const bulbs = useRef([]);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    bulbs.current.forEach((m, i) => {
+      if (!m) return;
+      m.material.emissiveIntensity = (night ? 1.6 : 0.5) * (0.75 + Math.sin(t * 2 + i * 1.7) * 0.25);
+    });
+  });
+  let k = 0;
+  return strands.map(([a, b, sag, n], si) => {
+    const curve = new THREE.CatmullRomCurve3(Array.from({ length: 10 }, (_, i) => hangPoint(a, b, i / 9, sag)));
+    return (
+      <group key={si}>
+        <mesh>
+          <tubeGeometry args={[curve, 20, 0.008, 3, false]} />
+          <meshStandardMaterial {...flat(p.rope)} />
+        </mesh>
+        {Array.from({ length: n }, (_, i) => {
+          const pos = hangPoint(a, b, (i + 0.5) / n, sag);
+          const idx = k++;
+          return (
+            <mesh key={i} ref={(el) => (bulbs.current[idx] = el)} position={[pos.x, pos.y - 0.04, pos.z]}>
+              <icosahedronGeometry args={[0.04, 0]} />
+              <meshStandardMaterial color={p.lantern[idx % p.lantern.length]} emissive={p.lantern[idx % p.lantern.length]} emissiveIntensity={0.5} roughness={1} flatShading toneMapped={false} />
+            </mesh>
+          );
+        })}
+      </group>
+    );
+  });
+}
+
+function PaperLanterns() {
+  const p = usePalette();
+  const night = useNight();
+  const items = [
+    { at: [TRUNK_AT[0] + 1.25, DECK_Y + 1.95, TRUNK_AT[1] + 0.55], c: 0, len: 0.35 },
+    { at: [TRUNK_AT[0] - 1.05, DECK_Y + 2.1, TRUNK_AT[1] + 0.75], c: 2, len: 0.45 },
+  ];
+  const refs = useRef([]);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    refs.current.forEach((g, i) => {
+      if (g) g.rotation.z = Math.sin(t * 1.1 + i * 2) * 0.08;
+    });
+  });
+  return items.map((l, i) => (
+    <group key={i} ref={(el) => (refs.current[i] = el)} position={l.at}>
+      <mesh position={[0, -l.len / 2, 0]}>
+        <cylinderGeometry args={[0.006, 0.006, l.len, 3]} />
+        <meshStandardMaterial {...flat(p.rope)} />
+      </mesh>
+      <mesh position={[0, -l.len - 0.13, 0]} scale={[1, 1.2, 1]} castShadow>
+        <icosahedronGeometry args={[0.13, 1]} />
+        <meshStandardMaterial color={p.lantern[l.c]} emissive={p.lantern[l.c]} emissiveIntensity={night ? 1.2 : 0.35} roughness={1} flatShading toneMapped={false} />
+      </mesh>
+      {night && <pointLight position={[0, -l.len - 0.13, 0]} color={p.lantern[l.c]} intensity={0.8} distance={2.0} decay={2} />}
+    </group>
+  ));
+}
+
+function DeckDecor() {
+  const p = usePalette();
+  return (
+    <group>
+      {[
+        [-1.45, -0.75, 0.9],
+        [1.75, 0.55, 0.8],
+        [-0.6, 1.55, 0.7],
+      ].map(([x, z, s], i) => (
+        <group key={i} position={[x, DECK_Y, z]} scale={s}>
+          <mesh position={[0, 0.09, 0]} castShadow>
+            <cylinderGeometry args={[0.12, 0.09, 0.18, 7]} />
+            <meshStandardMaterial {...flat(p.pot)} />
+          </mesh>
+          {[0, 1, 2].map((k) => (
+            <mesh key={k} position={[Math.cos(k * 2.1) * 0.07, 0.26 + k * 0.03, Math.sin(k * 2.1) * 0.07]} castShadow>
+              <icosahedronGeometry args={[0.1, 0]} />
+              <meshStandardMaterial {...flat(p.plant)} />
+            </mesh>
+          ))}
+          <mesh position={[0.04, 0.4, 0.02]}>
+            <icosahedronGeometry args={[0.045, 0]} />
+            <meshStandardMaterial {...flat(p.flower[i % p.flower.length])} />
+          </mesh>
+        </group>
+      ))}
+      <group position={[0.95, DECK_Y, 1.2]} rotation={[0, 0.4, 0]}>
+        <mesh position={[0, 0.1, 0]} castShadow>
+          <cylinderGeometry args={[0.2, 0.16, 0.2, 8, 1, true]} />
+          <meshStandardMaterial {...flat(p.basket, { side: THREE.DoubleSide })} />
+        </mesh>
+        {[0, 1, 2, 3, 4].map((k) => (
+          <mesh key={k} position={[Math.cos(k * 1.3) * 0.08, 0.22 + (k % 2) * 0.04, Math.sin(k * 1.3) * 0.08]} rotation={[0.4, k, 0.6]} scale={[1, 0.3, 0.55]}>
+            <icosahedronGeometry args={[0.09, 0]} />
+            <meshStandardMaterial {...flat(p.leafSnack)} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+function FallingLeaves() {
+  const p = usePalette();
+  const refs = useRef([]);
+  const leaves = useMemo(() => Array.from({ length: 10 }, (_, i) => ({ x: (seededRand(i * 3.1) - 0.5) * 6, z: (seededRand(i * 5.9) - 0.5) * 3, phase: i / 10, speed: 0.05 + seededRand(i * 2.2) * 0.04, c: i % 3 })), []);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    refs.current.forEach((m, i) => {
+      if (!m) return;
+      const l = leaves[i];
+      const life = ((t * l.speed + l.phase) % 1 + 1) % 1;
+      m.position.set(l.x + Math.sin(t * 1.4 + i) * 0.35, 4.2 - life * 7, l.z + Math.cos(t * 1.1 + i) * 0.25);
+      m.rotation.set(t * 2 + i, t * 1.3, t * 1.7 + i);
+    });
+  });
+  return leaves.map((l, i) => (
+    <mesh key={i} ref={(el) => (refs.current[i] = el)}>
+      <circleGeometry args={[0.065, 4]} />
+      <meshStandardMaterial {...flat(p.leafFall[l.c], { side: THREE.DoubleSide })} />
+    </mesh>
+  ));
+}
+
+function Moon() {
+  return (
+    <mesh position={[5.5, 9, -14]}>
+      <circleGeometry args={[1.1, 20]} />
+      <meshBasicMaterial color="#fff3d0" fog={false} toneMapped={false} />
+    </mesh>
+  );
+}
+
+function useNightModeSetting() {
+  const [night, setNight] = useState(() => typeof window !== "undefined" && localStorage.getItem("koda-dark-mode") === "true");
+  useEffect(() => {
+    const onMode = (e) => setNight(e?.detail && typeof e.detail.isDarkMode === "boolean" ? e.detail.isDarkMode : localStorage.getItem("koda-dark-mode") === "true");
+    window.addEventListener("koda-dark-mode", onMode);
+    return () => window.removeEventListener("koda-dark-mode", onMode);
+  }, []);
+  return night;
+}
+
+const NightContext = React.createContext(false);
+
+const useNight = () => React.useContext(NightContext);
 
 function readMoodAnimation() {
   if (typeof window === "undefined") return { active: false };
@@ -14,8 +783,8 @@ function readMoodAnimation() {
 }
 
 function useMoodAnimation() {
-  const [mood, setMood] = React.useState(readMoodAnimation);
-  React.useEffect(() => {
+  const [mood, setMood] = useState(readMoodAnimation);
+  useEffect(() => {
     const onChange = (e) => setMood(e.detail || readMoodAnimation());
     window.addEventListener("mood-animation", onChange);
     return () => window.removeEventListener("mood-animation", onChange);
@@ -37,423 +806,188 @@ function publishMoodAnchor(camera, gl, topWorld, bottomWorld) {
   window.dispatchEvent(new CustomEvent("mood-anchor", { detail: window.__moodAnchor }));
 }
 
+function ExposureSync({ exposure }) {
+  const { gl } = useThree();
+  useEffect(() => {
+    gl.toneMappingExposure = exposure;
+  }, [gl, exposure]);
+  return null;
+}
 
-const KOALA_HEIGHT = 0.3;
-const KOALA_POSITION = [0.02, 0.72];
-const KOALA_PERCH_Y = 0;
-const KOALA_MODEL_PATH = "/models/characters/koala/koala.glb";
 const seededRand = (seed) => {
   const value = Math.sin(seed * 999.91) * 43758.5453;
   return value - Math.floor(value);
 };
 
-const drawWrapped = (ctx, x, y, size, radius, draw) => {
-  [-size, 0, size].forEach((offsetX) => {
-    [-size, 0, size].forEach((offsetY) => draw(x + offsetX, y + offsetY));
-  });
-};
-
-const PALETTE = {
-  background: "#79c8ad",
-  fog: "#a9d6b4",
-  sun: "#ffe59a",
-  rim: "#dff2ca",
-  hemiSky: "#e6f4d5",
-  hemiGround: "#415d45",
-  groundBase: "#879b5c",
-  soilDark: "#58392d",
-  bark: "#8c7049",
-  barkDark: "#4e311f",
-  barkCoral: "#b85e50",
-  leaf: "#4e9565",
-  leafDeep: "#215c48",
-  leafSilver: "#9acb82",
-  stone: "#817864",
-  stoneLight: "#b4aa88",
-  moss: "#507d49",
-  wattle: "#ebce5f",
-  wattleLeaf: "#386d4b",
-  litter: "#8b4e38",
-  koala: "#898a82",
-  koalaLight: "#b5b2a5",
-  koalaDark: "#31332f",
-  coral: "#df856d",
-};
-
-const TEX = 512;
-
-function buildGroundTexture() {
-  const canvas = document.createElement("canvas");
-  canvas.width = TEX;
-  canvas.height = TEX;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = PALETTE.groundBase;
-  ctx.fillRect(0, 0, TEX, TEX);
-
-  for (let i = 0; i < 46; i++) {
-    const seed = i * 61 + 3;
-    const bx = (seed * 37) % TEX;
-    const by = (seed * 53) % TEX;
-    const radius = 44 + (seed % 5) * 24;
-    const hue = 55 + (seed % 9) * 4;
-    const light = 31 + (seed % 6) * 4;
-    drawWrapped(ctx, bx, by, TEX, radius, (x, y) => {
-      const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
-      g.addColorStop(0, `hsla(${hue}, 40%, ${light}%, 0.5)`);
-      g.addColorStop(1, `hsla(${hue}, 40%, ${light}%, 0)`);
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fill();
-    });
+function jitterGeometry(geo, amount, seed) {
+  const g = geo.index ? geo.toNonIndexed() : geo.clone();
+  const pos = g.attributes.position;
+  const map = new Map();
+  for (let i = 0; i < pos.count; i++) {
+    const key = `${pos.getX(i).toFixed(3)},${pos.getY(i).toFixed(3)},${pos.getZ(i).toFixed(3)}`;
+    if (!map.has(key)) {
+      const k = map.size;
+      map.set(key, [(seededRand(seed + k * 3.1) - 0.5) * amount, (seededRand(seed + k * 5.7) - 0.5) * amount, (seededRand(seed + k * 7.3) - 0.5) * amount]);
+    }
+    const [dx, dy, dz] = map.get(key);
+    pos.setXYZ(i, pos.getX(i) + dx, pos.getY(i) + dy, pos.getZ(i) + dz);
   }
-
-  const LEAF_LITTER = [PALETTE.litter, PALETTE.leafDeep, "#8b5138"];
-  for (let i = 0; i < 240; i++) {
-    const seed = i * 17 + 9;
-    const bx = (seed * 31) % TEX;
-    const by = (seed * 47) % TEX;
-    ctx.fillStyle = LEAF_LITTER[i % LEAF_LITTER.length];
-    ctx.globalAlpha = 0.45 + (seed % 4) * 0.08;
-    drawWrapped(ctx, bx, by, TEX, 6, (x, y) => {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate((seed % 12) * 0.26);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 1.4, 6.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    });
-  }
-  ctx.globalAlpha = 1;
-
-  for (let i = 0; i < 90; i++) {
-    const seed = i * 89 + 13;
-    const bx = (seed * 23) % TEX;
-    const by = (seed * 41) % TEX;
-    drawWrapped(ctx, bx, by, TEX, 8, (x, y) => {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate((seed % 14) * 0.22);
-      ctx.fillStyle = i % 3 === 0 ? "rgba(211,196,139,0.45)" : "rgba(82,67,47,0.38)";
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 6.5, 2.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    });
-  }
-
-  for (let i = 0; i < 60; i++) {
-    const seed = i * 31 + 21;
-    const bx = (seed * 19) % TEX;
-    const by = (seed * 43) % TEX;
-    ctx.fillStyle = `rgba(33,92,72,${0.22 + (seed % 4) * 0.08})`;
-    drawWrapped(ctx, bx, by, TEX, 4, (x, y) => {
-      ctx.beginPath();
-      ctx.arc(x, y, 2.2, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+  g.computeVertexNormals();
+  return g;
 }
 
-const GROUND_SIZE = 9;
+function useSway(amount = 0.05, speed = 1.2) {
+  const refs = useRef([]);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    refs.current.forEach((g, i) => {
+      if (!g) return;
+      g.rotation.z = Math.sin(t * speed + i * 1.3) * amount;
+      g.rotation.x = Math.cos(t * speed * 0.8 + i * 0.7) * amount * 0.5;
+    });
+  });
+  return refs;
+}
 
-function Ground() {
-  const tex = useMemo(() => buildGroundTexture(), []);
-  useEffect(() => {
-    tex.repeat.set(GROUND_SIZE / 2.4, GROUND_SIZE / 2.4);
-  }, [tex]);
+function useFreeRoam({ bounds = 6, minHeight = 0.6, maxHeight = 1.3, speed = 0.6, avoidCenter = 0 } = {}) {
+  const state = useMemo(() => {
+    const randPoint = () => {
+      let x;
+      let z;
+      do {
+        x = (Math.random() - 0.5) * bounds * 2;
+        z = (Math.random() - 0.5) * bounds * 2;
+      } while (avoidCenter && Math.hypot(x, z) < avoidCenter);
+      return new THREE.Vector3(x, minHeight + Math.random() * (maxHeight - minHeight), z);
+    };
+    return { pos: randPoint(), target: randPoint(), randPoint };
+  }, [bounds, minHeight, maxHeight, avoidCenter]);
+  const step = (delta) => {
+    const dir = state.target.clone().sub(state.pos);
+    const dist = dir.length();
+    if (dist < 0.15) state.target.copy(state.randPoint());
+    else state.pos.addScaledVector(dir.normalize(), Math.min(speed * delta, dist));
+    return state.pos;
+  };
+  return { state, step };
+}
+
+function Firefly({ bounds, speed, height }) {
+  const ref = useRef();
+  const { step } = useFreeRoam({ bounds, minHeight: height - 0.2, maxHeight: height + 0.3, speed });
+  const phase = useMemo(() => Math.random() * Math.PI * 2, []);
+  useFrame(({ clock }, delta) => {
+    const pos = step(delta);
+    if (ref.current) ref.current.position.set(pos.x, pos.y + Math.sin(clock.getElapsedTime() * 2 + phase) * 0.08, pos.z - 1);
+  });
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[GROUND_SIZE, GROUND_SIZE]} />
-      <meshStandardMaterial map={tex} />
+    <mesh ref={ref}>
+      <sphereGeometry args={[0.025, 8, 8]} />
+      <meshBasicMaterial color={FIREFLY_COLOR} toneMapped={false} />
+      <pointLight color={FIREFLY_COLOR} intensity={0.3} distance={0.9} />
     </mesh>
   );
 }
 
-function buildBarkTexture() {
-  const canvas = document.createElement("canvas");
-  canvas.width = 48;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = PALETTE.bark;
-  ctx.fillRect(0, 0, 48, 256);
-  for (let i = 0; i < 30; i++) {
-    const seed = i * 13 + 5;
-    ctx.fillStyle = `rgba(140,116,84,${0.18 + (seed % 4) * 0.09})`;
-    const x = (seed * 17) % 48;
-    ctx.fillRect(x, (seed * 29) % 256, 2 + (seed % 4), 40 + (seed % 60));
-  }
-  for (let i = 0; i < 16; i++) {
-    const seed = i * 31 + 7;
-    ctx.fillStyle = "rgba(224,212,180,0.4)";
-    ctx.fillRect((seed * 11) % 48, (seed * 37) % 256, 7, 22);
-  }
-  for (let i = 0; i < 12; i++) {
-    const seed = i * 47 + 17;
-    ctx.fillStyle = "rgba(184,94,80,0.72)";
-    ctx.beginPath();
-    ctx.ellipse((seed * 13) % 48, (seed * 31) % 256, 5 + (seed % 4), 13 + (seed % 12), 0.35, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  for (let i = 0; i < 8; i++) {
-    const seed = i * 43 + 11;
-    ctx.fillStyle = "rgba(140,175,120,0.3)";
-    ctx.fillRect((seed * 7) % 48, (seed * 53) % 256, 5, 14);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+function Fireflies() {
+  return (
+    <>
+      <Firefly bounds={3.6} speed={0.5} height={0.9} />
+      <Firefly bounds={3.2} speed={0.55} height={1.2} />
+      <Firefly bounds={4.2} speed={0.45} height={0.7} />
+      <Firefly bounds={2.8} speed={0.4} height={1.0} />
+      <Firefly bounds={4.6} speed={0.5} height={0.8} />
+      <Firefly bounds={2.4} speed={0.6} height={1.3} />
+    </>
+  );
 }
 
-function GumTree({ position, height, lean = 0, seed = 1 }) {
-  const bark = useMemo(() => buildBarkTexture(), []);
-  const canopy = useRef(null);
-  const phase = useMemo(() => seededRand(seed) * 8, [seed]);
-  useFrame(({ clock }) => {
-    if (canopy.current) {
-      canopy.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.45 + phase) * 0.03;
+function Butterfly({ bounds, speed, height, color }) {
+  const group = useRef();
+  const left = useRef();
+  const right = useRef();
+  const { state, step } = useFreeRoam({ bounds, minHeight: height - 0.2, maxHeight: height + 0.4, speed, avoidCenter: 0.9 });
+  const prev = useRef(state.pos.clone());
+  useFrame(({ clock }, delta) => {
+    const pos = step(delta);
+    const t = clock.getElapsedTime();
+    if (group.current) {
+      const dx = pos.x - prev.current.x;
+      const dz = pos.z - prev.current.z;
+      if (Math.abs(dx) + Math.abs(dz) > 0.0001) group.current.rotation.y = Math.atan2(dx, dz);
+      group.current.position.set(pos.x, pos.y + Math.sin(t * 4) * 0.06, pos.z - 0.5);
+      prev.current.copy(pos);
     }
+    const flap = Math.sin(t * 16) * 0.9;
+    if (left.current) left.current.rotation.z = 0.2 + flap;
+    if (right.current) right.current.rotation.z = -0.2 - flap;
   });
-  const clusters = useMemo(
-    () =>
-      Array.from({ length: 9 }).map((_, i) => {
-        const a = (i / 9) * Math.PI * 2 + phase;
-        const r = 0.2 + seededRand(seed + i * 3) * 0.34;
-        return {
-          position: [Math.cos(a) * r, height * (0.78 + seededRand(seed + i) * 0.26), Math.sin(a) * r],
-          scale: 0.28 + seededRand(seed + i * 7) * 0.22,
-          color: i % 3 === 0 ? PALETTE.leafSilver : i % 3 === 1 ? PALETTE.leaf : PALETTE.leafDeep,
-        };
-      }),
-    [height, phase, seed],
-  );
   return (
-    <group position={position} rotation={[0, 0, lean]}>
-      <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.06, 0.12, height, 10]} />
-        <meshStandardMaterial map={bark} roughness={0.9} />
-      </mesh>
-      <mesh position={[0.17, height * 0.7, 0]} rotation={[0, 0, -0.7]} castShadow>
-        <cylinderGeometry args={[0.026, 0.042, 0.52, 8]} />
-        <meshStandardMaterial color={PALETTE.barkDark} roughness={0.9} />
-      </mesh>
-      <mesh position={[-0.16, height * 0.78, 0.05]} rotation={[0, 0, 0.65]} castShadow>
-        <cylinderGeometry args={[0.023, 0.037, 0.46, 8]} />
-        <meshStandardMaterial color={PALETTE.barkDark} roughness={0.9} />
-      </mesh>
-      <group ref={canopy}>
-        {clusters.map((c, i) => (
-          <mesh key={i} position={c.position} scale={[c.scale * 0.72, c.scale, c.scale * 0.34]} rotation={[0.12, aToRotation(i), i * 0.42]} castShadow>
-            <sphereGeometry args={[1, 8, 6]} />
-            <meshToonMaterial color={c.color} />
-          </mesh>
-        ))}
+    <group ref={group}>
+      <group ref={left}>
+        <mesh position={[0.06, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.06, 5]} />
+          <meshStandardMaterial {...flat(color, { side: THREE.DoubleSide })} />
+        </mesh>
+      </group>
+      <group ref={right}>
+        <mesh position={[-0.06, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.06, 5]} />
+          <meshStandardMaterial {...flat(color, { side: THREE.DoubleSide })} />
+        </mesh>
       </group>
     </group>
   );
 }
 
-function aToRotation(index) {
-  return (index % 4) * 0.36;
-}
-
-const TREES = [
-  { position: [-1.35, 0, -1.35], height: 2.1, lean: 0.04, seed: 3 },
-  { position: [1.4, 0, -1.5], height: 2.5, lean: -0.05, seed: 11 },
-  { position: [-0.15, 0, -1.95], height: 2.85, lean: 0.02, seed: 19 },
-  { position: [-2.3, 0, -0.45], height: 1.85, lean: 0.06, seed: 27 },
-  { position: [2.3, 0, -0.3], height: 2.0, lean: -0.04, seed: 35 },
-  { position: [0.85, 0, -2.3], height: 2.3, lean: 0.03, seed: 43 },
-  { position: [-1.05, 0, 1.75], height: 1.65, lean: -0.03, seed: 51 },
-];
-
-function LeafSprig({ position, rotation, scale = 1 }) {
-  const ref = useRef(null);
-  const phase = useMemo(() => Math.random() * 8, []);
-  useFrame(({ clock }) => {
-    if (ref.current) ref.current.rotation.z = rotation + Math.sin(clock.getElapsedTime() + phase) * 0.06;
-  });
-  return (
-    <group ref={ref} position={position} scale={scale}>
-      <mesh position={[0, 0.07, 0]}>
-        <cylinderGeometry args={[0.006, 0.008, 0.15, 6]} />
-        <meshStandardMaterial color={PALETTE.barkDark} roughness={0.9} />
-      </mesh>
-      {[0, 1, 2, 3].map((i) => (
-        <mesh
-          key={i}
-          position={[i % 2 ? 0.045 : -0.045, 0.06 + i * 0.03, 0]}
-          rotation={[0, 0, i % 2 ? -0.8 : 0.8]}
-          scale={[1, 2.4, 1]}
-          castShadow
-        >
-          <sphereGeometry args={[0.022, 8, 6]} />
-          <meshToonMaterial color={i % 2 ? PALETTE.leaf : PALETTE.leafDeep} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-const SPRIGS = (() => {
-  const out = [];
-  for (let i = 0; i < 22; i++) {
-    const seed = i * 23 + 5;
-    const x = (seededRand(seed) - 0.5) * 3.6;
-    const z = -0.4 + (seededRand(seed * 1.7) - 0.5) * 3.0;
-    if (Math.hypot(x - KOALA_POSITION[0], z - KOALA_POSITION[1]) < 0.42) continue;
-    out.push({ position: [x, 0, z], rotation: (seededRand(seed * 2.3) - 0.5) * 0.4, scale: 0.8 + seededRand(seed * 3.1) * 0.7 });
-  }
-  return out;
-})();
-
-function WattleBush({ position, scale = 1, seed = 1 }) {
-  const puffs = useMemo(
+function GlowStars() {
+  const group = useRef(null);
+  const shape = useMemo(() => {
+    const outline = new THREE.Shape();
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.PI / 2 + (i * Math.PI) / 5;
+      const r = i % 2 === 0 ? 1 : 0.44;
+      if (i === 0) outline.moveTo(Math.cos(angle) * r, Math.sin(angle) * r);
+      else outline.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+    }
+    outline.closePath();
+    return outline;
+  }, []);
+  const stars = useMemo(
     () =>
-      Array.from({ length: 9 }).map((_, i) => {
-        const a = (i / 9) * Math.PI * 2 + seededRand(seed + i) * 2;
-        const r = 0.09 + seededRand(seed + i * 3) * 0.07;
-        return [Math.cos(a) * r, 0.09 + seededRand(seed + i * 5) * 0.1, Math.sin(a) * r];
-      }),
-    [seed],
-  );
-  return (
-    <group position={position} scale={scale}>
-      <mesh position={[0, 0.09, 0]} scale={[1, 0.75, 1]} castShadow receiveShadow>
-        <icosahedronGeometry args={[0.14, 1]} />
-        <meshStandardMaterial color={PALETTE.wattleLeaf} roughness={0.9} flatShading />
-      </mesh>
-      {puffs.map((p, i) => (
-        <mesh key={i} position={p} castShadow>
-          <sphereGeometry args={[0.02, 7, 6]} />
-          <meshStandardMaterial color={PALETTE.wattle} roughness={0.6} emissive={PALETTE.wattle} emissiveIntensity={0.12} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-const WATTLE_BUSHES = [
-  { position: [1.55, 0, 0.55], scale: 0.55, seed: 6 },
-  { position: [-1.05, 0, -0.55], scale: 0.5, seed: 14 },
-  { position: [0.75, 0, 1.5], scale: 0.6, seed: 22 },
-];
-
-function FallenLog({ position = [1.55, 0, -0.55], rotation = 0.5 }) {
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      <mesh position={[0, 0.14, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.14, 0.16, 1.15, 12]} />
-        <meshStandardMaterial color={PALETTE.bark} roughness={0.92} />
-      </mesh>
-      <mesh position={[0.575, 0.14, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.1, 0.1, 0.03, 12]} />
-        <meshStandardMaterial color={PALETTE.soilDark} roughness={1} />
-      </mesh>
-      <mesh position={[0, 0.24, 0.1]} rotation={[0.3, 0, 0]} castShadow>
-        <sphereGeometry args={[0.06, 8, 6]} />
-        <meshStandardMaterial color={PALETTE.moss} roughness={1} />
-      </mesh>
-      <mesh position={[-0.2, 0.24, -0.08]} rotation={[0.2, 0, 0]} castShadow>
-        <sphereGeometry args={[0.045, 8, 6]} />
-        <meshStandardMaterial color={PALETTE.moss} roughness={1} />
-      </mesh>
-    </group>
-  );
-}
-
-const STONES = [
-  { position: [1.1, 0.07, 0.2], scale: 0.14, rotation: 0.8 },
-  { position: [-1.35, 0.06, 0.85], scale: 0.12, rotation: 2.0 },
-  { position: [0.5, 0.05, 1.4], scale: 0.1, rotation: 1.4 },
-  { position: [-0.55, 0.06, 1.05], scale: 0.11, rotation: 0.3 },
-  { position: [-1.75, 0.06, -1.1], scale: 0.13, rotation: 1.9 },
-];
-
-function Stones() {
-  return (
-    <>
-      {STONES.map((s, i) => (
-        <group key={i} position={s.position} rotation={[0.1, s.rotation, 0.07]} scale={s.scale}>
-          <mesh castShadow receiveShadow>
-            <dodecahedronGeometry args={[1, 0]} />
-            <meshStandardMaterial color={i % 2 ? PALETTE.stone : PALETTE.stoneLight} roughness={0.9} />
-          </mesh>
-          <mesh position={[0.03, 0.5, -0.04]} scale={[0.74, 0.2, 0.68]}>
-            <sphereGeometry args={[1, 12, 8]} />
-            <meshStandardMaterial color={PALETTE.moss} roughness={1} />
-          </mesh>
-        </group>
-      ))}
-    </>
-  );
-}
-
-function WaterDish() {
-  const ref = useRef(null);
-  useFrame(({ clock }) => {
-    const m = ref.current?.material;
-    if (m) m.opacity = 0.85 + Math.sin(clock.getElapsedTime() * 0.9) * 0.06;
-  });
-  return (
-    <group position={[-0.85, 0, 0.35]}>
-      <mesh position={[0, 0.035, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.22, 0.18, 0.07, 20]} />
-        <meshStandardMaterial color={PALETTE.stone} roughness={0.9} />
-      </mesh>
-      <mesh ref={ref} position={[0, 0.072, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.18, 24]} />
-        <meshBasicMaterial color="#a9c8ca" transparent opacity={0.88} />
-      </mesh>
-    </group>
-  );
-}
-
-function MistWisp({ radius, speed, phase, height }) {
-  const ref = useRef(null);
-  useFrame(({ clock }) => {
-    if (!ref.current) return;
-    const t = clock.getElapsedTime() * speed + phase;
-    ref.current.position.set(Math.cos(t) * radius, height, Math.sin(t * 0.8) * radius * 0.6 - 0.4);
-    ref.current.material.opacity = 0.08 + Math.abs(Math.sin(t * 0.6)) * 0.12;
-  });
-  return (
-    <mesh ref={ref} scale={[1.7, 0.5, 1]}>
-      <sphereGeometry args={[0.4, 12, 8]} />
-      <meshBasicMaterial color={PALETTE.rim} transparent opacity={0.13} depthWrite={false} />
-    </mesh>
-  );
-}
-
-function Mist() {
-  const wisps = useMemo(
-    () =>
-      Array.from({ length: 6 }).map((_, i) => ({
-        radius: 1.0 + seededRand(i * 3.3) * 1.3,
-        speed: 0.1 + seededRand(i * 5.5) * 0.08,
-        phase: seededRand(i * 7.7) * 8,
-        height: 0.2 + seededRand(i * 9.1) * 0.5,
+      Array.from({ length: 13 }, (_, i) => ({
+        x: -0.86 + (i % 5) * 0.4 + seededRand(i * 17 + 2) * 0.13,
+        y: 0.57 + seededRand(i * 23 + 7) * 0.32,
+        radius: i % 3 === 0 ? 5 : 3,
+        phase: seededRand(i + 11) * Math.PI * 2,
       })),
     [],
   );
+  useFrame(({ camera, size, clock }) => {
+    if (!group.current || !camera.isOrthographicCamera) return;
+    group.current.position.copy(camera.position);
+    group.current.quaternion.copy(camera.quaternion);
+    const halfWidth = (camera.right - camera.left) / (2 * camera.zoom);
+    const halfHeight = (camera.top - camera.bottom) / (2 * camera.zoom);
+    group.current.children.forEach((mesh, i) => {
+      const star = stars[i];
+      mesh.position.set(star.x * halfWidth, star.y * halfHeight, -0.5);
+      mesh.scale.setScalar((star.radius * halfHeight * 2) / size.height);
+      mesh.material.opacity = 0.65 + Math.sin(clock.getElapsedTime() * 0.8 + star.phase) * 0.2;
+    });
+  });
   return (
-    <>
-      {wisps.map((w, i) => (
-        <MistWisp key={i} {...w} />
+    <group ref={group}>
+      {stars.map((_, i) => (
+        <mesh key={i} renderOrder={100} frustumCulled={false}>
+          <shapeGeometry args={[shape]} />
+          <meshBasicMaterial color={STAR_COLOR} transparent opacity={0.8} depthTest={false} depthWrite={false} toneMapped={false} />
+        </mesh>
       ))}
-    </>
+    </group>
   );
 }
+
 function useNormalizedModel(size) {
   const gltf = useGLTF(KOALA_MODEL_PATH);
   return useMemo(() => {
@@ -462,7 +996,7 @@ function useNormalizedModel(size) {
     const dim = box.getSize(new THREE.Vector3());
     const scale = size / (dim.y || 1);
     const center = box.getCenter(new THREE.Vector3());
-    clone.position.set(-center.x, -box.min.y, -center.z);
+    clone.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
     clone.scale.setScalar(scale);
     clone.traverse((o) => {
       if (o.isMesh) {
@@ -473,7 +1007,7 @@ function useNormalizedModel(size) {
     const wrapper = new THREE.Group();
     wrapper.add(clone);
     wrapper.userData.placement = {
-      offset: [-center.x, -box.min.y, -center.z],
+      offset: [-center.x * scale, -box.min.y * scale, -center.z * scale],
       scale,
       box: box.clone(),
     };
@@ -481,17 +1015,18 @@ function useNormalizedModel(size) {
   }, [gltf.scene, size]);
 }
 
-function Koala({ position = KOALA_RENDER_POSITION, inline: InlineAnimation = null }) {
+function Koala({ position = KOALA_POSITION, inline: InlineAnimation = null, inlineProps, variant }) {
   const group = useRef(null);
   const frame = useRef(null);
   const { camera, gl } = useThree();
-  const body = useRef(null);
   const nextGlance = useRef(1 + Math.random() * 2);
   const glance = useRef(0);
   const model = useNormalizedModel(KOALA_HEIGHT);
+  const { offset, scale } = model.userData.placement;
+  const placementOffset = useMemo(() => [offset[0], offset[1] + KOALA_PERCH_Y, offset[2]], [offset]);
 
   const anchorPoints = useMemo(() => {
-    const { offset, scale, box } = model.userData.placement;
+    const { box } = model.userData.placement;
     const x = position[0] + offset[0] + ((box.min.x + box.max.x) / 2) * scale;
     const z = position[1] + offset[2] + ((box.min.z + box.max.z) / 2) * scale;
     return {
@@ -500,7 +1035,7 @@ function Koala({ position = KOALA_RENDER_POSITION, inline: InlineAnimation = nul
       topWorld: new THREE.Vector3(),
       bottomWorld: new THREE.Vector3(),
     };
-  }, [model, position]);
+  }, [model, position, offset, scale]);
 
   useLayoutEffect(() => {
     if (group.current) group.current.rotation.y = 0;
@@ -513,34 +1048,23 @@ function Koala({ position = KOALA_RENDER_POSITION, inline: InlineAnimation = nul
       anchorPoints.bottomWorld.copy(anchorPoints.bottom).applyMatrix4(frame.current.matrixWorld);
       publishMoodAnchor(camera, gl, anchorPoints.topWorld, anchorPoints.bottomWorld);
     }
-
     if (!group.current) return;
     const t = clock.getElapsedTime();
     if (t > nextGlance.current) {
-      nextGlance.current = t + 2.4 + Math.random() * 2.5;
-      glance.current = (Math.random() - 0.5) * 0.35;
+      nextGlance.current = t + 3 + Math.random() * 3;
+      glance.current = (Math.random() - 0.5) * 0.3;
     }
-    group.current.rotation.y += (glance.current - group.current.rotation.y) * 0.035;
-    group.current.position.y = KOALA_PERCH_Y + Math.sin(t * 1.0) * 0.012;
-    if (body.current) {
-      const breathe = 1 + Math.sin(t * 1.6) * 0.018;
-      body.current.scale.set(1 / Math.sqrt(breathe), breathe, 1 / Math.sqrt(breathe));
-    }
+    group.current.rotation.y += (glance.current - group.current.rotation.y) * 0.03;
   });
 
   if (InlineAnimation) {
-    const { offset, scale } = model.userData.placement;
     return (
       <group ref={frame}>
         <InlineAnimation
-          placement={{
-            homePosition: position,
-            offset: [offset[0], offset[1] + KOALA_PERCH_Y, offset[2]],
-            scale,
-            yaw: 0,
-            lean: INLINE_LEAN,
-          }}
+          {...inlineProps}
+          placement={{ homePosition: position, offset: placementOffset, scale, yaw: 0, lean: INLINE_LEAN }}
           idleModelPath={KOALA_MODEL_PATH}
+          variant={variant}
         />
       </group>
     );
@@ -548,22 +1072,106 @@ function Koala({ position = KOALA_RENDER_POSITION, inline: InlineAnimation = nul
 
   return (
     <group ref={frame}>
-      <group ref={group} position={[position[0], KOALA_PERCH_Y, position[1]]}>
-        <group ref={body}>
-          <primitive object={model} />
+      <group ref={group} position={[position[0], 0, position[1]]}>
+        <group position={[-position[0], 0, -position[1]]}>
+          <KoalaMood
+            modelUrl={KOALA_MODEL_PATH}
+            idleModelPath={KOALA_MODEL_PATH}
+            placement={{ homePosition: position, offset: placementOffset, scale, yaw: 0, lean: 0 }}
+            Rig={KoalaIdleRig}
+          />
         </group>
       </group>
     </group>
   );
 }
 
+function headHit(clientX, clientY) {
+  const a = window.__moodAnchor;
+  if (!a) return null;
+  const height = a.bottom - a.top;
+  const halfWidth = height * 0.4;
+  const bottom = a.top + height * 0.5;
+  if (clientX < a.x - halfWidth || clientX > a.x + halfWidth || clientY < a.top - height * 0.04 || clientY > bottom) return null;
+  return THREE.MathUtils.clamp((clientX - a.x) / (halfWidth * 0.8), -1, 1);
+}
+
+function usePetTouch(enabled, onPet, onRelease) {
+  const handlers = useRef({ onPet, onRelease });
+  handlers.current = { onPet, onRelease };
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let activeId = null;
+    const down = (e) => {
+      const x = headHit(e.clientX, e.clientY);
+      if (x === null) return;
+      activeId = e.pointerId;
+      handlers.current.onPet(x, true);
+      e.stopPropagation();
+      if (e.cancelable && e.pointerType !== "mouse") e.preventDefault();
+    };
+    const move = (e) => {
+      if (activeId === null) {
+        if (e.pointerType === "mouse") document.body.style.cursor = headHit(e.clientX, e.clientY) === null ? "" : "grab";
+        return;
+      }
+      if (e.pointerId !== activeId) return;
+      e.stopPropagation();
+      const a = window.__moodAnchor;
+      const x = a ? THREE.MathUtils.clamp((e.clientX - a.x) / ((a.bottom - a.top) * 0.34), -1, 1) : 0;
+      handlers.current.onPet(x, false);
+    };
+    const up = (e) => {
+      if (activeId === null || e.pointerId !== activeId) return;
+      activeId = null;
+      handlers.current.onRelease();
+    };
+    window.addEventListener("pointerdown", down, { capture: true, passive: false });
+    window.addEventListener("pointermove", move, { capture: true });
+    window.addEventListener("pointerup", up, { capture: true });
+    window.addEventListener("pointercancel", up, { capture: true });
+    return () => {
+      window.removeEventListener("pointerdown", down, { capture: true });
+      window.removeEventListener("pointermove", move, { capture: true });
+      window.removeEventListener("pointerup", up, { capture: true });
+      window.removeEventListener("pointercancel", up, { capture: true });
+      document.body.style.cursor = "";
+    };
+  }, [enabled]);
+}
+
 function KoalaSlot() {
   const mood = useMoodAnimation();
-  const Inline = mood.active ? INLINE_MOODS[mood.mood] || null : null;
+  const [petting, setPetting] = useState(false);
+  const pet = useRef({ until: 0, x: null });
+  const Mood = mood.active ? INLINE_MOODS[mood.mood] || null : null;
+  const Inline = petting ? PetKoala : Mood;
+  const moodActive = (name) => mood.active && mood.mood === name;
+
+  const handlePet = (x, first) => {
+    const now = performance.now() / 1000;
+    pet.current = first ? { until: Infinity, x: null, downAt: now } : { ...pet.current, until: Infinity, x };
+    if (!petting) setPetting(true);
+  };
+  const handleRelease = () => {
+    const now = performance.now() / 1000;
+    const downAt = pet.current.downAt ?? now;
+    pet.current = { until: Math.max(downAt + PET_HOLD, now + PET_LINGER), x: null };
+  };
+  const handleDone = () => setPetting(false);
+  usePetTouch(true, handlePet, handleRelease);
+
   if (mood.active && !Inline) return null;
   return (
     <KoalaErrorBoundary>
-      <Koala inline={Inline} />
+      <Suspense fallback={null}>
+        <Koala
+          key={petting ? (moodActive("angry") ? "refuse" : moodActive("crying") ? "comfort" : "pet") : Inline ? `${mood.mood}-${mood.variant || ""}` : "idle"}
+          variant={mood.variant}
+          inline={Inline}
+          inlineProps={petting ? { pet, onDone: handleDone, refuse: moodActive("angry"), comfort: moodActive("crying") } : undefined}
+        />
+      </Suspense>
     </KoalaErrorBoundary>
   );
 }
@@ -585,20 +1193,20 @@ class KoalaErrorBoundary extends React.Component {
   }
 }
 
-const ISO_DISTANCE = 4.4;
-const ISO_ELEVATION = Math.atan(1 / Math.sqrt(2)) - 0.05;
-const ISO_ZOOM = 320;
-const ISO_POSITION = [
-  0,
-  ISO_DISTANCE * Math.sin(ISO_ELEVATION),
-  ISO_DISTANCE * Math.cos(ISO_ELEVATION),
+const CAM_ELEVATION = 0.5;
+const CAM_YAW = 0.32;
+const CAM_DISTANCE = 9;
+const VIEW_TARGET = [0.15, 2.0, 0.2];
+const CAM_POSITION = [
+  VIEW_TARGET[0] + CAM_DISTANCE * Math.cos(CAM_ELEVATION) * Math.sin(CAM_YAW),
+  VIEW_TARGET[1] + CAM_DISTANCE * Math.sin(CAM_ELEVATION),
+  VIEW_TARGET[2] + CAM_DISTANCE * Math.cos(CAM_ELEVATION) * Math.cos(CAM_YAW),
 ];
 
-const SCENE_PAN_X = 0.35;
-
-const KOALA_RENDER_POSITION = [KOALA_POSITION[0] - SCENE_PAN_X, KOALA_POSITION[1] + 0.15];
-
 const KoalaHabitat3D = ({ showCharacter = true }) => {
+  const night = useNightModeSetting();
+  const L = night ? LIGHTS.night : LIGHTS.day;
+
   useEffect(() => {
     useGLTF.preload(KOALA_MODEL_PATH);
   }, []);
@@ -617,52 +1225,86 @@ const KoalaHabitat3D = ({ showCharacter = true }) => {
     <div className="habitat-canvas-wrap habitat-canvas-wrap--no-touch-scroll">
       <Canvas
         shadows
+        dpr={[1, 1.75]}
         orthographic
-        camera={{ position: ISO_POSITION, zoom: ISO_ZOOM, near: 0.1, far: 60 }}
-        gl={{ toneMappingExposure: 1.1 }}
-        dpr={[1, 2]}
+        camera={{ position: CAM_POSITION, zoom: 74, near: 0.1, far: 200 }}
+        gl={{ toneMappingExposure: L.exposure, powerPreference: "high-performance" }}
         style={{ touchAction: "none" }}
         onCreated={({ gl }) => {
           gl.domElement.style.touchAction = "none";
         }}
       >
-        <color attach="background" args={[PALETTE.background]} />
-        <fog attach="fog" args={[PALETTE.fog, 5, 13]} />
+        <NightContext.Provider value={night}>
+          <ExposureSync exposure={L.exposure} />
+          <color attach="background" args={[L.fog]} />
+          <fog attach="fog" args={[L.fog, 14, 34]} />
 
-        <ambientLight intensity={0.68} color={PALETTE.rim} />
-        <directionalLight
-          position={[5, 8, 3]}
-          intensity={2.15}
-          color={PALETTE.sun}
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-          shadow-camera-left={-5}
-          shadow-camera-right={5}
-          shadow-camera-top={5}
-          shadow-camera-bottom={-5}
-        />
-        <directionalLight position={[-5, 3, -4]} intensity={0.35} color={PALETTE.rim} />
-        <hemisphereLight args={[PALETTE.hemiSky, PALETTE.hemiGround, 0.85]} />
+          <OrbitControls
+            makeDefault
+            target={VIEW_TARGET}
+            enableDamping
+            dampingFactor={0.08}
+            enablePan
+            screenSpacePanning
+            panSpeed={1}
+            enableRotate
+            rotateSpeed={0.6}
+            minPolarAngle={0.75}
+            maxPolarAngle={1.3}
+            minZoom={74}
+            maxZoom={150}
+            mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }}
+            touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }}
+          />
 
-        <Suspense fallback={null}>
-          <group position={[SCENE_PAN_X, -0.18, 0]}>
-            <Ground />
-            {TREES.map((t, i) => (
-              <GumTree key={`t${i}`} {...t} />
-            ))}
-            {WATTLE_BUSHES.map((w, i) => (
-              <WattleBush key={`w${i}`} {...w} />
-            ))}
-            <FallenLog />
-            <WaterDish />
-            {SPRIGS.map((s, i) => (
-              <LeafSprig key={`s${i}`} {...s} />
-            ))}
-            <Stones />
-            <Mist />
-            {showCharacter && <KoalaSlot />}
-          </group>
-        </Suspense>
+          <ambientLight intensity={L.ambient} color={L.ambientColor} />
+          <directionalLight
+            position={[5, 9, 4]}
+            intensity={L.sun}
+            color={L.sunColor}
+            castShadow
+            shadow-bias={-0.0005}
+            shadow-normalBias={0.02}
+            shadow-mapSize={[1024, 1024]}
+            shadow-camera-left={-6}
+            shadow-camera-right={6}
+            shadow-camera-top={7}
+            shadow-camera-bottom={-5}
+          />
+          <directionalLight position={[-6, 3, -3]} intensity={L.rim} color={L.rimColor} />
+          <hemisphereLight args={[L.hemiSky, L.hemiGround, L.hemi]} />
+
+          <Sky />
+          {night && <GlowStars />}
+          {night && <Moon />}
+
+          <Suspense fallback={null}>
+            <Clouds />
+            <FarCanopy />
+            <GiantTrunk />
+            <Canopy />
+            <Deck />
+            <Cushion />
+            <Hut />
+            <Hammock />
+            <RopeBridge />
+            <Lookout />
+            <RopeLadder />
+            <StringLights />
+            <PaperLanterns />
+            <DeckDecor />
+            {night ? (
+              <Fireflies />
+            ) : (
+              <>
+                <FallingLeaves />
+                <Butterfly bounds={3.4} speed={0.45} height={1.3} color="#ffd36b" />
+                <Butterfly bounds={3.8} speed={0.4} height={1.6} color="#c8d8ff" />
+              </>
+            )}
+          </Suspense>
+          {showCharacter && <KoalaSlot />}
+        </NightContext.Provider>
       </Canvas>
     </div>
   );

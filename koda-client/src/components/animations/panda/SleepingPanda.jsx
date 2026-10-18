@@ -178,6 +178,7 @@ export function SleepingRig({ rig }) {
       top.copy(rig.headTopOffset).applyMatrix4(rig.head.matrix);
       capRef.current.position.copy(top);
       capRef.current.quaternion.copy(rig.head.quaternion);
+      capRef.current.scale.setScalar(rig.capScale || 1);
       cap.tip.rotation.z = Math.sin(t * 0.9) * 0.15 - s.inhale * 0.1;
     }
   });

@@ -33,7 +33,6 @@ const THEMES = {
     stampDash: "rgba(255,248,238,0.55)",
     confetti: ["#ffb7c9", "#f6c945", "#7fd34e", "#9fd3ff", "#ff9f6b"],
   },
-  // matches the app's night theme: navy glass, light text, soft yellow titles, purple-blue buttons
   night: {
     INK: "#ece9ff",
     PAPER: "#262f58",
@@ -97,6 +96,9 @@ const dateText = (v) => {
   return d.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
 };
 
+const NOTE_TOPICS = ["diaper", "mood", "sleeping", "playtime", "feeding", "allergies", "other"];
+const topicOf = (label) => (NOTE_TOPICS.includes(String(label || "").toLowerCase()) ? String(label).toLowerCase() : "other");
+
 const Field = ({ label, value }) => (
   <div style={{ minWidth: 0 }}>
     <div style={{ fontSize: 9, letterSpacing: 1, textTransform: "uppercase", opacity: 0.55 }}>{label}</div>
@@ -144,7 +146,7 @@ const PencilIcon = () => (
   </svg>
 );
 
-const CLOSE_KEYFRAMES = `@keyframes bpBtnAway{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.7)}}@keyframes bpFadeOut{to{opacity:0}}@keyframes bpSettle{0%{transform:scale(1)}55%{transform:scale(0.965) rotate(-1deg)}100%{transform:scale(0.955) rotate(0.6deg)}}@keyframes bpSheetIn{0%{transform:translate(var(--sx),-120px) rotate(var(--rot)) scale(0.6);opacity:0}55%{transform:translate(var(--sx),7px) rotate(var(--rot)) scale(1.05);opacity:1}75%{transform:translate(var(--sx),-3px) rotate(var(--rot)) scale(0.99)}100%{transform:translate(var(--sx),0) rotate(var(--rot)) scale(1);opacity:1}}@keyframes bpStackUp{0%{transform:translate(0,0) rotate(0)}65%{transform:translate(var(--sx),calc(var(--ty) + 8px)) rotate(var(--rot)) scale(1.02)}82%{transform:translate(var(--sx),calc(var(--ty) - 3px)) rotate(var(--rot))}100%{transform:translate(var(--sx),var(--ty)) rotate(var(--rot))}}@keyframes bpBlank{from{opacity:0}to{opacity:1}}@keyframes bpAway{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(-30px,360px) rotate(-14deg)}}@keyframes bpStampSlam{0%{transform:translate(-50%,-160px) scale(1.1);opacity:0}12%{opacity:1}32%{transform:translate(-50%,0) scale(1)}40%{transform:translate(-50%,-8px) scale(1.03)}48%,82%{transform:translate(-50%,0) scale(1)}100%{transform:translate(-50%,-170px) scale(1);opacity:0}}@keyframes bpMark{0%{transform:translate(-50%,-50%) scale(2.2) rotate(10deg);opacity:0}55%{transform:translate(-50%,-50%) scale(1) rotate(-7deg);opacity:1}100%{transform:translate(-50%,-50%) scale(1) rotate(-7deg);opacity:1}}@keyframes bpThump{0%{transform:translate(-50%,-50%) scale(0.3);opacity:0}15%{opacity:0.9}100%{transform:translate(-50%,-50%) scale(1.6);opacity:0}}@keyframes bpConfetti{0%{transform:translate(0,0) scale(0.3) rotate(0);opacity:0}15%{opacity:1}60%{transform:translate(var(--dx),var(--dy)) scale(1) rotate(var(--r));opacity:1}100%{transform:translate(var(--dx),calc(var(--dy) + 40px)) scale(0.8) rotate(var(--r));opacity:0}}`;
+const CLOSE_KEYFRAMES = `@keyframes bpBtnAway{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.7)}}@keyframes bpFadeOut{to{opacity:0}}@keyframes bpSettle{0%{transform:scale(1)}55%{transform:scale(0.965) rotate(-1deg)}100%{transform:scale(0.955) rotate(0.6deg)}}@keyframes bpSheetIn{0%{transform:translate(var(--sx),-120px) rotate(var(--rot)) scale(0.6);opacity:0}55%{transform:translate(var(--sx),7px) rotate(var(--rot)) scale(1.05);opacity:1}75%{transform:translate(var(--sx),-3px) rotate(var(--rot)) scale(0.99)}100%{transform:translate(var(--sx),0) rotate(var(--rot)) scale(1);opacity:1}}@keyframes bpStackUp{0%{transform:translate(0,0) rotate(0)}65%{transform:translate(var(--sx),calc(var(--ty) + 8px)) rotate(var(--rot)) scale(1.02)}82%{transform:translate(var(--sx),calc(var(--ty) - 3px)) rotate(var(--rot))}100%{transform:translate(var(--sx),var(--ty)) rotate(var(--rot))}}@keyframes bpTrim{from{clip-path:inset(0 0 0 0 round 22px)}to{clip-path:inset(0 0 var(--cut) 0 round 22px)}}@keyframes bpBlank{from{opacity:0}to{opacity:1}}@keyframes bpAway{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(-30px,360px) rotate(-14deg)}}@keyframes bpStampSlam{0%{transform:translate(-50%,-160px) scale(1.1);opacity:0}12%{opacity:1}32%{transform:translate(-50%,0) scale(1)}40%{transform:translate(-50%,-8px) scale(1.03)}48%,82%{transform:translate(-50%,0) scale(1)}100%{transform:translate(-50%,-170px) scale(1);opacity:0}}@keyframes bpMark{0%{transform:translate(-50%,-50%) scale(2.2) rotate(10deg);opacity:0}55%{transform:translate(-50%,-50%) scale(1) rotate(-7deg);opacity:1}100%{transform:translate(-50%,-50%) scale(1) rotate(-7deg);opacity:1}}@keyframes bpThump{0%{transform:translate(-50%,-50%) scale(0.3);opacity:0}15%{opacity:0.9}100%{transform:translate(-50%,-50%) scale(1.6);opacity:0}}@keyframes bpConfetti{0%{transform:translate(0,0) scale(0.3) rotate(0);opacity:0}15%{opacity:1}60%{transform:translate(var(--dx),var(--dy)) scale(1) rotate(var(--r));opacity:1}100%{transform:translate(var(--dx),calc(var(--dy) + 40px)) scale(0.8) rotate(var(--r));opacity:0}}`;
 
 export default function BabyProfile({ child, mood, photo, onClose }) {
   const night = useNightMode();
@@ -171,7 +173,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
     colorScheme: night ? "dark" : "light",
   };
   const [closing, setClosing] = useState(false);
-  const [stack, setStack] = useState({ mood: 0, notes: 0 });
+  const [stack, setStack] = useState({ mood: 0, notes: 0, moodCut: 0, notesCut: 0 });
   const passRef = React.useRef(null);
   const moodRef = React.useRef(null);
   const notesRef = React.useRef(null);
@@ -180,8 +182,12 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
   closeRef.current = onClose;
   const shut = React.useCallback(() => {
     const base = passRef.current ? passRef.current.getBoundingClientRect().top : 0;
+    const passHeight = passRef.current ? passRef.current.getBoundingClientRect().height : 0;
     const off = (el, extra) => (el ? base - el.getBoundingClientRect().top + extra : 0);
-    setStack({ mood: off(moodRef.current, 10), notes: off(notesRef.current, 22) });
+    const cut = (el) => (el ? Math.max(0, el.getBoundingClientRect().height - passHeight) : 0);
+    setStack({ mood: off(moodRef.current, 10), notes: off(notesRef.current, 22), moodCut: cut(moodRef.current), notesCut: cut(notesRef.current) });
+    const root = rootRef.current;
+    if (root && root.scrollTop > 0) root.scrollTo({ top: 0, behavior: "smooth" });
     setClosing((was) => {
       if (!was) setTimeout(() => closeRef.current && closeRef.current(), 2550);
       return true;
@@ -210,6 +216,10 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
   const [editing, setEditing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [label, setLabel] = useState("");
+  const sortedNotes = React.useMemo(
+    () => notes.map((note, i) => ({ note, i })).sort((a, b) => NOTE_TOPICS.indexOf(topicOf(a.note.label)) - NOTE_TOPICS.indexOf(topicOf(b.note.label)) || a.i - b.i).map(({ note }) => note),
+    [notes]
+  );
   const [text, setText] = useState("");
   const [share, setShare] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -237,13 +247,13 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
   }, [childId, token]);
 
   const addNote = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || !label) return;
     setBusy(true);
     setError("");
     try {
       const { data } = await axios.post(
         `${API_URL}/api/child-notes/${childId}`,
-        { label: label.trim() || "note", text: text.trim(), visibleToCaregiver: share },
+        { label, text: text.trim(), visibleToCaregiver: share },
         { headers }
       );
       setNotes((n) => [...n, data]);
@@ -309,7 +319,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
   const mrz = (code + "<".repeat(44)).slice(0, 44);
 
   const blank = (delay) => closing ? <span style={{ position: "absolute", inset: 0, borderRadius: "inherit", background: PAPER, zIndex: 5, pointerEvents: "none", animation: `bpBlank 0.25s ease-out ${delay}s both` }} /> : null;
-  const stackStyle = (ty, sx, rot, delay, z) => closing ? { position: "relative", zIndex: z, "--ty": `${ty}px`, "--sx": `${sx}px`, "--rot": rot, animation: `bpStackUp 0.55s cubic-bezier(.3,1.3,.5,1) ${delay}s both`, pointerEvents: "none" } : {};
+  const stackStyle = (ty, sx, rot, delay, z, cut = 0) => closing ? { position: "relative", zIndex: z, "--ty": `${ty}px`, "--sx": `${sx}px`, "--rot": rot, "--cut": `${cut}px`, animation: `bpStackUp 0.55s cubic-bezier(.3,1.3,.5,1) ${delay}s both, bpTrim 0.45s ease-out ${delay}s both`, pointerEvents: "none" } : {};
 
   return (
     <div
@@ -469,7 +479,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
         </div>
 
         {mood ? (
-          <div ref={moodRef} style={{ ...card, padding: "14px 16px", position: "relative", animation: "mbPop 0.35s 0.08s ease-out both", ...stackStyle(stack.mood, -6, "-4deg", 0.1, 2) }}>
+          <div ref={moodRef} style={{ ...card, padding: "14px 16px", position: "relative", animation: "mbPop 0.35s 0.08s ease-out both", ...stackStyle(stack.mood, -6, "-4deg", 0.1, 2, stack.moodCut) }}>
             {blank(0.05)}
             <div className="hm-title" style={{ fontSize: 20, marginBottom: 6, paddingRight: 60 }}>mood explanation</div>
             <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>{mood.sentence}</p>
@@ -495,7 +505,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
           </div>
         ) : null}
 
-        <div ref={notesRef} style={{ ...card, padding: "14px 16px", animation: "mbPop 0.35s 0.16s ease-out both", ...stackStyle(stack.notes, 7, "3deg", 0.3, 3) }}>
+        <div ref={notesRef} style={{ ...card, padding: "14px 16px", animation: "mbPop 0.35s 0.16s ease-out both", ...stackStyle(stack.notes, 7, "3deg", 0.3, 3, stack.notesCut) }}>
           {blank(0.2)}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: T.title }}>notes</div>
@@ -506,10 +516,10 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
             <p style={{ margin: "0 0 8px", fontSize: 13, opacity: 0.6 }}>{isParent ? "no notes yet, add allergies or anything important below." : "no notes shared yet."}</p>
           ) : null}
 
-          {notes.map((note) => (
+          {sortedNotes.map((note) => (
             <div key={note._id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${LINE}` }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 9, letterSpacing: 1, textTransform: "uppercase", opacity: 0.55 }}>{note.label}</div>
+                <span style={{ display: "inline-block", fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", padding: "2px 8px", marginBottom: 3, borderRadius: 999, border: `1px solid ${LINE}`, background: T.field, opacity: 0.85 }}>{topicOf(note.label)}</span>
                 <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{note.text}</div>
               </div>
               {isParent ? (
@@ -530,8 +540,36 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
 
           {isParent ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-              <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={40} placeholder="title (e.g. allergies)" style={inputStyle} />
-              <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} rows={2} placeholder="write a note..." style={{ ...inputStyle, resize: "vertical" }} />
+              <div role="radiogroup" aria-label="note topic" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {NOTE_TOPICS.map((topic) => {
+                  const on = label === topic;
+                  return (
+                    <button
+                      key={topic}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => setLabel(on ? "" : topic)}
+                      style={{
+                        border: on ? "1.5px solid transparent" : `1.5px solid ${LINE}`,
+                        borderRadius: 999,
+                        padding: "4px 11px",
+                        background: on ? T.cta : T.field,
+                        color: on ? T.ctaText : INK,
+                        fontFamily: "inherit",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        transition: "background 0.15s, transform 0.15s",
+                        transform: on ? "scale(1.05)" : "scale(1)",
+                      }}
+                    >
+                      {topic}
+                    </button>
+                  );
+                })}
+              </div>
+              <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={1000} rows={2} placeholder={label ? `anything to know about ${label}...` : "pick a topic, then write a note..."} style={{ ...inputStyle, resize: "vertical" }} />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                 <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
                   <Toggle T={T} on={share} onChange={setShare} />
@@ -540,7 +578,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
                 <button
                   type="button"
                   onClick={addNote}
-                  disabled={busy || !text.trim()}
+                  disabled={busy || !text.trim() || !label}
                   style={{
                     border: "none",
                     borderRadius: 999,
@@ -551,7 +589,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
                     fontWeight: 700,
                     fontSize: 13,
                     cursor: "pointer",
-                    opacity: busy || !text.trim() ? 0.5 : 1,
+                    opacity: busy || !text.trim() || !label ? 0.5 : 1,
                   }}
                 >
                   add note

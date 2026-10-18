@@ -1,6 +1,5 @@
 // Renders the correct per-avatar 3D habitat scene behind every page
 import React, { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
 import { useGLTF } from "@react-three/drei";
 import { getSelectedChildForUser } from "../utils/authStorage";
 import { getAvatarById, DEFAULT_MODEL } from "../constants/avatars";
@@ -18,16 +17,11 @@ useGLTF.preload(DEFAULT_MODEL);
 useGLTF.preload("/models/feeding.glb");
 useGLTF.preload("/models/sleep.glb");
 
-const FROG_HABITAT_PATHS = ["/parentdashboard", "/add-activity"];
-
 const HabitatBackground = () => {
-  const location = useLocation();
   const selectedChild = getSelectedChildForUser();
   const character = getAvatarById(selectedChild?.avatar);
   const characterModel = character?.model || DEFAULT_MODEL;
   const [isUnlinkedCaregiver, setIsUnlinkedCaregiver] = useState(false);
-
-  const allowFrogHabitat = FROG_HABITAT_PATHS.includes(location.pathname.toLowerCase());
 
   useEffect(() => {
     useGLTF.preload(characterModel);
@@ -66,7 +60,7 @@ const HabitatBackground = () => {
     <div className="habitat-background-container">
       {character?.customHabitat === "fox" ? (
         <FoxHabitat3D characterModel={characterModel} />
-      ) : character?.customHabitat === "frog" && allowFrogHabitat ? (
+      ) : character?.customHabitat === "frog" ? (
         <FrogHabitat3D characterModel={characterModel} />
       ) : character?.customHabitat === "bunny" ? (
         <BunnyHabitat3D characterModel={characterModel} />

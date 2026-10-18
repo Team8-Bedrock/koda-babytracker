@@ -17,6 +17,8 @@ import HabitatBackground from "./HabitatBackground";
 import NavIconButton from "./NavIconButton";
 import MoodBuddy from "./MoodBuddy";
 import NightTheme from "./NightTheme";
+import ChildSwitchOverlay, { startChildSwitch } from "./childSwitch";
+import CharacterHead from "./CharacterHead";
 import "../styling/global/layout.css";
 
 const Layout = ({ children }) => {
@@ -27,6 +29,7 @@ const Layout = ({ children }) => {
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [childOptions, setChildOptions] = useState([]);
   const [headerLabel, setHeaderLabel] = useState("");
+  const [switchKey, setSwitchKey] = useState(0);
   const switcherRef = useRef(null);
   const isActivityLogPage = location.pathname.toLowerCase() === "/add-activity";
 
@@ -64,16 +67,22 @@ const Layout = ({ children }) => {
   const pageLabel = headerLabel || getPageLabel(location.pathname, selectedChild?.name || "Gracie");
 
   const handleSelectChild = (child) => {
-    setSelectedChildForUser(child);
     setIsSwitcherOpen(false);
-    window.location.reload();
+    if (selectedChild?._id === child._id) return;
+    startChildSwitch(child, switcherRef.current, () => {
+      setSelectedChildForUser(child);
+      setSelectedChild(child);
+      setHeaderLabel("");
+      setSwitchKey((k) => k + 1);
+    });
   };
 
   return (
     <div className="layout-mobile-frame">
       <NightTheme />
-      <HabitatBackground />
-      {selectedChild ? <MoodBuddy child={selectedChild} /> : null}
+      <ChildSwitchOverlay />
+      <HabitatBackground key={`habitat-${switchKey}`} />
+      {selectedChild ? <MoodBuddy key={`buddy-${selectedChild._id}-${switchKey}`} child={selectedChild} /> : null}
 
       <header className="layout-header">
         <button
@@ -111,15 +120,20 @@ const Layout = ({ children }) => {
 
             {isSwitcherOpen && (
               <div className="child-switcher-menu">
+                <style>{"@keyframes kcsItemIn{from{opacity:0;transform:translateY(-6px) scale(0.96)}to{opacity:1;transform:none}}"}</style>
                 {childOptions.length > 0 ? (
-                  childOptions.map((child) => (
+                  childOptions.map((child, index) => (
                     <button
                       key={child._id}
                       type="button"
                       className={`child-switcher-item ${selectedChild?._id === child._id ? "child-switcher-item--active" : ""}`}
                       onClick={() => handleSelectChild(child)}
+                      style={{ animation: `kcsItemIn 0.28s cubic-bezier(.2,1.3,.4,1) ${index * 0.05}s both` }}
                     >
-                      <span>{child.name}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <CharacterHead child={child} size={30} style={{ background: "rgba(255,255,255,0.55)", boxShadow: "inset 0 0 0 1.5px rgba(90,70,53,0.18)" }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{child.name}</span>
+                      </span>
                       {selectedChild?._id === child._id && <CheckCircle2 size={14} />}
                     </button>
                   ))
@@ -141,7 +155,7 @@ const Layout = ({ children }) => {
       </header>
 
 
-      {children}
+      <React.Fragment key={`page-${switchKey}`}>{children}</React.Fragment>
 
 
       <nav className="layout-bottom-nav">

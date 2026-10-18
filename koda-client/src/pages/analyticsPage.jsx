@@ -1,5 +1,3 @@
-// Analytics page: current-vs-previous-period trend comparison, insights summary, and per-type charts, with a PDF export.
-
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';

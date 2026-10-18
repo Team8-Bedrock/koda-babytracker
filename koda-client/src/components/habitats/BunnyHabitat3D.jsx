@@ -4,17 +4,44 @@ import { useGLTF, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import "../../styling/components/habitats.css";
 import { DEFAULT_MODEL } from "../../constants/avatars";
-import { useGroundedOffset, seededRand } from "./habitatUtils";
+import { useGroundedOffset, seededRand, drawWrapped } from "./habitatUtils";
 import FeedingBunny from "../animations/bunny/FeedingBunny";
+import AngryBunny from "../animations/bunny/AngryBunny";
+import CryingBunny from "../animations/bunny/CryingBunny";
+import HungryBunny from "../animations/bunny/HungryBunny";
+import SleepyBunny from "../animations/bunny/SleepyBunny";
+import SleepingBunny from "../animations/bunny/SleepingBunny";
+import WokeBunny from "../animations/bunny/WokeBunny";
+import HappyBunny from "../animations/bunny/HappyBunny";
+import EnergeticBunny from "../animations/bunny/EnergeticBunny";
+import QuietBunny from "../animations/bunny/QuietBunny";
+import OtherBunny from "../animations/bunny/OtherBunny";
+import PlaytimeBunny from "../animations/bunny/PlaytimeBunny";
+import DiaperBunny from "../animations/bunny/DiaperBunny";
+import PetBunny from "../animations/bunny/PetBunny";
+import { BunnyMood, BunnyPrincessIdleRig } from "../animations/bunny/bunnyRig";
 
-// Moods this habitat plays right inside the scene, in the idle bunny's exact spot
-// (same camera, lights, size). Other moods still play in MoodBuddy's overlay.
-const INLINE_MOODS = { feeding: FeedingBunny };
-// The habitat camera looks down from above; while she eats she leans back this much
-// (radians) toward the camera so you see her face instead of the top of her head.
+const INLINE_MOODS = {
+  feeding: FeedingBunny,
+  angry: AngryBunny,
+  crying: CryingBunny,
+  hungry: HungryBunny,
+  sleepy: SleepyBunny,
+  sleeping: SleepingBunny,
+  woke: WokeBunny,
+  groggy: WokeBunny,
+  happy: HappyBunny,
+  energetic: EnergeticBunny,
+  quiet: QuietBunny,
+  other: OtherBunny,
+  playtime: PlaytimeBunny,
+  diaper: DiaperBunny,
+};
+const BUNNY_MOOD_MODELS = ["/models/characters/bunny/bunny.glb", "/models/habitats/carrot.glb"];
 const INLINE_LEAN = 0.22;
+const PET_HOLD = 2.2;
+const PET_LINGER = 1.2;
 
-// ---------- day / night ----------
 function useNightModeSetting() {
   const [night, setNight] = React.useState(() => typeof window !== "undefined" && localStorage.getItem("koda-dark-mode") === "true");
   React.useEffect(() => {
@@ -24,37 +51,45 @@ function useNightModeSetting() {
   }, []);
   return night;
 }
-// shared inside the Canvas so every piece of the scene knows if it's night
 const NightContext = React.createContext(false);
 const useNight = () => React.useContext(NightContext);
 
-// Day: warm, peachy pastel garden. Night: the same garden at a dreamy lavender dusk —
-// soft lavender moonlight with a warm peach glow, glowing dandelion wishes and pastel mushrooms.
 const LIGHTS = {
   day: {
-    background: "#f8e0ad", exposure: 1.15,
-    ambient: 0.72, ambientColor: "#fff4e2",
-    sun: 2.0, sunColor: "#ffeec2",
-    rim: 0.35, rimColor: "#ffcfa0",
-    hemiSky: "#fff0c4", hemiGround: "#8a7a42", hemi: 1.0,
+    background: "#fbdde8", exposure: 1.1,
+    ambient: 0.82, ambientColor: "#fff2f6",
+    sun: 1.8, sunColor: "#fff1ec",
+    rim: 0.45, rimColor: "#ffc6dc",
+    hemiSky: "#ffe8f1", hemiGround: "#a9d4a4", hemi: 1.0,
   },
   night: {
-    background: "#4a4173", exposure: 1.0,
-    ambient: 0.62, ambientColor: "#d9cdf2",
-    sun: 0.85, sunColor: "#e6dbff",
-    rim: 0.55, rimColor: "#ffc4a3",
-    hemiSky: "#b9a9e3", hemiGround: "#5a4a3a", hemi: 0.75,
+    background: "#5b4a7c", exposure: 1.0,
+    ambient: 0.66, ambientColor: "#ecd8f4",
+    sun: 0.8, sunColor: "#f0deff",
+    rim: 0.6, rimColor: "#ffbcd8",
+    hemiSky: "#d6bce8", hemiGround: "#4f5a6a", hemi: 0.8,
   },
 };
 const NIGHT = {
-  dirtTint: "#b3a3bf",
-  tuft: ["#5f8a5a", "#6f9a66"],
+  tuft: ["#6d9a86", "#7caa92"],
   fence: "#e6e2f2",
   fenceCap: "#ddd8ec",
   firefly: "#ffe9a0",
   star: "#fff1c9",
   wish: "#fff6d8",
 };
+
+const DUSK = new THREE.Color("#7d6d9c");
+const soften = (hex, night) => (night ? `#${new THREE.Color(hex).lerp(DUSK, 0.32).getHexString()}` : hex);
+
+const PICKET_COLORS = ["#ffc9da", "#fff0b3", "#c9f0d6", "#c6e4f7", "#e4d2fa"];
+const EGG_SETS = [
+  ["#ffd1df", "#ffffff", "#ff9fbf"],
+  ["#fff1a8", "#ffb3c8", "#9fd8f0"],
+  ["#c8f0d8", "#ffffff", "#ffb3c8"],
+  ["#cfe6fb", "#fff1a8", "#ff9fbf"],
+  ["#e4d4fb", "#ffffff", "#ffd1df"],
+];
 
 function readMoodAnimation() {
   if (typeof window === "undefined") return { active: false };
@@ -71,8 +106,6 @@ function useMoodAnimation() {
   return mood;
 }
 
-// Tell MoodBuddy where the bunny is on screen (top of head + feet), so its
-// "nom nom" bubble can sit right above her when she's animating in the habitat.
 const _anchorV = new THREE.Vector3();
 function publishMoodAnchor(camera, gl, box) {
   const rect = gl.domElement.getBoundingClientRect();
@@ -89,96 +122,136 @@ function publishMoodAnchor(camera, gl, box) {
 }
 
 
+let spotTexture = null;
+function getSpotTexture() {
+  if (!spotTexture) {
+    const c = document.createElement("canvas");
+    c.width = 128;
+    c.height = 128;
+    const ctx = c.getContext("2d");
+    const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(0.45, "rgba(255,255,255,0.55)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+    spotTexture = new THREE.CanvasTexture(c);
+  }
+  return spotTexture;
+}
+
+function BunnySpot({ box }) {
+  const night = useNight();
+  const tex = getSpotTexture();
+  const x = (box.min.x + box.max.x) / 2;
+  const z = (box.min.z + box.max.z) / 2;
+  const width = box.max.x - box.min.x;
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.022, z]}>
+      <planeGeometry args={[width * 0.95, width * 0.75]} />
+      <meshBasicMaterial map={tex} color={night ? "#5e4e80" : "#c48aa6"} transparent opacity={night ? 0.3 : 0.26} depthWrite={false} />
+    </mesh>
+  );
+}
+
 function ContactShadow({ position = [0, 0], radius = 0.4, opacity = 0.18 }) {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[position[0], 0.018, position[1]]}>
       <circleGeometry args={[radius, 24]} />
-      <meshBasicMaterial color="#8a6a3a" transparent opacity={opacity} depthWrite={false} />
+      <meshBasicMaterial color="#d49ab0" transparent opacity={opacity} depthWrite={false} />
     </mesh>
   );
 }
 
 const MEADOW_TEX_SIZE = 256;
 function buildMeadowTexture(night = false) {
+  const SIZE = MEADOW_TEX_SIZE;
   const canvas = document.createElement("canvas");
-  canvas.width = MEADOW_TEX_SIZE;
-  canvas.height = MEADOW_TEX_SIZE;
+  canvas.width = SIZE;
+  canvas.height = SIZE;
   const ctx = canvas.getContext("2d");
 
-  // night keeps the same meadow pattern, shifted to a soft moonlit sage
-  const H = night ? 38 : 0;
+  const H = night ? 30 : 0;
   const S = night ? 0.5 : 1;
   const L = night ? 0.66 : 1;
-  ctx.fillStyle = night ? "hsl(104, 24%, 38%)" : "hsl(68, 52%, 60%)";
-  ctx.fillRect(0, 0, MEADOW_TEX_SIZE, MEADOW_TEX_SIZE);
+  ctx.fillStyle = night ? "hsl(140, 22%, 42%)" : "hsl(112, 44%, 74%)";
+  ctx.fillRect(0, 0, SIZE, SIZE);
 
   for (let i = 0; i < 90; i++) {
     const seed = i * 53 + 7;
-    const cx = (seed * 17) % MEADOW_TEX_SIZE;
-    const cy = (seed * 31) % MEADOW_TEX_SIZE;
+    const bx = seededRand(seed * 1.3) * SIZE;
+    const by = seededRand(seed * 2.9) * SIZE;
     const r = 22 + (seed % 26);
-    const hue = 60 + (seed % 14) + H;
-    const light = (54 + (seed % 10)) * L;
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    grad.addColorStop(0, `hsla(${hue}, ${52 * S}%, ${light}%, 0.5)`);
-    grad.addColorStop(1, `hsla(${hue}, ${52 * S}%, ${light}%, 0)`);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
+    const hue = 100 + (seed % 14) + H;
+    const light = (66 + (seed % 10)) * L;
+    drawWrapped(ctx, bx, by, SIZE, r, (cx, cy) => {
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      grad.addColorStop(0, `hsla(${hue}, ${52 * S}%, ${light}%, 0.45)`);
+      grad.addColorStop(1, `hsla(${hue}, ${52 * S}%, ${light}%, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
 
   for (let i = 0; i < 320; i++) {
     const seed = i * 91 + 13;
-    const bx = (seed * 7) % MEADOW_TEX_SIZE;
-    const by = (seed * 19) % MEADOW_TEX_SIZE;
-    const hue = 64 + (seed % 10) + H;
+    const bx = seededRand(seed * 1.7) * SIZE;
+    const by = seededRand(seed * 3.1) * SIZE;
+    const hue = 104 + (seed % 10) + H;
     const a = seededRand(seed) * Math.PI;
-    ctx.save();
-    ctx.translate(bx, by);
-    ctx.rotate(a);
-    ctx.fillStyle = `hsla(${hue + 6}, ${56 * S}%, ${66 * L}%, 0.55)`;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 1.2, 3.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    ctx.fillStyle = `hsla(${hue + 6}, ${48 * S}%, ${80 * L}%, 0.55)`;
+    drawWrapped(ctx, bx, by, SIZE, 4, (cx, cy) => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(a);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 1.2, 3.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
   }
 
   for (let i = 0; i < 24; i++) {
     const seed = i * 97 + 11;
-    const cx = (seed * 13) % canvas.width;
-    const cy = (seed * 29) % canvas.height;
-    ctx.fillStyle = night ? "hsl(120, 20%, 30%)" : "hsl(86, 36%, 42%)";
-    for (let l = 0; l < 3; l++) {
-      const a = (l / 3) * Math.PI * 2;
-      ctx.beginPath();
-      ctx.ellipse(cx + Math.cos(a) * 2.4, cy + Math.sin(a) * 2.4, 2.0, 1.4, a, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    if (seed % 3 === 0) {
-      ctx.fillStyle = "rgba(255,175,205,0.92)";
-      ctx.beginPath();
-      ctx.arc(cx, cy - 3, 1.4, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    const bx = seededRand(seed * 2.3) * SIZE;
+    const by = seededRand(seed * 4.7) * SIZE;
+    drawWrapped(ctx, bx, by, SIZE, 6, (cx, cy) => {
+      ctx.fillStyle = night ? "hsl(140, 20%, 34%)" : "hsl(112, 34%, 58%)";
+      for (let l = 0; l < 3; l++) {
+        const a = (l / 3) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(a) * 2.4, cy + Math.sin(a) * 2.4, 2.0, 1.4, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (seed % 2 === 0) {
+        ctx.fillStyle = "rgba(255,175,205,0.92)";
+        ctx.beginPath();
+        ctx.arc(cx, cy - 3, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
   }
 
   for (let i = 0; i < 28; i++) {
     const seed = i * 71 + 5;
-    const dx = (seed * 17) % canvas.width;
-    const dy = (seed * 41) % canvas.height;
+    const bx = seededRand(seed * 3.7) * SIZE;
+    const by = seededRand(seed * 5.9) * SIZE;
     const petal = seed % 3 === 0 ? "rgba(216,196,255,0.85)" : "rgba(255,205,225,0.85)";
-    ctx.fillStyle = petal;
-    for (let p = 0; p < 5; p++) {
-      const a = (p / 5) * Math.PI * 2;
+    drawWrapped(ctx, bx, by, SIZE, 4, (dx, dy) => {
+      ctx.fillStyle = petal;
+      for (let q = 0; q < 5; q++) {
+        const a = (q / 5) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.ellipse(dx + Math.cos(a) * 1.6, dy + Math.sin(a) * 1.6, 1, 0.7, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#ffcf5c";
       ctx.beginPath();
-      ctx.ellipse(dx + Math.cos(a) * 1.6, dy + Math.sin(a) * 1.6, 1, 0.7, a, 0, Math.PI * 2);
+      ctx.arc(dx, dy, 0.9, 0, Math.PI * 2);
       ctx.fill();
-    }
-    ctx.fillStyle = "#ffcf5c";
-    ctx.beginPath();
-    ctx.arc(dx, dy, 0.9, 0, Math.PI * 2);
-    ctx.fill();
+    });
   }
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -207,7 +280,14 @@ function Ground({ size = 100 }) {
   );
 }
 
-function buildDirtTexture() {
+const DIRT_PALETTE = {
+  day: { edge: [250, 214, 224], mid: [252, 224, 232], core: [255, 236, 241], dark: [232, 166, 190], light: [255, 248, 250] },
+  night: { edge: [132, 112, 148], mid: [140, 120, 156], core: [150, 130, 166], dark: [104, 86, 124], light: [196, 176, 212] },
+};
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+function buildDirtTexture(night = false) {
+  const P = night ? DIRT_PALETTE.night : DIRT_PALETTE.day;
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 512;
@@ -224,9 +304,9 @@ function buildDirtTexture() {
     const cy = C + Math.sin(a) * r * 0.66;
     const rad = 96 + seededRand(i * 9.1) * 48;
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-    g.addColorStop(0, "rgba(206,169,124,0.92)");
-    g.addColorStop(0.6, "rgba(200,161,116,0.78)");
-    g.addColorStop(1, "rgba(198,158,113,0)");
+    g.addColorStop(0, rgba(P.mid, 0.92));
+    g.addColorStop(0.6, rgba(P.edge, 0.78));
+    g.addColorStop(1, rgba(P.edge, 0));
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(cx, cy, rad, 0, Math.PI * 2);
@@ -234,15 +314,15 @@ function buildDirtTexture() {
   }
 
   const core = ctx.createRadialGradient(C, C, 0, C, C, 250);
-  core.addColorStop(0, "rgba(218,182,136,1)");
-  core.addColorStop(0.62, "rgba(210,172,127,1)");
-  core.addColorStop(0.86, "rgba(204,165,120,0.76)");
-  core.addColorStop(1, "rgba(202,162,118,0)");
+  core.addColorStop(0, rgba(P.core, 1));
+  core.addColorStop(0.62, rgba(P.mid, 1));
+  core.addColorStop(0.86, rgba(P.edge, 0.76));
+  core.addColorStop(1, rgba(P.edge, 0));
   ctx.fillStyle = core;
   ctx.fillRect(0, 0, 512, 512);
 
-  ctx.fillStyle = "rgba(126,92,58,0.16)";
-  for (let i = 0; i < 110; i++) {
+  ctx.fillStyle = rgba(P.dark, 0.1);
+  for (let i = 0; i < 70; i++) {
     const a = seededRand(i * 1.7) * Math.PI * 2;
     const r = seededRand(i * 3.9) * 200;
     ctx.beginPath();
@@ -250,7 +330,7 @@ function buildDirtTexture() {
     ctx.fill();
   }
 
-  ctx.fillStyle = "rgba(228,196,150,0.28)";
+  ctx.fillStyle = rgba(P.light, 0.5);
   for (let i = 0; i < 90; i++) {
     const a = seededRand(i * 5.1) * Math.PI * 2;
     const r = seededRand(i * 2.3) * 195;
@@ -259,7 +339,7 @@ function buildDirtTexture() {
     ctx.fill();
   }
 
-  ctx.fillStyle = "rgba(140,102,64,0.18)";
+  ctx.fillStyle = rgba(P.dark, 0.1);
 
   for (let i = 0; i < 22; i++) {
     const a = seededRand(i * 6.7) * Math.PI * 2;
@@ -345,7 +425,7 @@ const PEN_DEPTH = 6.2;
 
 function DirtPen() {
   const night = useNight();
-  const tex = useMemo(() => buildDirtTexture(), []);
+  const tex = useMemo(() => buildDirtTexture(night), [night]);
   const mask = useMemo(() => buildDirtAlpha(), []);
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
@@ -353,7 +433,7 @@ function DirtPen() {
       <meshStandardMaterial
         map={tex}
         alphaMap={mask}
-        color={night ? NIGHT.dirtTint : "#e8cca8"}
+        color="#ffffff"
         transparent
         roughness={0.95}
         depthWrite={false}
@@ -391,7 +471,7 @@ function GrassTufts() {
             return (
               <mesh key={b} position={[Math.cos(a) * 0.04, 0.07, Math.sin(a) * 0.04]} rotation={[0.22 * Math.cos(a), a, 0.22 * Math.sin(a)]}>
                 <coneGeometry args={[0.022, 0.16, 4]} />
-                <meshStandardMaterial color={night ? NIGHT.tuft[b % 2] : b % 2 === 0 ? "#8fb14f" : "#a2c063"} roughness={0.9} />
+                <meshStandardMaterial color={night ? NIGHT.tuft[b % 2] : b % 2 === 0 ? "#9fd49a" : "#b6e2a8"} roughness={0.9} />
               </mesh>
             );
           })}
@@ -433,17 +513,18 @@ function generateFencePerimeter(width, depth, spacing, gate) {
 const FENCE_GATE = { x: 0, z: PEN_DEPTH / 2, width: 1.4 };
 const FENCE_POSTS = generateFencePerimeter(PEN_WIDTH, PEN_DEPTH, 0.42, FENCE_GATE);
 
-function FencePost({ x, z, angle }) {
+function FencePost({ x, z, angle, index = 0 }) {
   const night = useNight();
+  const color = soften(PICKET_COLORS[index % PICKET_COLORS.length], night);
   return (
     <group position={[x, 0, z]} rotation={[0, angle, 0]}>
-      <mesh position={[0, 0.28, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.08, 0.56, 0.05]} />
-        <meshStandardMaterial color={night ? NIGHT.fence : "#f6f1e4"} roughness={0.85} />
+      <mesh position={[0, 0.3, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.17, 0.6, 0.05]} />
+        <meshStandardMaterial color={color} roughness={0.85} />
       </mesh>
-      <mesh position={[0, 0.58, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-        <coneGeometry args={[0.07, 0.12, 4]} />
-        <meshStandardMaterial color={night ? NIGHT.fenceCap : "#efe8d6"} roughness={0.85} />
+      <mesh position={[0, 0.6, 0]} scale={[1, 1, 0.3]} castShadow>
+        <sphereGeometry args={[0.085, 18, 12]} />
+        <meshStandardMaterial color={color} roughness={0.85} />
       </mesh>
     </group>
   );
@@ -451,7 +532,7 @@ function FencePost({ x, z, angle }) {
 
 function Fence() {
   const night = useNight();
-  const rail = night ? NIGHT.fenceCap : "#efe8d6";
+  const rail = soften("#ffdbe6", night);
   const halfW = PEN_WIDTH / 2;
   const halfD = PEN_DEPTH / 2;
   const railY = [0.18, 0.42];
@@ -461,7 +542,7 @@ function Fence() {
   return (
     <>
       {FENCE_POSTS.map((p, i) => (
-        <FencePost key={i} x={p.x} z={p.z} angle={p.angle} />
+        <FencePost key={i} index={i} x={p.x} z={p.z} angle={p.angle} />
       ))}
       {railY.map((y, i) => (
         <React.Fragment key={i}>
@@ -490,13 +571,12 @@ function Fence() {
       {[-gateHalf, gateHalf].map((x, i) => (
         <group key={`gp-${i}`} position={[x, 0, halfD]}>
           <mesh position={[0, 0.38, 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.11, 0.76, 0.11]} />
-            <meshStandardMaterial color={night ? NIGHT.fence : "#f6f1e4"} roughness={0.85} />
+            <boxGeometry args={[0.13, 0.76, 0.13]} />
+            <meshStandardMaterial color={soften("#fff6f0", night)} roughness={0.85} />
           </mesh>
-          <mesh position={[0, 0.8, 0]} castShadow>
-            <sphereGeometry args={[0.07, 12, 12]} />
-            <meshStandardMaterial color="#ffc9de" roughness={0.6} />
-          </mesh>
+          <group position={[0, 0.87, 0]} rotation={[0, i ? -0.6 : 0.6, i ? -0.15 : 0.15]}>
+            <EasterEgg size={0.085} set={i ? 3 : 0} />
+          </group>
         </group>
       ))}
     </>
@@ -516,7 +596,7 @@ function Entrance() {
       {ENTRANCE_STONES.map((s, i) => (
         <mesh key={i} position={[s.x, 0.02, s.z]} rotation={[-Math.PI / 2, 0, i]} receiveShadow>
           <circleGeometry args={[s.s, 10]} />
-          <meshStandardMaterial color="#cfc7b4" roughness={0.95} />
+          <meshStandardMaterial color="#fbe4ec" roughness={0.95} />
         </mesh>
       ))}
 
@@ -524,11 +604,11 @@ function Entrance() {
         <group key={`pot-${i}`} position={[x, 0, halfD + 0.18]}>
           <mesh position={[0, 0.11, 0]} castShadow receiveShadow>
             <cylinderGeometry args={[0.15, 0.11, 0.22, 14]} />
-            <meshStandardMaterial color="#dd9a7a" roughness={0.85} />
+            <meshStandardMaterial color="#f7bccd" roughness={0.85} />
           </mesh>
           <mesh position={[0, 0.23, 0]}>
             <cylinderGeometry args={[0.155, 0.155, 0.04, 14]} />
-            <meshStandardMaterial color="#c9866a" roughness={0.85} />
+            <meshStandardMaterial color="#efa6bc" roughness={0.85} />
           </mesh>
           {[0, 1, 2, 3].map((f) => {
             const a = (f / 4) * Math.PI * 2 + i;
@@ -571,20 +651,7 @@ function Entrance() {
         ))}
       </group>
 
-      <group position={[-0.8, 0, halfD + 0.62]} rotation={[0, 0.5, 0]}>
-        <mesh position={[0, 0.14, 0]} castShadow>
-          <cylinderGeometry args={[0.13, 0.14, 0.28, 14]} />
-          <meshStandardMaterial color="#9fd3d8" roughness={0.5} metalness={0.15} />
-        </mesh>
-        <mesh position={[0.18, 0.22, 0]} rotation={[0, 0, -0.5]}>
-          <cylinderGeometry args={[0.03, 0.05, 0.24, 10]} />
-          <meshStandardMaterial color="#8cc3c9" roughness={0.5} metalness={0.15} />
-        </mesh>
-        <mesh position={[-0.14, 0.26, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.07, 0.015, 8, 14]} />
-          <meshStandardMaterial color="#8cc3c9" roughness={0.5} metalness={0.15} />
-        </mesh>
-      </group>
+      <EggBasket position={[-0.8, halfD + 0.62]} rotation={0.4} />
 
       {[-0.45, 0.45].map((x, i) => (
         <group key={`t-${i}`} position={[x, 0, halfD + 0.06]}>
@@ -639,58 +706,635 @@ function Bunting() {
   );
 }
 
-function buildHayTexture() {
-  const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#e6c674";
-  ctx.fillRect(0, 0, 64, 64);
-  ctx.strokeStyle = "rgba(160,120,50,0.5)";
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 40; i++) {
-    const x = seededRand(i * 3.7) * 64;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x + (seededRand(i * 5.1) - 0.5) * 6, 64);
-    ctx.stroke();
+const eggTextures = new Map();
+function getEggTexture(setIndex) {
+  const key = setIndex % EGG_SETS.length;
+  if (eggTextures.has(key)) return eggTextures.get(key);
+  const [base, a, b] = EGG_SETS[key];
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 256;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 128, 256);
+  ctx.fillStyle = a;
+  ctx.beginPath();
+  ctx.moveTo(0, 112);
+  for (let x = 0; x <= 128; x += 16) {
+    ctx.lineTo(x, x % 32 === 0 ? 100 : 124);
   }
-  const tex = new THREE.CanvasTexture(canvas);
+  ctx.lineTo(128, 146);
+  for (let x = 128; x >= 0; x -= 16) {
+    ctx.lineTo(x, x % 32 === 0 ? 134 : 158);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = b;
+  [62, 196].forEach((y, row) => {
+    for (let x = row * 12 + 8; x < 128; x += 24) {
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  ctx.fillStyle = a;
+  ctx.fillRect(0, 222, 128, 6);
+  ctx.fillRect(0, 34, 128, 6);
+  const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
+  eggTextures.set(key, tex);
   return tex;
 }
 
-function HayBale({ position = [-1.7, -1.0], rotation = 0.15 }) {
-  const tex = useMemo(() => buildHayTexture(), []);
+function EasterEgg({ size = 0.1, set = 0 }) {
+  const night = useNight();
+  const tex = getEggTexture(set);
+  return (
+    <mesh scale={[size, size * 1.32, size]} castShadow>
+      <sphereGeometry args={[1, 20, 16]} />
+      <meshStandardMaterial map={tex} roughness={0.7} emissive={night ? EGG_SETS[set % EGG_SETS.length][0] : "#000000"} emissiveIntensity={night ? 0.18 : 0} />
+    </mesh>
+  );
+}
+
+const EGG_PLACEMENTS = [
+  [-0.95, 0.95], [1.25, 1.0], [-2.6, 0.6], [2.75, 0.35], [-0.45, -1.95],
+  [0.95, -2.25], [-2.95, -2.2], [2.6, 2.25], [-2.35, 2.3], [0.25, 2.45],
+  [-4.4, 1.6], [4.5, -1.3], [3.7, 4.1], [-3.4, -4.0],
+].map(([x, z], i) => ({
+  x,
+  z,
+  set: i,
+  size: 0.085 + seededRand(i * 3.7) * 0.035,
+  tilt: (seededRand(i * 5.9) - 0.5) * 0.9,
+  spin: seededRand(i * 7.1) * Math.PI * 2,
+}));
+
+function ScatteredEggs() {
+  return (
+    <>
+      {EGG_PLACEMENTS.map((e, i) => (
+        <group key={i} position={[e.x, e.size * 1.15, e.z]} rotation={[0, e.spin, e.tilt]}>
+          <EasterEgg size={e.size} set={e.set} />
+        </group>
+      ))}
+    </>
+  );
+}
+
+const PLANTER_WOOD = "#f4cdbd";
+const PLANTER_WOOD_DARK = "#e6b29f";
+
+function CarrotSprout({ position, phase }) {
+  const ref = useRef();
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.z = Math.sin(clock.getElapsedTime() * 1.4 + phase) * 0.08;
+  });
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.012, 0]}>
+        <sphereGeometry args={[0.03, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color="#f59a52" roughness={0.7} />
+      </mesh>
+      <group ref={ref} position={[0, 0.02, 0]}>
+        {[-0.35, 0, 0.35].map((a, i) => (
+          <mesh key={i} position={[Math.sin(a) * 0.02, 0.05, 0]} rotation={[0, 0, a]} scale={[1, 1, 0.5]}>
+            <coneGeometry args={[0.018, 0.1, 5]} />
+            <meshStandardMaterial color={i === 1 ? "#7cc46e" : "#94d384"} roughness={0.9} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+function Strawberry({ position }) {
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.03, 0]} rotation={[Math.PI, 0, 0]}>
+        <coneGeometry args={[0.028, 0.05, 10]} />
+        <meshStandardMaterial color="#ff7f9a" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.056, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.024, 6]} />
+        <meshStandardMaterial color="#7cc46e" side={THREE.DoubleSide} roughness={0.9} />
+      </mesh>
+    </group>
+  );
+}
+
+function RoseArch({ position = [0, 0, -0.45] }) {
+  const night = useNight();
+  const roses = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, i) => {
+        const a = (i / 15) * Math.PI;
+        return {
+          p: [Math.cos(a) * 0.52, 0.62 + Math.sin(a) * 0.32, (seededRand(i * 3.3) - 0.5) * 0.06],
+          color: ["#ffb3c8", "#ff9fbf", "#ffd1df", "#ffffff"][i % 4],
+          r: 0.035 + seededRand(i * 5.1) * 0.015,
+        };
+      }),
+    [],
+  );
+  return (
+    <group position={position}>
+      {[-0.52, 0.52].map((x) => (
+        <mesh key={x} position={[x, 0.31, 0]} castShadow>
+          <boxGeometry args={[0.05, 0.62, 0.05]} />
+          <meshStandardMaterial color="#fff6f0" roughness={0.85} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.62, 0]} scale={[1, 0.62, 1]} castShadow>
+        <torusGeometry args={[0.52, 0.022, 8, 28, Math.PI]} />
+        <meshStandardMaterial color="#fff6f0" roughness={0.85} />
+      </mesh>
+      {roses.map((r, i) => (
+        <group key={i} position={r.p}>
+          <mesh>
+            <sphereGeometry args={[r.r, 10, 8]} />
+            <meshStandardMaterial color={soften(r.color, night)} emissive={r.color} emissiveIntensity={night ? 0.15 : 0.04} roughness={0.75} />
+          </mesh>
+          <mesh position={[r.r * 0.9, -r.r * 0.6, 0.01]} rotation={[0, 0, 0.8]} scale={[1, 0.5, 0.4]}>
+            <sphereGeometry args={[r.r * 0.9, 8, 6]} />
+            <meshStandardMaterial color="#8fcf86" roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function WateringCan({ position, rotation = 0 }) {
+  return (
+    <group position={position} rotation={[0, rotation, 0]} scale={0.55}>
+      <mesh position={[0, 0.12, 0]} castShadow>
+        <cylinderGeometry args={[0.11, 0.12, 0.24, 16]} />
+        <meshStandardMaterial color="#bfe6da" roughness={0.6} />
+      </mesh>
+      <mesh position={[0.16, 0.18, 0]} rotation={[0, 0, -0.9]}>
+        <cylinderGeometry args={[0.018, 0.03, 0.22, 10]} />
+        <meshStandardMaterial color="#a9dccc" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.27, 0]}>
+        <torusGeometry args={[0.08, 0.014, 8, 16, Math.PI]} />
+        <meshStandardMaterial color="#a9dccc" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.12, 0.116]}>
+        <circleGeometry args={[0.035, 12]} />
+        <meshStandardMaterial color="#ffb3c8" roughness={0.7} />
+      </mesh>
+    </group>
+  );
+}
+
+function BabyBunny({ position, color, scale = 1, phase = 0, facing = 0 }) {
+  const root = useRef();
+  const head = useRef();
+  const earL = useRef();
+  const earR = useRef();
+  const tail = useRef();
+  const nextHop = useRef(2 + phase);
+  const hopAt = useRef(-10);
+  const yaw = useRef(facing);
+  const targetYaw = useRef(facing);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (t > nextHop.current) {
+      hopAt.current = t;
+      nextHop.current = t + 3 + seededRand(Math.floor(t) + phase * 7) * 3;
+      targetYaw.current = facing + (seededRand(Math.floor(t * 3) + phase) - 0.5) * 1.4;
+    }
+    const h = t - hopAt.current;
+    const hop = h >= 0 && h < 0.35 ? Math.sin((h / 0.35) * Math.PI) : 0;
+    const land = h >= 0.35 && h < 0.5 ? Math.sin(((h - 0.35) / 0.15) * Math.PI) : 0;
+    const nibbling = hop === 0 && Math.sin(t * 0.6 + phase * 2) > 0.3;
+    yaw.current += (targetYaw.current - yaw.current) * 0.06;
+    if (root.current) {
+      root.current.position.y = hop * 0.07;
+      root.current.rotation.y = yaw.current;
+      const sq = 1 + hop * 0.12 - land * 0.08;
+      root.current.scale.set(scale / Math.sqrt(sq), scale * sq, scale / Math.sqrt(sq));
+    }
+    if (head.current) head.current.rotation.x = nibbling ? 0.25 + Math.sin(t * 18) * 0.06 : Math.sin(t * 1.2 + phase) * 0.05 - hop * 0.15;
+    const twitch = Math.max(0, Math.sin(t * 0.9 + phase * 3) - 0.92) * 6;
+    if (earL.current) earL.current.rotation.set(-0.25 - hop * 0.5, 0, 0.18 + Math.sin(t * 25) * 0.15 * twitch);
+    if (earR.current) earR.current.rotation.set(-0.25 - hop * 0.5, 0, -0.18);
+    if (tail.current) tail.current.scale.setScalar(1 + Math.max(0, Math.sin(t * 10 + phase)) * 0.15 * (nibbling ? 1 : 0));
+  });
+  return (
+    <group position={position}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, 0]}>
+        <circleGeometry args={[0.1 * scale, 16]} />
+        <meshBasicMaterial color="#c58aa0" transparent opacity={0.18} depthWrite={false} />
+      </mesh>
+      <group ref={root}>
+        <mesh position={[0, 0.085, 0]} scale={[1, 0.85, 1.15]} castShadow>
+          <sphereGeometry args={[0.09, 18, 14]} />
+          <meshStandardMaterial color={color} roughness={0.9} />
+        </mesh>
+        <mesh ref={tail} position={[0, 0.09, -0.105]}>
+          <sphereGeometry args={[0.032, 12, 10]} />
+          <meshStandardMaterial color="#ffffff" roughness={1} />
+        </mesh>
+        {[-1, 1].map((side) => (
+          <mesh key={side} position={[side * 0.04, 0.02, 0.07]} scale={[0.8, 0.5, 1.2]}>
+            <sphereGeometry args={[0.028, 10, 8]} />
+            <meshStandardMaterial color={color} roughness={0.9} />
+          </mesh>
+        ))}
+        <group ref={head} position={[0, 0.15, 0.06]}>
+          <mesh position={[0, 0.02, 0.01]} castShadow>
+            <sphereGeometry args={[0.066, 18, 14]} />
+            <meshStandardMaterial color={color} roughness={0.9} />
+          </mesh>
+          {[-1, 1].map((side) => (
+            <group key={side} ref={side < 0 ? earL : earR} position={[side * 0.03, 0.07, 0]}>
+              <mesh position={[0, 0.05, 0]} scale={[1, 1, 0.55]}>
+                <capsuleGeometry args={[0.018, 0.07, 4, 10]} />
+                <meshStandardMaterial color={color} roughness={0.9} />
+              </mesh>
+              <mesh position={[0, 0.05, 0.009]} scale={[1, 1, 0.3]}>
+                <capsuleGeometry args={[0.009, 0.055, 4, 8]} />
+                <meshStandardMaterial color="#ffb8cc" roughness={0.9} />
+              </mesh>
+            </group>
+          ))}
+          {[-1, 1].map((side) => (
+            <mesh key={`e${side}`} position={[side * 0.027, 0.03, 0.068]}>
+              <sphereGeometry args={[0.009, 8, 6]} />
+              <meshStandardMaterial color="#2b1a12" roughness={0.4} />
+            </mesh>
+          ))}
+          {[-1, 1].map((side) => (
+            <mesh key={`c${side}`} position={[side * 0.04, 0.008, 0.058]} scale={[1, 0.6, 0.4]}>
+              <sphereGeometry args={[0.014, 8, 6]} />
+              <meshBasicMaterial color="#ffb3c8" transparent opacity={0.7} />
+            </mesh>
+          ))}
+          <mesh position={[0, 0.013, 0.075]}>
+            <sphereGeometry args={[0.008, 8, 6]} />
+            <meshStandardMaterial color="#ff9fb8" roughness={0.6} />
+          </mesh>
+        </group>
+      </group>
+    </group>
+  );
+}
+
+function GardenNook({ position = [-1.7, -1.0], rotation = 0.3 }) {
+  const night = useNight();
+  const carrots = useMemo(
+    () =>
+      [-1, 1].flatMap((row) =>
+        Array.from({ length: 4 }, (_, i) => ({ p: [-0.33 + i * 0.22, 0.14, row * 0.12], phase: i + row * 2 })),
+      ),
+    [],
+  );
   return (
     <group position={[position[0], 0, position[1]]} rotation={[0, rotation, 0]}>
-      <mesh rotation={[0, 0, Math.PI / 2]} position={[0, 0.32, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[0.32, 0.32, 0.9, 16]} />
-        <meshStandardMaterial map={tex} roughness={1} />
-      </mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0.45, 0.32, 0]}>
-        <circleGeometry args={[0.32, 16]} />
-        <meshStandardMaterial map={tex} roughness={1} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-0.45, 0.32, 0]}>
-        <circleGeometry args={[0.32, 16]} />
-        <meshStandardMaterial map={tex} roughness={1} />
-      </mesh>
+      <RoseArch />
+      <group position={[0, 0, -0.05]}>
+        <mesh position={[0, 0.07, 0]} castShadow receiveShadow>
+          <boxGeometry args={[1.0, 0.14, 0.5]} />
+          <meshStandardMaterial color={soften(PLANTER_WOOD, night)} roughness={0.9} />
+        </mesh>
+        {[0.035, 0.105].map((y) => (
+          <mesh key={y} position={[0, y, 0.252]}>
+            <boxGeometry args={[1.0, 0.006, 0.004]} />
+            <meshStandardMaterial color={PLANTER_WOOD_DARK} roughness={0.9} />
+          </mesh>
+        ))}
+        <mesh position={[0, 0.142, 0]}>
+          <boxGeometry args={[0.92, 0.01, 0.42]} />
+          <meshStandardMaterial color="#8a6650" roughness={1} />
+        </mesh>
+        {carrots.map((c, i) => (
+          <CarrotSprout key={i} position={c.p} phase={c.phase} />
+        ))}
+      </group>
+      <group position={[0.75, 0, 0.12]}>
+        <mesh position={[0, 0.05, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.16, 0.14, 0.1, 16]} />
+          <meshStandardMaterial color={soften(PLANTER_WOOD, night)} roughness={0.9} />
+        </mesh>
+        <mesh position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.14, 16]} />
+          <meshStandardMaterial color="#8fcf86" roughness={1} />
+        </mesh>
+        {[[-0.06, 0.1, 0.03], [0.05, 0.1, -0.04], [0.02, 0.1, 0.07]].map((p, i) => (
+          <Strawberry key={i} position={p} />
+        ))}
+      </group>
+      <WateringCan position={[-0.72, 0, 0.2]} rotation={0.6} />
+      <BabyBunny position={[0.35, 0, 0.45]} color="#fffaf6" phase={0.4} facing={-0.5} />
+      <BabyBunny position={[-0.3, 0, 0.5]} color="#f6dcc6" scale={0.9} phase={1.7} facing={0.3} />
+      <BabyBunny position={[0.85, 0, 0.5]} color="#e9e2f0" scale={0.8} phase={3.1} facing={-1.2} />
+    </group>
+  );
+}
 
-      {[0, 1, 2, 3].map((i) => {
-        const a = seededRand(i * 4.4) * Math.PI * 2;
-        const x = Math.cos(a) * 0.3;
-        const z = Math.sin(a) * 0.15;
+function EggBasket({ position, rotation = 0 }) {
+  return (
+    <group position={[position[0], 0, position[1]]} rotation={[0, rotation, 0]}>
+      <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.16, 0.12, 0.16, 18]} />
+        <meshStandardMaterial color="#e0b088" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 0.16, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.16, 0.018, 8, 24]} />
+        <meshStandardMaterial color="#cf9a72" roughness={0.95} />
+      </mesh>
+      {[0.05, 0.11].map((y) => (
+        <mesh key={y} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.14 + y * 0.2, 0.008, 6, 24]} />
+          <meshStandardMaterial color="#cf9a72" roughness={0.95} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.16, 0]}>
+        <torusGeometry args={[0.15, 0.014, 8, 24, Math.PI]} />
+        <meshStandardMaterial color="#cf9a72" roughness={0.95} />
+      </mesh>
+      {[
+        [-0.06, 0.2, 0.02, 0.3, 1],
+        [0.06, 0.2, -0.03, -0.25, 3],
+        [0.0, 0.22, 0.07, 0.1, 0],
+        [-0.02, 0.21, -0.08, -0.4, 4],
+      ].map(([x, y, z, r, set], i) => (
+        <group key={i} position={[x, y, z]} rotation={[r * 0.5, 0, r]}>
+          <EasterEgg size={0.055} set={set} />
+        </group>
+      ))}
+      <group position={[0, 0.31, 0]}>
+        {[-1, 1].map((side) => (
+          <mesh key={side} position={[side * 0.035, 0, 0]} rotation={[0, 0, side * 1.2]} scale={[1, 0.6, 0.5]}>
+            <coneGeometry args={[0.035, 0.07, 10]} />
+            <meshStandardMaterial color="#ff9fbf" roughness={0.6} />
+          </mesh>
+        ))}
+        <mesh>
+          <sphereGeometry args={[0.018, 8, 8]} />
+          <meshStandardMaterial color="#ff8fb2" roughness={0.6} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+let cloudTexture = null;
+function getCloudTexture() {
+  if (cloudTexture) return cloudTexture;
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 128;
+  const ctx = c.getContext("2d");
+  [[70, 78, 42], [118, 58, 52], [170, 74, 44], [210, 86, 30], [40, 92, 28], [128, 92, 40]].forEach(([x, y, r]) => {
+    const g = ctx.createRadialGradient(x, y - r * 0.3, r * 0.2, x, y, r);
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(0.75, "rgba(255,246,250,0.95)");
+    g.addColorStop(1, "rgba(255,226,238,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  const shade = ctx.createLinearGradient(0, 70, 0, 128);
+  shade.addColorStop(0, "rgba(255,190,214,0)");
+  shade.addColorStop(1, "rgba(255,190,214,0.55)");
+  ctx.globalCompositeOperation = "source-atop";
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, 256, 128);
+  ctx.globalCompositeOperation = "source-over";
+  cloudTexture = new THREE.CanvasTexture(c);
+  cloudTexture.colorSpace = THREE.SRGBColorSpace;
+  return cloudTexture;
+}
+
+const CLOUDS = [
+  { x: -0.78, y: 0.86, width: 0.42, speed: 0.012, phase: 0 },
+  { x: -0.12, y: 0.93, width: 0.5, speed: 0.008, phase: 0.6 },
+  { x: 0.55, y: 0.84, width: 0.4, speed: 0.01, phase: 1.3 },
+  { x: 1.1, y: 0.94, width: 0.34, speed: 0.009, phase: 2.1 },
+];
+
+function Clouds() {
+  const night = useNight();
+  const group = useRef(null);
+  const tex = getCloudTexture();
+  useFrame(({ camera, clock }) => {
+    if (!group.current || !camera.isOrthographicCamera) return;
+    group.current.position.copy(camera.position);
+    group.current.quaternion.copy(camera.quaternion);
+    const halfWidth = (camera.right - camera.left) / (2 * camera.zoom);
+    const halfHeight = (camera.top - camera.bottom) / (2 * camera.zoom);
+    const t = clock.getElapsedTime();
+    group.current.children.forEach((mesh, i) => {
+      const cl = CLOUDS[i];
+      const x = ((cl.x + 1.4 + t * cl.speed) % 2.8) - 1.4;
+      mesh.position.set(x * halfWidth, cl.y * halfHeight + Math.sin(t * 0.4 + cl.phase) * halfHeight * 0.01, -0.6);
+      const w = cl.width * halfWidth;
+      mesh.scale.set(w, w * 0.5, 1);
+    });
+  });
+  return (
+    <group ref={group}>
+      {CLOUDS.map((_, i) => (
+        <mesh key={i} renderOrder={99} frustumCulled={false}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial map={tex} color={night ? "#b9a6d6" : "#ffffff"} transparent opacity={night ? 0.45 : 0.9} depthTest={false} depthWrite={false} toneMapped={false} fog={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+const BLOSSOM_TREES = [
+  { position: [-2.9, -4.0], height: 1.9, seed: 3 },
+  { position: [0.9, -4.3], height: 2.2, seed: 11 },
+  { position: [3.6, -3.8], height: 1.8, seed: 19 },
+  { position: [-4.7, -1.2], height: 1.7, seed: 27 },
+  { position: [4.8, 1.4], height: 1.6, seed: 35 },
+];
+const BLOSSOM_COLORS = ["#ffc4d8", "#ffd6e4", "#ffb0c9", "#ffe6ef"];
+
+function BlossomTree({ position, height, seed }) {
+  const night = useNight();
+  const ref = useRef();
+  const phase = useMemo(() => seededRand(seed) * 6, [seed]);
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.5 + phase) * 0.008;
+  });
+  const puffs = useMemo(
+    () =>
+      Array.from({ length: 9 }, (_, i) => {
+        const a = (i / 9) * Math.PI * 2 + seededRand(seed + i) * 0.8;
+        const r = i === 0 ? 0 : 0.28 + seededRand(seed * 3 + i) * 0.22;
+        return {
+          p: [Math.cos(a) * r, height * (0.82 + seededRand(seed * 5 + i) * 0.22) + (i === 0 ? 0.12 : 0), Math.sin(a) * r * 0.8],
+          r: (i === 0 ? 0.42 : 0.26 + seededRand(seed * 7 + i) * 0.12) * (height / 1.9),
+          color: BLOSSOM_COLORS[(i + seed) % BLOSSOM_COLORS.length],
+        };
+      }),
+    [height, seed],
+  );
+  return (
+    <group position={[position[0], 0, position[1]]} ref={ref}>
+      <mesh position={[0, height * 0.38, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.05, 0.09, height * 0.76, 8]} />
+        <meshStandardMaterial color={night ? "#6f5a6e" : "#a87b6c"} roughness={0.95} />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[side * 0.16, height * 0.66, 0]} rotation={[0, 0, -side * 0.7]} castShadow>
+          <cylinderGeometry args={[0.025, 0.04, 0.4, 6]} />
+          <meshStandardMaterial color={night ? "#6f5a6e" : "#a87b6c"} roughness={0.95} />
+        </mesh>
+      ))}
+      {puffs.map((f, i) => (
+        <mesh key={i} position={f.p} castShadow>
+          <icosahedronGeometry args={[f.r, 2]} />
+          <meshStandardMaterial color={soften(f.color, night)} emissive={f.color} emissiveIntensity={night ? 0.12 : 0.06} roughness={0.9} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function BlossomTrees() {
+  return (
+    <>
+      {BLOSSOM_TREES.map((tr, i) => (
+        <BlossomTree key={i} {...tr} />
+      ))}
+    </>
+  );
+}
+
+const FALLING_PETALS = Array.from({ length: 22 }, (_, i) => ({
+  x: (seededRand(i * 3.1 + 1) - 0.5) * 9,
+  z: (seededRand(i * 5.3 + 2) - 0.5) * 8,
+  speed: 0.18 + seededRand(i * 7.7) * 0.14,
+  phase: seededRand(i * 9.1) * 10,
+  color: BLOSSOM_COLORS[i % BLOSSOM_COLORS.length],
+}));
+
+function FallingPetals() {
+  const night = useNight();
+  const refs = useRef([]);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    refs.current.forEach((m, i) => {
+      if (!m) return;
+      const p = FALLING_PETALS[i];
+      const life = ((t * p.speed + p.phase) % 1 + 1) % 1;
+      m.position.set(p.x + Math.sin(t * 0.8 + p.phase) * 0.35, 2.4 - life * 2.4, p.z + Math.cos(t * 0.6 + p.phase) * 0.25);
+      m.rotation.set(Math.sin(t * 1.6 + p.phase) * 0.9 + 1.1, t * 0.7 + p.phase, Math.cos(t * 2 + p.phase) * 0.8);
+      m.material.opacity = Math.min(1, life * 8, (1 - life) * 6) * (night ? 0.7 : 0.95);
+    });
+  });
+  return (
+    <>
+      {FALLING_PETALS.map((p, i) => (
+        <mesh key={i} ref={(el) => (refs.current[i] = el)} scale={[0.6, 1, 1]}>
+          <circleGeometry args={[0.035, 8]} />
+          <meshStandardMaterial color={p.color} side={THREE.DoubleSide} transparent opacity={0} roughness={0.7} depthWrite={false} />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
+const TULIP_COLORS = ["#ff9fbf", "#ffc8a8", "#d9c2ff", "#fff0a6", "#ffb7d0"];
+const TULIP_BEDS = [
+  { center: [-2.85, -2.35], count: 7, seed: 4 },
+  { center: [2.95, -2.45], count: 6, seed: 9 },
+  { center: [-2.95, 2.0], count: 6, seed: 14 },
+  { center: [3.0, 1.9], count: 7, seed: 21 },
+];
+
+function Tulip({ position, color, height, tilt }) {
+  const night = useNight();
+  const c = soften(color, night);
+  return (
+    <group position={position} rotation={[tilt, 0, tilt * 0.6]}>
+      <mesh position={[0, height / 2, 0]}>
+        <cylinderGeometry args={[0.008, 0.01, height, 5]} />
+        <meshStandardMaterial color="#7fbf76" roughness={0.9} />
+      </mesh>
+      <mesh position={[0.025, height * 0.35, 0]} rotation={[0, 0, -0.6]} scale={[0.35, 1, 0.15]}>
+        <sphereGeometry args={[0.06, 8, 6]} />
+        <meshStandardMaterial color="#8fcf86" roughness={0.9} />
+      </mesh>
+      <group position={[0, height, 0]}>
+        {[0, 1, 2].map((k) => {
+          const a = (k / 3) * Math.PI * 2;
+          return (
+            <mesh key={k} position={[Math.cos(a) * 0.015, 0.03, Math.sin(a) * 0.015]} rotation={[Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25]} scale={[0.75, 1.2, 0.75]}>
+              <sphereGeometry args={[0.035, 10, 8]} />
+              <meshStandardMaterial color={c} emissive={c} emissiveIntensity={night ? 0.15 : 0.04} roughness={0.7} />
+            </mesh>
+          );
+        })}
+      </group>
+    </group>
+  );
+}
+
+function TulipBeds() {
+  const tulips = useMemo(
+    () =>
+      TULIP_BEDS.flatMap((bed) =>
+        Array.from({ length: bed.count }, (_, i) => {
+          const a = seededRand(bed.seed * 11 + i) * Math.PI * 2;
+          const r = Math.sqrt(seededRand(bed.seed * 13 + i)) * 0.32;
+          return {
+            position: [bed.center[0] + Math.cos(a) * r, 0, bed.center[1] + Math.sin(a) * r * 0.8],
+            color: TULIP_COLORS[(i + bed.seed) % TULIP_COLORS.length],
+            height: 0.16 + seededRand(bed.seed * 17 + i) * 0.1,
+            tilt: (seededRand(bed.seed * 19 + i) - 0.5) * 0.25,
+          };
+        }),
+      ),
+    [],
+  );
+  return (
+    <>
+      {tulips.map((tl, i) => (
+        <Tulip key={i} {...tl} />
+      ))}
+    </>
+  );
+}
+
+const FAIRY_BULBS = Array.from({ length: 15 }, (_, i) => i);
+
+function FairyLights() {
+  const night = useNight();
+  const refs = useRef([]);
+  const halfW = PEN_WIDTH / 2;
+  const z = -PEN_DEPTH / 2 + 0.02;
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    refs.current.forEach((m, i) => {
+      if (!m) return;
+      m.material.emissiveIntensity = night ? 1.1 + Math.sin(t * 2 + i * 1.3) * 0.35 : 0.25;
+    });
+  });
+  return (
+    <>
+      {FAIRY_BULBS.map((i) => {
+        const u = i / (FAIRY_BULBS.length - 1);
+        const x = -halfW + 0.3 + u * (PEN_WIDTH - 0.6);
+        const sag = Math.sin(((u * 4) % 1) * Math.PI) * 0.06;
+        const color = ["#fff2c4", "#ffd1e2", "#e6dcff"][i % 3];
         return (
-          <mesh key={i} position={[x, 0.6, z]} rotation={[0.3, a, 0.4]}>
-            <coneGeometry args={[0.012, 0.22, 4]} />
-            <meshStandardMaterial color="#f0d488" roughness={1} />
+          <mesh key={i} ref={(el) => (refs.current[i] = el)} position={[x, 0.5 - sag, z]}>
+            <sphereGeometry args={[0.028, 10, 8]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.25} toneMapped={false} />
           </mesh>
         );
       })}
-    </group>
+    </>
   );
 }
 
@@ -707,11 +1351,11 @@ function BunnyPlayCorner({ position = [1.9, -1.1], rotation = -0.3 }) {
     <group position={[position[0], 0, position[1]]} rotation={[0, rotation, 0]}>
       <mesh position={[0, -0.08, 0]} scale={[1, 0.6, 0.9]} castShadow receiveShadow>
         <sphereGeometry args={[0.6, 24, 16]} />
-        <meshStandardMaterial color="#8fb262" roughness={1} flatShading />
+        <meshStandardMaterial color="#a9dca2" roughness={1} flatShading />
       </mesh>
       <mesh position={[0.03, 0.0, -0.04]} scale={[0.8, 0.48, 0.7]}>
         <sphereGeometry args={[0.6, 20, 14]} />
-        <meshStandardMaterial color="#a5c672" roughness={1} flatShading />
+        <meshStandardMaterial color="#bfe8b4" roughness={1} flatShading />
       </mesh>
 
       <group position={[0, 0, 0.45]}>
@@ -827,93 +1471,31 @@ function BunnyPlayCorner({ position = [1.9, -1.1], rotation = -0.3 }) {
   );
 }
 
+const HEART_SHAPE = (() => {
+  const h = new THREE.Shape();
+  h.moveTo(0, -0.7);
+  h.bezierCurveTo(-1.1, 0.05, -0.55, 0.85, 0, 0.35);
+  h.bezierCurveTo(0.55, 0.85, 1.1, 0.05, 0, -0.7);
+  return h;
+})();
+
 function Signpost({ position = [1.6, PEN_DEPTH / 2 + 0.3], rotation = 0.15 }) {
   return (
     <group position={[position[0], 0, position[1]]} rotation={[0, rotation, 0]}>
       <mesh position={[0, 0.32, 0]} castShadow>
         <cylinderGeometry args={[0.03, 0.035, 0.64, 8]} />
-        <meshStandardMaterial color="#a9714a" roughness={0.85} />
+        <meshStandardMaterial color="#e2a8b4" roughness={0.85} />
       </mesh>
       <mesh position={[0, 0.56, 0]} castShadow>
         <boxGeometry args={[0.42, 0.24, 0.03]} />
-        <meshStandardMaterial color="#f6e9d0" roughness={0.8} />
+        <meshStandardMaterial color="#fff4f7" roughness={0.8} />
       </mesh>
-      <mesh position={[0, 0.56, 0.017]}>
-        <circleGeometry args={[0.06, 5]} />
+      <mesh position={[0, 0.555, 0.017]} scale={0.06}>
+        <shapeGeometry args={[HEART_SHAPE]} />
         <meshStandardMaterial color="#ff9fb8" />
       </mesh>
     </group>
   );
-}
-
-function buildMoundTexture() {
-  const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 30);
-  grad.addColorStop(0, "rgba(168,112,64,0.95)");
-  grad.addColorStop(0.6, "rgba(168,112,64,0.7)");
-  grad.addColorStop(1, "rgba(168,112,64,0)");
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(32, 32, 30, 0, Math.PI * 2);
-  ctx.fill();
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-const CARROT_PLACEMENTS = [{ x: 0.55, z: 0.55, rotation: 0.5 }];
-
-function Carrot({ x, z, rotation, sourceScene }) {
-  const object = useMemo(() => makeMatte(sourceScene.clone()), [sourceScene]);
-  const offset = useGroundedOffset(object);
-  const ref = useRef();
-  const swayPhase = useMemo(() => Math.random() * Math.PI * 2, []);
-  useFrame(({ clock }) => {
-    if (!ref.current) return;
-    ref.current.rotation.z = Math.sin(clock.getElapsedTime() * 0.9 + swayPhase) * 0.04;
-  });
-
-  const scale = 0.39;
-  return (
-    <group ref={ref} position={[x, 0, z]} rotation={[0, rotation, 0]}>
-      <primitive object={object} scale={scale} position={[offset[0], offset[1], offset[2]]} />
-    </group>
-  );
-}
-
-function CarrotPatch() {
-  const { scene } = useGLTF('/models/habitats/carrot.glb');
-  const tex = useMemo(() => buildMoundTexture(), []);
-  return (
-    <>
-      {CARROT_PLACEMENTS.map((c, i) => (
-        <mesh key={`mound-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[c.x, 0.016, c.z]}>
-          <circleGeometry args={[0.65, 20]} />
-          <meshStandardMaterial map={tex} transparent depthWrite={false} roughness={1} />
-        </mesh>
-      ))}
-      {CARROT_PLACEMENTS.map((c, i) => (
-        <Carrot key={i} x={c.x} z={c.z} rotation={c.rotation} sourceScene={scene} />
-      ))}
-    </>
-  );
-}
-
-class CarrotPatchErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { failed: false };
-  }
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  render() {
-    if (this.state.failed) return null;
-    return this.props.children;
-  }
 }
 
 const FLOWER_COLORS = ["#ffd9e8", "#fff3b0", "#ffffff", "#ffc2d9", "#d9c2ff"];
@@ -964,7 +1546,7 @@ function generateFlowerScatter(count, seedOffset) {
   return flowers;
 }
 
-const FLOWER_PLACEMENTS = generateFlowerScatter(30, 41);
+const FLOWER_PLACEMENTS = generateFlowerScatter(46, 41);
 
 function Flowers() {
   return (
@@ -976,7 +1558,7 @@ function Flowers() {
   );
 }
 
-const MUSHROOM_COLORS = ["#ff9f8f", "#ffc2d9", "#d9a5ff"];
+const MUSHROOM_COLORS = ["#ffb3c8", "#ffd1df", "#e2c4fb"];
 
 function Mushroom({ position, color, scale = 1, rotation = 0 }) {
   const night = useNight();
@@ -1041,7 +1623,7 @@ function Rocks() {
           receiveShadow
         >
           <dodecahedronGeometry args={[1, 0]} />
-          <meshStandardMaterial color="#9a9186" roughness={0.9} />
+          <meshStandardMaterial color="#e4d8ea" roughness={0.9} />
         </mesh>
       ))}
     </>
@@ -1253,7 +1835,6 @@ function Fireflies({ count = 14 }) {
   );
 }
 
-// twinkling stars pinned to the top of the view (follow the camera, even when it's rotated)
 function Stars() {
   const group = useRef(null);
   const shape = useMemo(() => {
@@ -1298,7 +1879,6 @@ function Stars() {
   );
 }
 
-// gl settings are only read once, so keep brightness in sync with day/night
 function ExposureSync({ exposure }) {
   const { gl } = useThree();
   useEffect(() => {
@@ -1307,7 +1887,6 @@ function ExposureSync({ exposure }) {
   return null;
 }
 
-// matte finish for GLB models: no glossy/oily highlights (same as the other habitats)
 function makeMatte(root) {
   root.traverse((o) => {
     if (!o.isMesh) return;
@@ -1362,15 +1941,15 @@ function PoofManager({ poofs, onPoofDone }) {
 
 const BUNNY_BASE_YAW = 0;
 
-function IdleBunny({ modelPath, homePosition, onHop, scale = 1, inline: InlineAnimation = null }) {
+function IdleBunny({ modelPath, homePosition, onHop, scale = 1, inline: InlineAnimation = null, variant, inlineProps }) {
   const group = useRef();
   const body = useRef();
+  const motion = useRef({ hop: 0, glance: 0, busy: false });
   const { camera, gl } = useThree();
   const { scene } = useGLTF(modelPath);
   const object = useMemo(() => makeMatte(scene.clone()), [scene]);
   const offset = useGroundedOffset(object);
-  // Where she is in the world (idle pose), worked out straight from the model and the same
-  // offset/scale used to draw her, so it's right from the first frame (even mid-animation).
+  const rigged = isBunnyModel(modelPath);
   const anchorBox = useMemo(() => {
     const b = new THREE.Box3().setFromObject(object);
     if (b.isEmpty()) return null;
@@ -1387,24 +1966,29 @@ function IdleBunny({ modelPath, homePosition, onHop, scale = 1, inline: InlineAn
   const glanceOffset = useRef(0);
 
   useFrame(({ clock }) => {
-    // keep MoodBuddy's bubble anchored above her (follows the camera if it's rotated/zoomed)
     if (anchorBox) publishMoodAnchor(camera, gl, anchorBox);
 
     if (!group.current) return;
     const t = clock.getElapsedTime();
 
     if (t > nextHop.current) {
-      nextHop.current = t + 2 + Math.random() * 2.5;
-      onHop?.(homePosition);
+      if (motion.current.busy) {
+        nextHop.current = t + 1.2;
+      } else {
+        nextHop.current = t + 2 + Math.random() * 2.5;
+        onHop?.(homePosition);
+      }
     }
 
     const timeSincePlan = nextHop.current - t;
     const justHopped = timeSincePlan > 1.7 && timeSincePlan < 2.0;
     const hopProgress = justHopped ? (2 - timeSincePlan) / 0.3 : 0;
-    const hopY = justHopped ? Math.abs(Math.sin(hopProgress * Math.PI)) * 0.16 : Math.sin(t * 2.2) * 0.02;
+    const hopArc = justHopped ? Math.abs(Math.sin(hopProgress * Math.PI)) : 0;
+    const hopY = justHopped ? hopArc * 0.16 : Math.sin(t * 2.2) * 0.012;
+    motion.current.hop = hopArc;
 
     if (body.current) {
-      const squashStretch = justHopped ? 1 + Math.sin(hopProgress * Math.PI) * 0.08 : 1;
+      const squashStretch = justHopped ? 1 + Math.sin(hopProgress * Math.PI) * 0.08 : 1 + Math.sin(t * 2.2) * 0.01;
       body.current.scale.set(1 / Math.sqrt(squashStretch), squashStretch, 1 / Math.sqrt(squashStretch));
     }
 
@@ -1412,30 +1996,61 @@ function IdleBunny({ modelPath, homePosition, onHop, scale = 1, inline: InlineAn
       nextGlance.current = t + 2 + Math.random() * 2.5;
       glanceOffset.current = (Math.random() - 0.5) * 0.35;
     }
-    const targetYaw = baseYaw.current + glanceOffset.current;
+    motion.current.glance = glanceOffset.current;
+    const targetYaw = baseYaw.current + glanceOffset.current * (rigged ? 0.5 : 1);
     let angleDelta = targetYaw - group.current.rotation.y;
     while (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
     while (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
     group.current.rotation.y += angleDelta * 0.05;
-    group.current.position.y = offset[1] + hopY;
+    group.current.position.y = (rigged ? 0 : offset[1]) + hopY;
   });
 
+  const spot = anchorBox ? <BunnySpot box={anchorBox} /> : null;
+
   if (InlineAnimation) {
-    // e.g. feeding: same spot, offset, scale and facing as the idle bunny
     return (
-      <InlineAnimation
-        placement={{ homePosition, offset, scale, yaw: BUNNY_BASE_YAW, lean: INLINE_LEAN }}
-        idleModelPath={modelPath}
-      />
+      <>
+        {spot}
+        <InlineAnimation
+          {...inlineProps}
+          placement={{ homePosition, offset, scale, yaw: BUNNY_BASE_YAW, lean: INLINE_LEAN }}
+          idleModelPath={modelPath}
+          variant={variant}
+        />
+      </>
+    );
+  }
+
+  if (rigged) {
+    return (
+      <>
+        {spot}
+        <group ref={group} position={[homePosition[0], 0, homePosition[1]]}>
+          <group ref={body}>
+            <group position={[-homePosition[0], 0, -homePosition[1]]}>
+              <BunnyMood
+                modelUrl={modelPath}
+                idleModelPath={modelPath}
+                placement={{ homePosition, offset, scale, yaw: BUNNY_BASE_YAW, lean: 0 }}
+                Rig={BunnyPrincessIdleRig}
+                rigProps={{ motion }}
+              />
+            </group>
+          </group>
+        </group>
+      </>
     );
   }
 
   return (
-    <group ref={group} position={[homePosition[0], 0, homePosition[1]]} rotation={[0, BUNNY_BASE_YAW, 0]}>
-      <group ref={body}>
-        <primitive object={object} scale={scale} position={[offset[0], 0, offset[2]]} />
+    <>
+      {spot}
+      <group ref={group} position={[homePosition[0], 0, homePosition[1]]} rotation={[0, BUNNY_BASE_YAW, 0]}>
+        <group ref={body}>
+          <primitive object={object} scale={scale} position={[offset[0], 0, offset[2]]} />
+        </group>
       </group>
-    </group>
+    </>
   );
 }
 
@@ -1455,29 +2070,109 @@ class BunnyErrorBoundary extends React.Component {
   }
 }
 
-const BUNNY_HOME_POSITION = [0, 0.3];
+const BUNNY_HOME_POSITION = [0.14, 1.1];
 
-const BUNNY_SCALE = 0.55;
+const BUNNY_SCALE = 0.70;
+
+const isBunnyModel = (model) => /characters\/bunny\/bunny\.glb/.test(String(model || ""));
+
+function headHit(clientX, clientY) {
+  const a = window.__moodAnchor;
+  if (!a) return null;
+  const height = a.bottom - a.top;
+  const halfWidth = height * 0.34;
+  const bottom = a.top + height * 0.5;
+  if (clientX < a.x - halfWidth || clientX > a.x + halfWidth || clientY < a.top - height * 0.04 || clientY > bottom) return null;
+  return THREE.MathUtils.clamp((clientX - a.x) / (halfWidth * 0.8), -1, 1);
+}
+
+function usePetTouch(enabled, onPet, onRelease) {
+  const handlers = useRef({ onPet, onRelease });
+  handlers.current = { onPet, onRelease };
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let activeId = null;
+    const down = (e) => {
+      const x = headHit(e.clientX, e.clientY);
+      if (x === null) return;
+      activeId = e.pointerId;
+      handlers.current.onPet(x, true);
+      e.stopPropagation();
+      if (e.cancelable && e.pointerType !== "mouse") e.preventDefault();
+    };
+    const move = (e) => {
+      if (activeId === null) {
+        if (e.pointerType === "mouse") document.body.style.cursor = headHit(e.clientX, e.clientY) === null ? "" : "grab";
+        return;
+      }
+      if (e.pointerId !== activeId) return;
+      e.stopPropagation();
+      const a = window.__moodAnchor;
+      const x = a ? THREE.MathUtils.clamp((e.clientX - a.x) / ((a.bottom - a.top) * 0.27), -1, 1) : 0;
+      handlers.current.onPet(x, false);
+    };
+    const up = (e) => {
+      if (activeId === null || e.pointerId !== activeId) return;
+      activeId = null;
+      handlers.current.onRelease();
+    };
+    window.addEventListener("pointerdown", down, { capture: true, passive: false });
+    window.addEventListener("pointermove", move, { capture: true });
+    window.addEventListener("pointerup", up, { capture: true });
+    window.addEventListener("pointercancel", up, { capture: true });
+    return () => {
+      window.removeEventListener("pointerdown", down, { capture: true });
+      window.removeEventListener("pointermove", move, { capture: true });
+      window.removeEventListener("pointerup", up, { capture: true });
+      window.removeEventListener("pointercancel", up, { capture: true });
+      document.body.style.cursor = "";
+    };
+  }, [enabled]);
+}
 
 function BunnySlot({ characterModel, onHop }) {
   const mood = useMoodAnimation();
-  const Inline = mood.active ? INLINE_MOODS[mood.mood] || null : null;
-  if (mood.active && !Inline) return null; // MoodBuddy's overlay plays this one
+  const [petting, setPetting] = useState(false);
+  const pet = useRef({ until: 0, x: null });
+  const canPet = isBunnyModel(characterModel);
+  const canInline = canPet || mood.mood === "feeding";
+  const Mood = mood.active && canInline ? INLINE_MOODS[mood.mood] || null : null;
+  const Inline = petting && canPet ? PetBunny : Mood;
+  const moodActive = (name) => mood.active && mood.mood === name;
+
+  const handlePet = (x, first) => {
+    const now = performance.now() / 1000;
+    pet.current = first ? { until: Infinity, x: null, downAt: now } : { ...pet.current, until: Infinity, x };
+    if (!petting) setPetting(true);
+  };
+  const handleRelease = () => {
+    const now = performance.now() / 1000;
+    const downAt = pet.current.downAt ?? now;
+    pet.current = { until: Math.max(downAt + PET_HOLD, now + PET_LINGER), x: null };
+  };
+  const handleDone = () => setPetting(false);
+  usePetTouch(canPet, handlePet, handleRelease);
+
+  if (mood.active && !Inline) return null;
+  const pettingNow = petting && canPet;
   return (
     <BunnyErrorBoundary position={BUNNY_HOME_POSITION}>
       <IdleBunny
+        key={pettingNow ? (moodActive("angry") ? "refuse" : moodActive("crying") ? "comfort" : "pet") : Inline ? `${mood.mood}-${mood.variant || ""}` : "idle"}
+        variant={mood.variant}
         modelPath={characterModel}
         homePosition={BUNNY_HOME_POSITION}
         onHop={Inline ? undefined : onHop}
         scale={BUNNY_SCALE}
         inline={Inline}
+        inlineProps={pettingNow ? { pet, onDone: handleDone, refuse: moodActive("angry"), comfort: moodActive("crying") } : undefined}
       />
     </BunnyErrorBoundary>
   );
 }
 
 const ISO_DISTANCE = 7.8;
-const ISO_ELEVATION = Math.atan(1 / Math.sqrt(2)) + 0.08;
+const ISO_ELEVATION = 0.20;
 const ISO_YAW = 0;
 const ISO_ZOOM = 98;
 const ISO_POSITION = [
@@ -1488,19 +2183,22 @@ const ISO_POSITION = [
 
 const BunnyHabitat3D = ({ characterModel, showCharacter = true }) => {
   const night = useNightModeSetting();
+
+  useEffect(() => {
+    if (isBunnyModel(characterModel)) BUNNY_MOOD_MODELS.forEach((url) => useGLTF.preload(url));
+  }, [characterModel]);
   const L = night ? LIGHTS.night : LIGHTS.day;
   const [poofs, setPoofs] = useState([]);
 
-  // Let MoodBuddy know which moods this habitat plays in-scene.
   useEffect(() => {
-    window.__habitatInline = { animal: "bunny", moods: Object.keys(INLINE_MOODS) };
+    window.__habitatInline = { animal: "bunny", moods: isBunnyModel(characterModel) ? Object.keys(INLINE_MOODS) : ["feeding"] };
     window.dispatchEvent(new CustomEvent("habitat-inline", { detail: window.__habitatInline }));
     return () => {
       window.__habitatInline = null;
       window.__moodAnchor = null;
       window.dispatchEvent(new CustomEvent("habitat-inline", { detail: null }));
     };
-  }, []);
+  }, [characterModel]);
 
   const addPoof = (position) => {
     setPoofs((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, position }]);
@@ -1549,7 +2247,9 @@ const BunnyHabitat3D = ({ characterModel, showCharacter = true }) => {
             shadow-camera-bottom={-7}
           />
           <directionalLight position={[-5, 3, -4]} intensity={L.rim} color={L.rimColor} />
+          <directionalLight position={[0, 3, 7]} intensity={night ? 0.3 : 0.5} color={night ? "#f2e4ff" : "#fff6f2"} />
           <hemisphereLight args={[L.hemiSky, L.hemiGround, L.hemi]} />
+          <Clouds />
           {night && <Stars />}
 
           <React.Suspense fallback={null}>
@@ -1560,25 +2260,24 @@ const BunnyHabitat3D = ({ characterModel, showCharacter = true }) => {
             <PoofManager poofs={poofs} onPoofDone={removePoof} />
 
             <DirtPen />
-            <ContactShadow position={[-1.7, -1.0]} radius={0.62} opacity={0.16} />
+            <ContactShadow position={[-1.7, -1.0]} radius={0.72} opacity={0.14} />
             <ContactShadow position={[1.9, -1.1]} radius={0.78} opacity={0.18} />
             <GrassTufts />
             <Fence />
             <Entrance />
 
             <Bunting />
-            <HayBale />
+            <GardenNook />
+            <BlossomTrees />
+            <TulipBeds />
+            <FairyLights />
+            <FallingPetals />
+            <ScatteredEggs />
             <BunnyPlayCorner />
 
             <Signpost />
 
-            <CarrotPatchErrorBoundary>
-              <React.Suspense fallback={null}>
-                <CarrotPatch />
-              </React.Suspense>
-            </CarrotPatchErrorBoundary>
 
-            <ContactShadow position={BUNNY_HOME_POSITION} radius={0.34} opacity={0.2} />
             <Rocks />
             <Flowers />
             <Mushrooms />

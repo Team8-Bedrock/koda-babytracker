@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { fitInnerEars } from "../earFix";
 
 export const LOCAL_REFERENCE_HEIGHT = 1.6;
 export const PANDA_IDLE_MODEL = "/models/characters/panda/panda.glb";
@@ -62,6 +63,16 @@ export function usePandaRig(url, idleUrl) {
     const center = box.getCenter(new THREE.Vector3());
     const k = LOCAL_REFERENCE_HEIGHT / (size.y || 1);
     const norm = { center: center.clone(), minY: box.min.y, k };
+
+    idle.scene.updateMatrixWorld(true);
+    const idleBox = new THREE.Box3().setFromObject(idle.scene);
+    const idleSize = idleBox.getSize(new THREE.Vector3());
+    const idleNorm = {
+      center: idleBox.getCenter(new THREE.Vector3()),
+      minY: idleBox.min.y,
+      k: LOCAL_REFERENCE_HEIGHT / (idleSize.y || 1),
+    };
+
     const toRig = ([x, y, z]) => new THREE.Vector3((x - center.x) * k, (y - box.min.y) * k, (z - center.z) * k);
     const cx = center.x;
 
@@ -78,14 +89,14 @@ export function usePandaRig(url, idleUrl) {
     const hands = ownHands.length
       ? ownHands.map((p) => ({ mesh: p.mesh, left: p.center.x < cx }))
       : meshesOf(idle.scene)
-          .filter(isHand)
-          .map((p) => {
-            const h = p.mesh.clone(true);
-            p.mesh.matrixWorld.decompose(h.position, h.quaternion, h.scale);
-            h.castShadow = true;
-            root.add(h);
-            return { mesh: h, left: p.center.x < cx };
-          });
+        .filter(isHand)
+        .map((p) => {
+          const h = p.mesh.clone(true);
+          p.mesh.matrixWorld.decompose(h.position, h.quaternion, h.scale);
+          h.castShadow = true;
+          root.add(h);
+          return { mesh: h, left: p.center.x < cx };
+        });
 
     root.position.set(-center.x, -box.min.y, -center.z);
     const scaled = new THREE.Group();
@@ -115,6 +126,8 @@ export function usePandaRig(url, idleUrl) {
     const earLeft = pivot(head, toRig(RAW.earLeft));
     const earRight = pivot(head, toRig(RAW.earRight));
     earParts.forEach((p) => (p.center.x < cx ? earLeft : earRight).attach(p.mesh));
+    fitInnerEars(earLeft);
+    fitInnerEars(earRight);
 
     const faceParts = headParts.filter((p) => p.center.z > 0.085 && p.center.y < -0.12 && p.center.y > -0.16 && Math.abs(p.center.x - cx) > 0.012);
     const eyeSide = (left) => {
@@ -183,6 +196,7 @@ export function usePandaRig(url, idleUrl) {
     return {
       rig,
       norm,
+      idleNorm,
       toRig,
       head,
       headBase,
