@@ -8,6 +8,7 @@ import '../styling/pages/activities.css';
 
 import { getSelectedChildForUser, getCurrentUserId } from '../utils/authStorage';
 import { queueActivityOffline } from '../utils/offlineStorage';
+import { addNotification } from '../utils/notifications';
 import { API_URL } from "../config";
 import Layout from '../components/Layout';
 
@@ -172,6 +173,13 @@ const Activities = () => {
           message: 'It will sync automatically when the connection is restored.'
         })
       );
+      addNotification({
+        title: navigator.onLine
+          ? 'Entry saved on this device'
+          : 'You’re offline. Entry saved on this device.',
+        message: 'It will sync automatically when the connection is restored.',
+        path: '/add-activity',
+      });
 
       return true;
     };

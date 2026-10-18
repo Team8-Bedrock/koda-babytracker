@@ -82,6 +82,84 @@
   justify-self: end;
 }
 
+.header-notifications {
+  grid-column: 3;
+  justify-self: end;
+  position: relative;
+  z-index: 2;
+}
+
+.header-notifications .header-bell-btn {
+  grid-column: auto;
+}
+
+.header-notification-dot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: block;
+  width: 13px;
+  height: 13px;
+  box-sizing: border-box;
+  border: 2px solid #fffdf7;
+  border-radius: 50%;
+  background: #e3262e;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.notifications-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(300px, calc(100vw - 28px));
+  padding: 12px;
+  border: 2px solid var(--k-ink);
+  border-radius: 16px;
+  background: rgba(255, 253, 247, 0.96);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+}
+
+.notifications-menu h2 {
+  margin: 0 4px 8px;
+  color: var(--k-ink);
+  font-family: "Baloo 2", "Nunito", sans-serif;
+  font-size: 18px;
+}
+
+.notification-item {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(108, 191, 79, 0.12);
+  color: var(--k-ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.notification-item + .notification-item {
+  margin-top: 6px;
+}
+
+.notification-item span,
+.notifications-empty {
+  font-size: 13px;
+}
+
+.notification-item strong,
+.notification-item span,
+.notifications-empty {
+  font-family: "Baloo 2", "Nunito", sans-serif;
+}
+
+.notifications-empty {
+  margin: 0 4px 4px;
+}
+
 .name-dropdown-btn {
   justify-self: center;
   font-size: 18px;
