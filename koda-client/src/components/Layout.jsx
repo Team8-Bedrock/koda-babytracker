@@ -17,7 +17,7 @@ import HabitatBackground from "./HabitatBackground";
 import NavIconButton from "./NavIconButton";
 import MoodBuddy from "./MoodBuddy";
 import NightTheme from "./NightTheme";
-import ChildSwitchOverlay, { startChildSwitch } from "./ChildSwitch";
+import ChildSwitchOverlay, { startChildSwitch } from "./childSwitch";
 import { addNotification, getNotifications, removeNotification } from "../utils/notifications";
 import CharacterHead from "./CharacterHead";
 import "../styling/global/layout.css";
