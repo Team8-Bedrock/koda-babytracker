@@ -32,6 +32,12 @@ const FLY_RADIUS = new THREE.Vector3(0.45, 0.14, 0.16);
 const TONGUE_RADIUS = 0.024;
 const TONGUE_TIP = 0.038;
 const ARM_REACH = 0.85;
+const PETAL_COUNT = 5;
+const PETAL_COLOR = "#ffb3cf";
+const PETAL_TIP = "#ff8fb8";
+const FLOWER_HEART = "#ffd84d";
+const SEPAL_COLOR = "#5aa83a";
+const BLOOM_SECONDS = 0.9;
 const HABITAT_TUNING = { lift: 0.42, flySize: 1.8, tongue: 1.6 };
 const CARD_TUNING = { lift: 0, flySize: 1, tongue: 1 };
 
@@ -89,6 +95,82 @@ function makeMatte(root) {
       m.needsUpdate = true;
     });
   });
+}
+
+function averageColor(mesh) {
+  const col = mesh.geometry?.attributes?.color;
+  if (col) {
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let n = 0;
+    for (let i = 0; i < col.count; i += 7) {
+      r += col.getX(i);
+      g += col.getY(i);
+      b += col.getZ(i);
+      n++;
+    }
+    return [r / Math.max(1, n), g / Math.max(1, n), b / Math.max(1, n)];
+  }
+  const m = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+  const c = m?.color || new THREE.Color(1, 1, 1);
+  return [c.r, c.g, c.b];
+}
+
+const isStemColor = ([r, g, b]) => g > 0.34 && g < 0.52 && r > 0.1 && r < 0.24 && b < 0.06;
+const isBladeColor = ([r, g, b]) => g > 0.14 && g < 0.3 && r < 0.09 && b < 0.06;
+
+function topVertex(meshes) {
+  const v = new THREE.Vector3();
+  let best = null;
+  meshes.forEach((mesh) => {
+    const pos = mesh.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(pos.count / 1500));
+    for (let i = 0; i < pos.count; i += step) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+      if (!best || v.y > best.y) best = v.clone();
+    }
+  });
+  return best;
+}
+
+function softMaterial(color) {
+  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0 });
+  m.userData.kodaMatte = true;
+  return m;
+}
+
+function makeFlower(size) {
+  const flower = new THREE.Group();
+  const bloom = new THREE.Group();
+  flower.add(bloom);
+  const heart = new THREE.Mesh(new THREE.SphereGeometry(size * 0.32, 16, 12), softMaterial(FLOWER_HEART));
+  heart.scale.set(1, 0.7, 1);
+  heart.position.y = size * 0.08;
+  bloom.add(heart);
+  const petals = [];
+  for (let i = 0; i < PETAL_COUNT; i++) {
+    const hinge = new THREE.Group();
+    hinge.rotation.y = (i / PETAL_COUNT) * Math.PI * 2;
+    const tilt = new THREE.Group();
+    hinge.add(tilt);
+    const petal = new THREE.Mesh(new THREE.SphereGeometry(size * 0.42, 14, 10), softMaterial(i % 2 ? PETAL_TIP : PETAL_COLOR));
+    petal.scale.set(0.62, 0.22, 1);
+    petal.position.set(0, 0, size * 0.42);
+    tilt.add(petal);
+    bloom.add(hinge);
+    petals.push(tilt);
+  }
+  const sepal = new THREE.Mesh(new THREE.SphereGeometry(size * 0.3, 12, 8), softMaterial(SEPAL_COLOR));
+  sepal.scale.set(1, 0.45, 1);
+  sepal.position.y = -size * 0.06;
+  bloom.add(sepal);
+  flower.traverse((o) => {
+    if (o.isMesh) o.castShadow = true;
+  });
+  flower.scale.setScalar(0.0001);
+  flower.visible = false;
+  return { flower, bloom, petals };
 }
 
 function meshesOf(root) {
@@ -165,6 +247,19 @@ function useFrogRig(url, idleUrl, targetHeight) {
     const stemParts = headParts.filter((p) => p.center.y > -0.215 && Math.abs(p.center.x) < 0.07);
     const leaf = pivot(head, toRig(RAW.leaf));
     stemParts.forEach((p) => leaf.attach(p.mesh));
+    rig.updateMatrixWorld(true);
+    const stems = stemParts.filter((p) => isStemColor(averageColor(p.mesh)));
+    const blades = stemParts.filter((p) => isBladeColor(averageColor(p.mesh)));
+    const stemTip = topVertex((stems.length ? stems : stemParts).map((p) => p.mesh)) || toRig(RAW.leaf).add(new THREE.Vector3(0, 0.2, 0));
+    const bladeBox = new THREE.Box3();
+    blades.forEach((p) => bladeBox.union(new THREE.Box3().setFromObject(p.mesh)));
+    const leafLength = bladeBox.isEmpty() ? 0.3 : Math.max(bladeBox.max.x - bladeBox.min.x, bladeBox.max.z - bladeBox.min.z);
+    const stemBox = new THREE.Box3();
+    (stems.length ? stems : stemParts).forEach((p) => stemBox.union(new THREE.Box3().setFromObject(p.mesh)));
+    const stemHeight = stemBox.isEmpty() ? 0.25 : stemBox.max.y - stemBox.min.y;
+    const flowerParts = makeFlower(Math.max(leafLength * 0.62, stemHeight * 0.7));
+    const flowerSeat = pivot(leaf, stemTip.clone().add(new THREE.Vector3(0, leafLength * 0.03, 0)));
+    flowerSeat.add(flowerParts.flower);
 
     const eyes = headParts
       .filter((p) => Math.abs(p.center.x) > 0.06 && p.center.z > 0.09 && p.center.y > -0.3 && p.size.y < 0.06)
@@ -213,6 +308,7 @@ function useFrogRig(url, idleUrl, targetHeight) {
       head,
       headBase,
       leaf,
+      flower: flowerParts,
       eyes,
       mouth,
       throat,
@@ -459,6 +555,7 @@ function FeedingFrogRig({ worldScale, idleModelPath, placement }) {
   const tongueRef = useRef(null);
   const tongueBodyRef = useRef(null);
   const tongueTipRef = useRef(null);
+  const bloomState = useRef({ started: null, amount: 0 });
   const tongueGeometry = useMemo(() => new THREE.CylinderGeometry(TONGUE_RADIUS, TONGUE_RADIUS * 1.15, 1, 12).translate(0, 0.5, 0), []);
 
   useEffect(() => {
@@ -516,6 +613,21 @@ function FeedingFrogRig({ worldScale, idleModelPath, placement }) {
     frog.eyes.forEach((e) => e.scale.set(1, 1 - s.gulp * 0.4 - s.chewing * 0.15, 1));
     frog.leaf.rotation.z = Math.sin(t * 2.4) * 0.12 + s.hop * 0.4 * Math.sin(t * 9);
     frog.leaf.rotation.x = -s.hop * 0.3 + s.crouch * 0.15;
+
+    const bloom = bloomState.current;
+    if (bloom.started === null && s.gulp > 0.1) bloom.started = t;
+    bloom.amount = bloom.started === null ? 0 : smooth(0, BLOOM_SECONDS, t - bloom.started);
+    const fl = frog.flower;
+    const grow = smooth(0, 0.5, bloom.amount);
+    const open = smooth(0.4, 1, bloom.amount);
+    const pop = 1 + s.gulp * 0.18 + s.chewing * 0.04;
+    fl.flower.visible = bloom.amount > 0.01;
+    fl.flower.scale.setScalar(Math.max(0.0001, grow * pop));
+    fl.flower.rotation.z = Math.sin(t * 2.1) * 0.12 + Math.sin(t * 9) * 0.08 * s.happy;
+    fl.bloom.rotation.y = t * 0.4 + s.happy * 0.6;
+    fl.petals.forEach((petal, i) => {
+      petal.rotation.x = -1.35 * (1 - open) - 0.25 + Math.sin(t * 3 + i) * 0.06 * open - s.gulp * 0.25 + s.happy * Math.sin(t * 10 + i) * 0.08;
+    });
 
     tmp.base.copy(frog.tongueOffset).applyMatrix4(head.matrix);
     tmp.dir.copy(tmp.hit).sub(tmp.base);

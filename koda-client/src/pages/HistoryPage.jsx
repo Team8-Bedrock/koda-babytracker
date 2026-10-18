@@ -1,6 +1,3 @@
-// what needs to be fixed:
-// 1. habitat isnt displaying in the background of the page
-
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { FileText, Download, Moon, Milk, Baby } from 'lucide-react';

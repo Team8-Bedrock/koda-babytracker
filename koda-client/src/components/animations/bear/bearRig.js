@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { LOCAL_REFERENCE_HEIGHT, PandaMood } from "../panda/pandaRig";
+import { fitInnerEars } from "../earFix";
 
 export const BEAR_IDLE_MODEL = "/models/characters/bear/bear.glb";
 const MOUTH_TILT = 0.45;
@@ -9,7 +10,7 @@ const MOUTH_TILT = 0.45;
 function averageColor(mesh) {
   const col = mesh.geometry?.attributes?.color;
   if (col) {
-    const sum = [0, 0, 0];
+    const sum = [0, 0, 0];  
     let n = 0;
     for (let i = 0; i < col.count; i += 7) {
       sum[0] += col.getX(i);
@@ -121,6 +122,8 @@ export function useBearRig(url, idleUrl) {
     };
     const earLeft = earFor(true);
     const earRight = earFor(false);
+    fitInnerEars(earLeft);
+    fitInnerEars(earRight);
 
     const faceDark = headParts.filter((p) => isDark(p.color) && p.center.z > skullCenter.z + 0.05);
     const noseParts = faceDark.filter((p) => Math.abs(p.center.x - skullCenter.x) < 0.08);

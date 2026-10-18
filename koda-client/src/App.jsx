@@ -15,6 +15,7 @@ import AnalyticsPage from './pages/analyticsPage';
 import FullLogPage from './pages/FullLogPage';
 import Chat from './pages/Chat';
 import Layout from './components/Layout';
+
 function App() {
   return (
     <Router>

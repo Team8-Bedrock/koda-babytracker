@@ -11,6 +11,7 @@ import { getQueuedActivities } from "../utils/offlineStorage";
 
 const ParentDashboard = () => {
   const [activities, setActivities] = useState([]);
+  const [caregivers, setCaregivers] = useState([]);
 
   const [reviewVersion, setReviewVersion] = useState(0);
 
@@ -110,7 +111,8 @@ const ParentDashboard = () => {
         const isToday = (value) => {
           if (!value) return false;
 
-          const date = new Date(value);
+          const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? new Date(`${value}T00:00`) : new Date(value);
+          if (Number.isNaN(date.getTime())) return false;
           const now = new Date();
 
           return (
@@ -190,15 +192,34 @@ const ParentDashboard = () => {
 
     fetchData();
 
+    let midnightTimer;
+    const scheduleMidnight = () => {
+      const next = new Date();
+      next.setHours(24, 0, 5, 0);
+      midnightTimer = setTimeout(() => {
+        fetchData();
+        scheduleMidnight();
+      }, next.getTime() - Date.now());
+    };
+    scheduleMidnight();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchData();
+    };
+
     window.addEventListener("online", fetchData);
     window.addEventListener("offline", fetchData);
     window.addEventListener("offline-sync-complete", fetchData);
+    window.addEventListener("activity-saved", fetchData);
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       active = false;
+      clearTimeout(midnightTimer);
       window.removeEventListener("online", fetchData);
       window.removeEventListener("offline", fetchData);
       window.removeEventListener("offline-sync-complete", fetchData);
+      window.removeEventListener("activity-saved", fetchData);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [selectedChild?._id, reviewVersion]);
 
@@ -268,8 +289,17 @@ const ParentDashboard = () => {
 
   useEffect(() => {
     const closeActivities = () => setIsActivitiesOpen(false);
+    const afterSwitch = () => {
+      setIsActivitiesOpen(false);
+      requestAnimationFrame(() => requestAnimationFrame(() => setIsActivitiesOpen(true)));
+      setReviewVersion((v) => v + 1);
+    };
     window.addEventListener("close-todays-activities", closeActivities);
-    return () => window.removeEventListener("close-todays-activities", closeActivities);
+    window.addEventListener("koda-child-switched", afterSwitch);
+    return () => {
+      window.removeEventListener("close-todays-activities", closeActivities);
+      window.removeEventListener("koda-child-switched", afterSwitch);
+    };
   }, []);
 
   return (

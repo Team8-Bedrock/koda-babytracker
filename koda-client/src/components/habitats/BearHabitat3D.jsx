@@ -4,7 +4,6 @@ import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
 import "../../styling/components/habitats.css";
-import { DEFAULT_MODEL } from "../../constants/avatars";
 import { seededRand, drawWrapped } from "./habitatUtils";
 import FeedingBear from "../animations/bear/FeedingBear";
 import AngryBear from "../animations/bear/AngryBear";
@@ -19,6 +18,7 @@ import QuietBear from "../animations/bear/QuietBear";
 import OtherBear from "../animations/bear/OtherBear";
 import PlaytimeBear from "../animations/bear/PlaytimeBear";
 import DiaperBear from "../animations/bear/DiaperBear";
+import PetBear from "../animations/bear/PetBear";
 
 function useNightMode() {
   const [night, setNight] = React.useState(() => typeof window !== "undefined" && localStorage.getItem("koda-dark-mode") === "true");
@@ -97,6 +97,8 @@ const INLINE_MOODS = {
 const BEAR_MOOD_MODELS = ["angry", "feeding", "hungry", "sleepy", "sleeping"].map((name) => `/models/characters/bear/${name}.glb`);
 const INLINE_LEAN = 0.1;
 const BUBBLE_LIFT = 0.02;
+const PET_HOLD = 2.2;
+const PET_LINGER = 1.2;
 
 function readMoodAnimation() {
   if (typeof window === "undefined") return { active: false };
@@ -208,7 +210,6 @@ function buildForestFloorTexture(night = false) {
         ctx.restore();
       });
     }
-    // dewy, moonlit petals
     const dew = ["rgba(226,236,255,0.55)", "rgba(201,182,228,0.5)", "rgba(255,233,160,0.4)"];
     for (let i = 0; i < 60; i++) {
       const seed = i * 29 + 13;
@@ -710,7 +711,6 @@ function Pond() {
     </group>
   );
 }
-
 function Firefly({ radius, speed, phase, height }) {
   const ref = useRef(null);
   useFrame(({ clock }) => {
@@ -958,7 +958,7 @@ function House({ model }) {
   );
 }
 
-function Bear({ model, position = BEAR_POSITION, inline: InlineAnimation = null, variant }) {
+function Bear({ model, position = BEAR_POSITION, inline: InlineAnimation = null, variant, inlineProps }) {
   const group = useRef(null);
   const frame = useRef(null);
   const { camera, gl } = useThree();
@@ -1040,6 +1040,7 @@ function Bear({ model, position = BEAR_POSITION, inline: InlineAnimation = null,
           placement={{ homePosition: position, offset, scale, yaw: 0, lean: INLINE_LEAN }}
           idleModelPath={model}
           variant={variant}
+          {...inlineProps}
         />
       </group>
     );
@@ -1056,19 +1057,92 @@ function Bear({ model, position = BEAR_POSITION, inline: InlineAnimation = null,
   );
 }
 
+function headHit(clientX, clientY) {
+  const a = window.__moodAnchor;
+  if (!a) return null;
+  const height = a.bottom - a.top;
+  const halfWidth = height * 0.34;
+  const bottom = a.top + height * 0.5;
+  if (clientX < a.x - halfWidth || clientX > a.x + halfWidth || clientY < a.top - height * 0.04 || clientY > bottom) return null;
+  return THREE.MathUtils.clamp((clientX - a.x) / (halfWidth * 0.8), -1, 1);
+}
+
+function usePetTouch(enabled, onPet, onRelease) {
+  const handlers = useRef({ onPet, onRelease });
+  handlers.current = { onPet, onRelease };
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let activeId = null;
+    const down = (e) => {
+      const x = headHit(e.clientX, e.clientY);
+      if (x === null) return;
+      activeId = e.pointerId;
+      handlers.current.onPet(x, true);
+      if (e.cancelable && e.pointerType !== "mouse") e.preventDefault();
+    };
+    const move = (e) => {
+      if (activeId === null) {
+        if (e.pointerType === "mouse") document.body.style.cursor = headHit(e.clientX, e.clientY) === null ? "" : "grab";
+        return;
+      }
+      if (e.pointerId !== activeId) return;
+      const a = window.__moodAnchor;
+      const x = a ? THREE.MathUtils.clamp((e.clientX - a.x) / ((a.bottom - a.top) * 0.27), -1, 1) : 0;
+      handlers.current.onPet(x, false);
+    };
+    const up = (e) => {
+      if (activeId === null || e.pointerId !== activeId) return;
+      activeId = null;
+      handlers.current.onRelease();
+    };
+    window.addEventListener("pointerdown", down, { capture: true, passive: false });
+    window.addEventListener("pointermove", move, { capture: true });
+    window.addEventListener("pointerup", up, { capture: true });
+    window.addEventListener("pointercancel", up, { capture: true });
+    return () => {
+      window.removeEventListener("pointerdown", down, { capture: true });
+      window.removeEventListener("pointermove", move, { capture: true });
+      window.removeEventListener("pointerup", up, { capture: true });
+      window.removeEventListener("pointercancel", up, { capture: true });
+      document.body.style.cursor = "";
+    };
+  }, [enabled]);
+}
+
+const isBearModel = (model) => model === BEAR_MODEL || /characters\/bear\/bear\.glb/.test(String(model || ""));
+
 function BearSlot({ model }) {
   const mood = useMoodAnimation();
-  const canInline = model === BEAR_MODEL;
-  const Inline = mood.active && canInline ? INLINE_MOODS[mood.mood] || null : null;
+  const [petting, setPetting] = React.useState(false);
+  const pet = useRef({ until: 0, x: null });
+  const canInline = isBearModel(model);
+  const Mood = mood.active && canInline ? INLINE_MOODS[mood.mood] || null : null;
+  const Inline = petting && canInline ? PetBear : Mood;
+  const moodActive = (name) => mood.active && mood.mood === name;
+
+  const handlePet = (x, first) => {
+    const now = performance.now() / 1000;
+    pet.current = first ? { until: Infinity, x: null, downAt: now } : { ...pet.current, until: Infinity, x };
+    if (!petting) setPetting(true);
+  };
+  const handleRelease = () => {
+    const now = performance.now() / 1000;
+    const downAt = pet.current.downAt ?? now;
+    pet.current = { until: Math.max(downAt + PET_HOLD, now + PET_LINGER), x: null };
+  };
+  const handleDone = () => setPetting(false);
+  usePetTouch(canInline, handlePet, handleRelease);
+
   if (mood.active && !Inline) return null;
   return (
     <BearErrorBoundary position={BEAR_POSITION}>
       <Bear
-        key={Inline ? `${mood.mood}-${mood.variant || ""}` : "idle"}
+        key={petting && canInline ? (moodActive("angry") ? "refuse" : moodActive("crying") ? "comfort" : "pet") : Mood ? `${mood.mood}-${mood.variant || ""}` : "idle"}
         model={model}
         position={BEAR_POSITION}
         inline={Inline}
         variant={mood.variant}
+        inlineProps={petting && canInline ? { pet, onDone: handleDone, refuse: moodActive("angry"), comfort: moodActive("crying") } : undefined}
       />
     </BearErrorBoundary>
   );
@@ -1086,7 +1160,7 @@ class BearErrorBoundary extends React.Component {
     console.error("Bear model failed to load:", error);
   }
   render() {
-    if (this.state.failed) return <Bear model={DEFAULT_MODEL} position={this.props.position} />;
+    if (this.state.failed) return <Bear model={BEAR_MODEL} position={this.props.position} />;
     return this.props.children;
   }
 }
@@ -1153,11 +1227,11 @@ const BearHabitat3D = ({ characterModel, showCharacter = true, houseModel, useHo
 
   useEffect(() => {
     if (bearModel) useGLTF.preload(bearModel);
-    if (bearModel === BEAR_MODEL) BEAR_MOOD_MODELS.forEach((url) => useGLTF.preload(url));
+    if (isBearModel(bearModel)) BEAR_MOOD_MODELS.forEach((url) => useGLTF.preload(url));
   }, [bearModel]);
 
   useEffect(() => {
-    if (!showCharacter || bearModel !== BEAR_MODEL) return undefined;
+    if (!showCharacter || !isBearModel(bearModel)) return undefined;
     window.__habitatInline = { animal: "bear", moods: Object.keys(INLINE_MOODS) };
     window.dispatchEvent(new CustomEvent("habitat-inline", { detail: window.__habitatInline }));
     return () => {

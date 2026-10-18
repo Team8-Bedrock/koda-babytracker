@@ -10,22 +10,68 @@ const scene = (load) => ({ kind: "scene", Comp: lazy(load) });
 
 const ANIMATIONS = {
     fox: {
-        angry: own(() => import("./animations/fox/AngryFox")),
+        angry: scene(() => import("./animations/fox/AngryFox")),
         feeding: scene(() => import("./animations/fox/FeedingFox")),
+        crying: scene(() => import("./animations/fox/CryingFox")),
+        hungry: scene(() => import("./animations/fox/HungryFox")),
+        sleepy: scene(() => import("./animations/fox/SleepyFox")),
+        sleeping: scene(() => import("./animations/fox/SleepingFox")),
+        woke: scene(() => import("./animations/fox/WokeFox")),
+        groggy: scene(() => import("./animations/fox/WokeFox")),
+        happy: scene(() => import("./animations/fox/HappyFox")),
+        energetic: scene(() => import("./animations/fox/EnergeticFox")),
+        quiet: scene(() => import("./animations/fox/QuietFox")),
+        other: scene(() => import("./animations/fox/OtherFox")),
+        playtime: scene(() => import("./animations/fox/PlaytimeFox")),
+        diaper: scene(() => import("./animations/fox/DiaperFox")),
     },
     frog: {
-        angry: own(() => import("./animations/frog/AngryFrog")),
+        angry: scene(() => import("./animations/frog/AngryFrog")),
         feeding: scene(() => import("./animations/frog/FeedingFrog")),
+        crying: scene(() => import("./animations/frog/CryingFrog")),
+        hungry: scene(() => import("./animations/frog/HungryFrog")),
+        sleepy: scene(() => import("./animations/frog/SleepyFrog")),
+        sleeping: scene(() => import("./animations/frog/SleepingFrog")),
+        woke: scene(() => import("./animations/frog/WokeFrog")),
+        groggy: scene(() => import("./animations/frog/WokeFrog")),
+        happy: scene(() => import("./animations/frog/HappyFrog")),
+        energetic: scene(() => import("./animations/frog/EnergeticFrog")),
+        quiet: scene(() => import("./animations/frog/QuietFrog")),
+        other: scene(() => import("./animations/frog/OtherFrog")),
+        playtime: scene(() => import("./animations/frog/PlaytimeFrog")),
+        diaper: scene(() => import("./animations/frog/DiaperFrog")),
     },
     koala: {
-        angry: own(() => import("./animations/koala/AngryKoala")),
+        angry: scene(() => import("./animations/koala/AngryKoala")),
         feeding: scene(() => import("./animations/koala/FeedingKoala")),
+        crying: scene(() => import("./animations/koala/CryingKoala")),
+        hungry: scene(() => import("./animations/koala/HungryKoala")),
+        sleepy: scene(() => import("./animations/koala/SleepyKoala")),
+        sleeping: scene(() => import("./animations/koala/SleepingKoala")),
+        woke: scene(() => import("./animations/koala/WokeKoala")),
+        groggy: scene(() => import("./animations/koala/WokeKoala")),
+        happy: scene(() => import("./animations/koala/HappyKoala")),
+        energetic: scene(() => import("./animations/koala/EnergeticKoala")),
+        quiet: scene(() => import("./animations/koala/QuietKoala")),
+        other: scene(() => import("./animations/koala/OtherKoala")),
+        playtime: scene(() => import("./animations/koala/PlaytimeKoala")),
+        diaper: scene(() => import("./animations/koala/DiaperKoala")),
     },
     bunny: {
         angry: own(() => import("./animations/bunny/AngryBunny")),
         feeding: scene(() => import("./animations/bunny/FeedingBunny")),
         crying: scene(() => import("./animations/bunny/CryingBunny")),
         hungry: scene(() => import("./animations/bunny/HungryBunny")),
+        sleepy: scene(() => import("./animations/bunny/SleepyBunny")),
+        sleeping: scene(() => import("./animations/bunny/SleepingBunny")),
+        woke: scene(() => import("./animations/bunny/WokeBunny")),
+        groggy: scene(() => import("./animations/bunny/WokeBunny")),
+        happy: scene(() => import("./animations/bunny/HappyBunny")),
+        energetic: scene(() => import("./animations/bunny/EnergeticBunny")),
+        quiet: scene(() => import("./animations/bunny/QuietBunny")),
+        other: scene(() => import("./animations/bunny/OtherBunny")),
+        playtime: scene(() => import("./animations/bunny/PlaytimeBunny")),
+        diaper: scene(() => import("./animations/bunny/DiaperBunny")),
     },
     bear: {
         angry: scene(() => import("./animations/bear/AngryBear")),
@@ -120,6 +166,7 @@ function moodNoteOf(log) {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MOOD_LIFETIME_MS = DAY_MS;
 
 function diaperKind(log) {
     const v = String(log.type || log.diaperType || log.details?.type || log.value || "").toLowerCase();
@@ -258,8 +305,9 @@ export function resolveMood(logs, schedules, now = new Date()) {
         }
     }
 
-    events.sort((a, b) => b.at - a.at);
-    return events[0] || { mood: "content", at: null, reason: "nothing logged yet" };
+    const fresh = events.filter((e) => e.at && now.getTime() - new Date(e.at).getTime() <= MOOD_LIFETIME_MS);
+    fresh.sort((a, b) => b.at - a.at);
+    return fresh[0] || { mood: "content", at: null, reason: events.length ? "nothing new in the last 24 hours" : "nothing logged yet" };
 }
 async function loadChildData(childId, token) {
     const headers = { "x-auth-token": token };
@@ -310,7 +358,7 @@ const MOOD_INFO = {
         cause: () => "sleep has been started",
     },
     woke: {
-        short: (ev) => (ev?.variant === "poor" ? "so groggy..." : ev?.variant === "fair" ? "kinda sleepy" : "well rested!"),
+        short: (ev) => (ev?.variant === "poor" ? "so groggy..." : ev?.variant === "fair" ? "yawn..." : "well rested!"),
         sentence: (n, ev) =>
             `${n} slept ${formatDuration(ev?.sleep?.minutes || 0)} (${clock(ev?.sleep?.start)} – ${clock(ev?.sleep?.end)}). Sleep quality: ${ev?.variant || "good"}.`,
         cause: (r, ev) =>
@@ -374,7 +422,7 @@ const MOOD_INFO = {
         cause: (r) => (r && r.includes("playtime") ? "possibly due to a missed playtime" : `noted as ${r && r.includes("mood logged: ") ? r.split("mood logged: ")[1] : "mad"} in the mood log`),
     },
     crying: {
-        short: "sniff...",
+        short: "waaah!",
         sentence: (n) => `${n} has been noted as sad and teary.`,
         cause: (r) => (r && r.includes("diaper") ? "possibly due to a missed diaper change" : `noted as ${r && r.includes("mood logged: ") ? r.split("mood logged: ")[1] : "sad"} in the mood log`),
     },
@@ -411,28 +459,28 @@ function useNightMode() {
     return night;
 }
 
-// Same light setup as the habitat scenes, so the animated avatar matches the idle one on the dashboard.
 const SCENE_LIGHTS = {
     day: { exposure: 1.15, ambient: 0.9, ambientColor: "#fff4e2", sun: 2.0, sunColor: "#fff0cf", rim: 0.6, rimColor: "#b6e3d6", hemiSky: "#ffffff", hemiGround: "#6f9a6e", hemi: 0.95 },
     night: { exposure: 1.0, ambient: 0.62, ambientColor: "#b9c6f0", sun: 0.85, sunColor: "#c7d4ff", rim: 0.5, rimColor: "#9fbaff", hemiSky: "#8ea3e0", hemiGround: "#34525c", hemi: 0.75 },
 };
 
-// Each habitat has its own night mood (and the bunny its own day light), so an
-// animation always uses the same lights as that animal's idle scene.
+
 const NIGHT_LIGHTS_BY_ANIMAL = {
     bear: SCENE_LIGHTS.night,
     panda: { exposure: 1.0, ambient: 0.62, ambientColor: "#c4e6dc", sun: 0.85, sunColor: "#d6ecff", rim: 0.5, rimColor: "#a6d8e8", hemiSky: "#9fd0c8", hemiGround: "#2f5a52", hemi: 0.75 },
     frog: { exposure: 1.0, ambient: 0.6, ambientColor: "#c9dcf2", sun: 0.85, sunColor: "#d6e8ff", rim: 0.55, rimColor: "#9fd6d0", hemiSky: "#9cc4e0", hemiGround: "#2f4a3a", hemi: 0.75 },
     bunny: { exposure: 1.0, ambient: 0.62, ambientColor: "#d9cdf2", sun: 0.85, sunColor: "#e6dbff", rim: 0.55, rimColor: "#ffc4a3", hemiSky: "#b4b0e0", hemiGround: "#5a4a3a", hemi: 0.75 },
+    fox: { exposure: 1.0, ambient: 0.62, ambientColor: "#d8c8e6", sun: 0.85, sunColor: "#e2d8ff", rim: 0.6, rimColor: "#ffb27a", hemiSky: "#a9a2d6", hemiGround: "#4a3a2e", hemi: 0.75 },
+    koala: { exposure: 1.0, ambient: 0.62, ambientColor: "#cfd6ee", sun: 0.85, sunColor: "#d8e2ff", rim: 0.55, rimColor: "#ffd59a", hemiSky: "#9fb0dc", hemiGround: "#3e4a40", hemi: 0.75 },
 };
 const DAY_LIGHTS_BY_ANIMAL = {
     frog: { exposure: 1.15, ambient: 0.8, ambientColor: "#fff6e6", sun: 2.1, sunColor: "#fff3d6", rim: 0.45, rimColor: "#a8e0ea", hemiSky: "#f0ffe6", hemiGround: "#4a6b47", hemi: 0.95 },
     bunny: { exposure: 1.15, ambient: 0.72, ambientColor: "#fff4e2", sun: 2.0, sunColor: "#ffeec2", rim: 0.35, rimColor: "#ffcfa0", hemiSky: "#fff0c4", hemiGround: "#8a7a42", hemi: 0.9 },
+    fox: { exposure: 1.12, ambient: 0.78, ambientColor: "#fff0dc", sun: 2.0, sunColor: "#ffe2b8", rim: 0.45, rimColor: "#ffc48a", hemiSky: "#fff2d8", hemiGround: "#7a5a36", hemi: 0.9 },
+    koala: { exposure: 1.12, ambient: 0.8, ambientColor: "#f6f4ec", sun: 2.0, sunColor: "#fff1d6", rim: 0.45, rimColor: "#c8e2d0", hemiSky: "#eef6ea", hemiGround: "#5e6e52", hemi: 0.92 },
 };
 
-// At night the idle bear is also lit by the campfire, both lanterns and a soft light above it.
-// These are the same lights, moved and scaled up to the animation's size so they land on it the same way.
-// (habitat bear is 0.32 tall, animations are 1.8 tall → everything ×5.625, brightness ×5.625²)
+
 const HABITAT_TO_ANIM = 1.8 / 0.32;
 const NIGHT_POINT_LIGHTS = [
     { name: "above", pos: [-0.05, 0.5, 0.25], color: "#ffe6c4", intensity: 0.2, distance: 0.9 },
@@ -466,7 +514,6 @@ function NightPointLights() {
     ));
 }
 
-// keep brightness in sync when night mode is toggled (gl settings are otherwise only read once)
 function ExposureSync({ exposure }) {
     const { gl } = useThree();
     useEffect(() => {
@@ -475,7 +522,6 @@ function ExposureSync({ exposure }) {
     return null;
 }
 
-// Matte finish: no glossy/oily highlights (same as the habitat models).
 function makeMatte(root) {
     root.traverse((o) => {
         if (!o.isMesh) return;
@@ -497,7 +543,6 @@ function makeMatte(root) {
     });
 }
 
-// Models load lazily, so check every so often and matte anything new.
 function MatteScene() {
     const { scene } = useThree();
     const tick = React.useRef(0);
@@ -553,7 +598,6 @@ export default function MoodBuddy({ child, refreshKey = 0, size = 130, bottom = 
     const [state, setState] = useState(null);
     const [view, setView] = useState(null);
     const night = useNightMode();
-    // chatbox colours: day = cream, night = the same light lavender as the night buttons
     const C = night
         ? { bubble: "#e4e7ff", bubbleAlt: "#e4e7ff", ink: "#27305a", edge: "rgba(255,255,255,0.6)", card: "#262f58", cardInk: "#ece9ff", soft: "rgba(228,231,255,0.12)", overlay: "rgba(10,14,35,0.5)" }
         : { bubble: "#fff8ee", bubbleAlt: "rgba(255,255,255,0.92)", ink: "#2f5a3a", edge: "rgba(47,90,58,0.12)", card: "rgba(255,255,255,0.96)", cardInk: "#2f5a3a", soft: "rgba(47,90,58,0.1)", overlay: "rgba(20,45,30,0.35)" };
@@ -648,7 +692,6 @@ export default function MoodBuddy({ child, refreshKey = 0, size = 130, bottom = 
         setView(null);
     };
 
-    // the 3D habitat avatar sends this when it's tapped
     const openProfileRef = React.useRef(openProfile);
     openProfileRef.current = openProfile;
     useEffect(() => {
