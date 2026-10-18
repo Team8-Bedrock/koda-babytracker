@@ -11,6 +11,7 @@ import { getQueuedActivities } from "../utils/offlineStorage";
 
 const ParentDashboard = () => {
   const [activities, setActivities] = useState([]);
+  const [caregivers, setCaregivers] = useState([]);
 
   const [reviewVersion, setReviewVersion] = useState(0);
 
