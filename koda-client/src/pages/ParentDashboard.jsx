@@ -8,6 +8,7 @@ import ActivitiesModal from "../components/modals/ActivitiesModal";
 import NavIconButton from "../components/NavIconButton";
 import OfflineDuplicateReview from "../components/OfflineDuplicateReview";
 import { getQueuedActivities } from "../utils/offlineStorage";
+import { addNotification } from "../utils/notifications";
 
 const ParentDashboard = () => {
   const [activities, setActivities] = useState([]);
@@ -254,6 +255,20 @@ const ParentDashboard = () => {
 
         if (newReminders.length > 0) {
           setScheduleReminders(newReminders);
+          newReminders.forEach((reminder) => {
+            const reminderKey = `${reminder.activityType}-${reminder.occursAt}`;
+            const activityLabel = reminder.activityType === "sleep" ? "sleep" : "feeding";
+            addNotification({
+              id: `schedule:${childId}:${reminderKey}`,
+              title: `Scheduled ${activityLabel}`,
+              message: `It's time to log the scheduled ${activityLabel}.`,
+              path: "/add-activity",
+              notificationType: "schedule-reminder",
+              childId,
+              activityType: reminder.activityType,
+              occursAt: reminder.occursAt,
+            });
+          });
           window.clearTimeout(reminderTimer);
           reminderTimer = window.setTimeout(() => {
             if (active) setScheduleReminders([]);

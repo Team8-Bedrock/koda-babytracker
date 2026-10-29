@@ -1421,8 +1421,32 @@ router.get('/schedule/reminders', authMiddleware, async (req, res) => {
             childId,
             activityType: { $in: ['feeding', 'sleep'] }
         }).select('activityType repeat time daysOfWeek timezone');
-        const reminders = getReminderOccurrences(schedules, req.query.timezone);
-        return res.json({ reminders });
+        const now = new Date();
+        const reminders = getReminderOccurrences(schedules, req.query.timezone, now);
+        if (reminders.length === 0) {
+            return res.json({ reminders });
+        }
+
+        const matchWindow = 15 * 60 * 1000;
+        const reminderTimes = reminders.map((reminder) => reminder.occursAt.getTime());
+        const loggedAtRange = {
+            $gte: new Date(Math.min(...reminderTimes) - matchWindow),
+            $lte: new Date(Math.max(...reminderTimes) + matchWindow)
+        };
+        const [feedings, sleeps] = await Promise.all([
+            Feeding.find({ childId, timestamp: loggedAtRange }).select('timestamp').lean(),
+            Sleep.find({ childId, startTime: loggedAtRange }).select('startTime').lean()
+        ]);
+        const matchingLogs = {
+            feeding: feedings.map((entry) => new Date(entry.timestamp).getTime()),
+            sleep: sleeps.map((entry) => new Date(entry.startTime).getTime())
+        };
+        const unloggedReminders = reminders.filter((reminder) => (
+            !matchingLogs[reminder.activityType].some((loggedAt) => (
+                Math.abs(loggedAt - reminder.occursAt.getTime()) <= matchWindow
+            ))
+        ));
+        return res.json({ reminders: unloggedReminders });
     } catch (err) {
         return res.status(400).json({ error: err.message });
     }

@@ -7,6 +7,21 @@
   border-bottom: 1px solid rgba(90, 70, 53, 0.35);
 }
 
+.layout-simple-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, var(--simple-bg-start) 0%, var(--simple-bg-end) 88%);
+  transition: background 0.4s ease;
+}
+
+html.koda-night .layout-simple-background {
+  background-image:
+    linear-gradient(rgba(15, 18, 45, 0.78), rgba(15, 18, 45, 0.78)),
+    linear-gradient(180deg, var(--simple-bg-start) 0%, var(--simple-bg-end) 88%);
+}
+
 .layout-header {
   position: fixed;
   top: 0;

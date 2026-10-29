@@ -10,6 +10,7 @@ export const AVATARS = [
     habitatClass: "habitat-bear",
     model: "/models/characters/bear/bear.glb",
     bg: "linear-gradient(180deg, #a8845a 0%, #7a9b5c 100%)",
+    pageBackground: ["#a8845a", "#7a9b5c"],
     customHabitat: "bear",
   },
   {
@@ -18,6 +19,7 @@ export const AVATARS = [
     habitatClass: "habitat-frog",
     model: "/models/characters/frog/frog.glb",
     bg: "linear-gradient(180deg, #4a9fd4 0%, #2ecc71 100%)",
+    pageBackground: ["#4a9fd4", "#2ecc71"],
     customHabitat: "frog",
   },
   {
@@ -26,6 +28,7 @@ export const AVATARS = [
     habitatClass: "habitat-bunny",
     model: "/models/characters/bunny/bunny.glb",
     bg: "linear-gradient(180deg, #f7c6d9 0%, #f5efe0 100%)",
+    pageBackground: ["#f7c6d9", "#f5efe0"],
     customHabitat: "bunny",
   },
   {
@@ -34,6 +37,7 @@ export const AVATARS = [
     habitatClass: "habitat-panda",
     model: "/models/characters/panda/panda.glb",
     bg: "linear-gradient(180deg, #a8b8a0 0%, #eef7e8 100%)",
+    pageBackground: ["#a8b8a0", "#eef7e8"],
     customHabitat: "panda",
   },
   {
@@ -42,6 +46,7 @@ export const AVATARS = [
     habitatClass: "habitat-koala",
     model: "/models/characters/koala/koala.glb",
     bg: "linear-gradient(180deg, #8fa8b0 0%, #d9cfc0 100%)",
+    pageBackground: ["#8fa8b0", "#d9cfc0"],
     customHabitat: "koala",
   },
   {
@@ -50,6 +55,7 @@ export const AVATARS = [
     habitatClass: "habitat-fox",
     model: "/models/characters/fox/fox.glb",
     bg: "linear-gradient(180deg, #e8935a 0%, #f5efe0 100%)",
+    pageBackground: ["#e8935a", "#f5efe0"],
     customHabitat: "fox",
   },
 ];

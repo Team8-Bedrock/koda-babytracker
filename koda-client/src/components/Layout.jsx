@@ -14,6 +14,7 @@ import { getCurrentUserId, getSelectedChildForUser, setSelectedChildForUser } fr
 import { getPageLabel, getPillFontSize } from "../constants/pageLabels";
 import { API_URL } from "../config";
 import HabitatBackground from "./HabitatBackground";
+import { getAvatarById } from "../constants/avatars";
 import NavIconButton from "./NavIconButton";
 import MoodBuddy from "./MoodBuddy";
 import NightTheme from "./NightTheme";
@@ -36,6 +37,9 @@ const Layout = ({ children }) => {
   const switcherRef = useRef(null);
   const notificationsRef = useRef(null);
   const isActivityLogPage = location.pathname.toLowerCase() === "/add-activity";
+  const isDashboardPage = location.pathname.toLowerCase() === "/parentdashboard";
+  const selectedAvatar = getAvatarById(selectedChild?.avatar);
+  const backgroundColors = selectedAvatar?.pageBackground || ["#d3e6ee", "#fdfbf3"];
 
   useEffect(() => {
     const savedChild = getSelectedChildForUser();
@@ -158,10 +162,12 @@ const Layout = ({ children }) => {
   };
 
   const handleNotificationPress = (notification) => {
-    setNotifications((current) =>
-      current.filter((item) => item.id !== notification.id)
-    );
-    removeNotification(notification.id);
+    if (notification.notificationType !== "schedule-reminder") {
+      setNotifications((current) =>
+        current.filter((item) => item.id !== notification.id)
+      );
+      removeNotification(notification.id);
+    }
     if (notification.path) {
       setNotificationsOpen(false);
       navigate(notification.path);
@@ -172,8 +178,25 @@ const Layout = ({ children }) => {
     <div className="layout-mobile-frame">
       <NightTheme />
       <ChildSwitchOverlay />
-      <HabitatBackground key={`habitat-${switchKey}`} />
-      {selectedChild ? <MoodBuddy key={`buddy-${selectedChild._id}-${switchKey}`} child={selectedChild} /> : null}
+      {isDashboardPage ? (
+        <>
+          <HabitatBackground key={`habitat-${switchKey}`} />
+          {selectedChild ? <MoodBuddy key={`buddy-${selectedChild._id}-${switchKey}`} child={selectedChild} /> : null}
+        </>
+      ) : (
+        <div
+          className="layout-simple-background"
+          style={{
+            "--simple-bg-start": backgroundColors[0],
+            "--simple-bg-end": backgroundColors[1],
+          }}
+          aria-hidden="true"
+        >
+          <div className="firefly-layer">
+            {[...Array(6)].map((_, index) => <div key={index} className="firefly" />)}
+          </div>
+        </div>
+      )}
 
       <header className="layout-header">
         <button

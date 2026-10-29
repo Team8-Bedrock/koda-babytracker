@@ -44,6 +44,7 @@ const AnalyticsPage = () => {
 
   const [historyItems, setHistoryItems] = useState([]);
   const [canViewAnalytics, setCanViewAnalytics] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [accessChecked, setAccessChecked] = useState(false);
   const [range, setRange] = useState('day');
   const [isExportRangeOpen, setIsExportRangeOpen] = useState(false);
@@ -73,7 +74,7 @@ const AnalyticsPage = () => {
         if (response.data?.role === 'parent') {
           setCanViewAnalytics(true);
         } else {
-          navigate('/ParentDashboard', { replace: true });
+          setAccessDenied(true);
         }
       })
       .catch((error) => {
@@ -327,11 +328,26 @@ const AnalyticsPage = () => {
     return remainingMinutes === 0 ? `${hours} hr` : `${hours} hr ${remainingMinutes} min`;
   };
 
-  if (!accessChecked || !canViewAnalytics) {
+  if (!accessChecked) {
     return (
       <Layout>
         <div className="analytics-content">
           <p className="empty-msg-light">checking access…</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <Layout>
+        <div className="analytics-content">
+          <section className="glass-card" role="status">
+            <h1 className="card-header">Analytics unavailable</h1>
+            <p className="empty-msg-light">
+              Caregiver accounts don't have access to the analytics page.
+            </p>
+          </section>
         </div>
       </Layout>
     );

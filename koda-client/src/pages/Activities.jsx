@@ -8,7 +8,7 @@ import '../styling/pages/activities.css';
 
 import { getSelectedChildForUser, getCurrentUserId } from '../utils/authStorage';
 import { queueActivityOffline } from '../utils/offlineStorage';
-import { addNotification } from '../utils/notifications';
+import { addNotification, removeScheduleNotifications } from '../utils/notifications';
 import { API_URL } from "../config";
 import Layout from '../components/Layout';
 
@@ -327,8 +327,16 @@ const Activities = () => {
 
       if (saved) {
         const kind = mode === 'schedule' ? 'scheduled' : 'logged';
+        if (kind === 'logged') {
+          const loggedAt = type === 'sleep'
+            ? timeRange(startTime, endTime).start
+            : new Date();
+          removeScheduleNotifications(childId, type, loggedAt);
+        }
         sessionStorage.setItem('koda-celebrate', kind + ':' + Date.now());
-        window.dispatchEvent(new CustomEvent('activity-saved', { detail: { kind } }));
+        window.dispatchEvent(new CustomEvent('activity-saved', {
+          detail: { kind, activityType: type, childId },
+        }));
         navigate('/ParentDashboard');
       }
     } catch (err) {
@@ -362,8 +370,19 @@ const Activities = () => {
 
       setDuplicateEntry(null);
       setPendingActivity(null);
+      removeScheduleNotifications(
+        pendingActivity.activityData.childId,
+        pendingActivity.activityType,
+        pendingActivity.activityData.startTime || new Date()
+      );
       sessionStorage.setItem('koda-celebrate', 'logged:' + Date.now());
-      window.dispatchEvent(new CustomEvent('activity-saved', { detail: { kind: 'logged' } }));
+      window.dispatchEvent(new CustomEvent('activity-saved', {
+        detail: {
+          kind: 'logged',
+          activityType: pendingActivity.activityType,
+          childId: pendingActivity.activityData.childId,
+        },
+      }));
       navigate('/ParentDashboard');
     } catch (err) {
       setSubmitError(

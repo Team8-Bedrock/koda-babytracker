@@ -16,7 +16,18 @@ export const getNotifications = () => {
   }
 };
 
-export const addNotification = ({ id, groupId, title, message, path, count = 1 }) => {
+export const addNotification = ({
+  id,
+  groupId,
+  title,
+  message,
+  path,
+  count = 1,
+  notificationType,
+  childId,
+  activityType,
+  occursAt,
+}) => {
   const key = getKey();
   if (!key) return;
   const current = getNotifications();
@@ -43,6 +54,10 @@ export const addNotification = ({ id, groupId, title, message, path, count = 1 }
       message: groupId ? `${title} — ${message}` : message,
       path,
       count,
+      ...(notificationType ? { notificationType } : {}),
+      ...(childId ? { childId } : {}),
+      ...(activityType ? { activityType } : {}),
+      ...(occursAt ? { occursAt } : {}),
     });
   }
 
@@ -54,5 +69,24 @@ export const removeNotification = (id) => {
   const key = getKey();
   if (!key) return;
   localStorage.setItem(key, JSON.stringify(getNotifications().filter((item) => item.id !== id)));
+  window.dispatchEvent(new Event("koda-notifications-updated"));
+};
+
+export const removeScheduleNotifications = (childId, activityType, loggedAt) => {
+  const key = getKey();
+  const loggedTime = new Date(loggedAt).getTime();
+  if (!key || !Number.isFinite(loggedTime)) return;
+
+  const current = getNotifications();
+  const next = current.filter((notification) => (
+    notification.notificationType !== "schedule-reminder" ||
+    String(notification.childId) !== String(childId) ||
+    notification.activityType !== activityType ||
+    !Number.isFinite(new Date(notification.occursAt).getTime()) ||
+    Math.abs(loggedTime - new Date(notification.occursAt).getTime()) > 15 * 60 * 1000
+  ));
+
+  if (next.length === current.length) return;
+  localStorage.setItem(key, JSON.stringify(next));
   window.dispatchEvent(new Event("koda-notifications-updated"));
 };
