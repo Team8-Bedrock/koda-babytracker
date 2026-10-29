@@ -79,4 +79,30 @@ router.put("/:id", authMiddleware, async (req, res) => {
   }
 });
 
+router.patch("/:id/avatar", authMiddleware, async (req, res) => {
+  try {
+    const validAvatars = ["bear", "frog", "bunny", "panda", "koala", "fox"];
+    const { avatar } = req.body;
+
+    if (!validAvatars.includes(avatar)) {
+      return res.status(400).json({ msg: "Choose a valid avatar." });
+    }
+
+    const child = await Child.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      { $set: { avatar } },
+      { new: true, runValidators: true }
+    );
+
+    if (!child) {
+      return res.status(404).json({ msg: "Child profile not found" });
+    }
+
+    return res.json(child);
+  } catch (err) {
+    console.error("Could not update child avatar:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

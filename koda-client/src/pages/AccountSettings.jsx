@@ -255,7 +255,7 @@ const AccountSettings = () => {
                       <span>{panelTitles.baby}</span>
                     </div>
 
-                    <ChildProfilePicker />
+                    <ChildProfilePicker onSelectedChildChange={setSelectedChild} />
 
                     <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
                       cancel

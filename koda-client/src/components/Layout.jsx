@@ -55,6 +55,19 @@ const Layout = ({ children }) => {
   }, []);
 
   useEffect(() => {
+    const updateChild = (event) => {
+      const child = event.detail?.child;
+      if (!child) return;
+      setSelectedChild(child);
+      setChildOptions((current) => current.map((option) => (
+        option._id === child._id ? child : option
+      )));
+    };
+    window.addEventListener("koda-selected-child-updated", updateChild);
+    return () => window.removeEventListener("koda-selected-child-updated", updateChild);
+  }, []);
+
+  useEffect(() => {
     const update = () => setNotifications(getNotifications());
     window.addEventListener("koda-notifications-updated", update);
     window.addEventListener("storage", update);
