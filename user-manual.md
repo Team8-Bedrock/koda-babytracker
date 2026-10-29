@@ -113,7 +113,7 @@ To prevent redundant activity logs when multiple caregivers are managing the sam
 
 ### Feature 4: Offline-First Synchronization & Conflict Resolution
 **Description:**  
-Designed to function seamlessly without Wi-Fi or cellular service. Any activity logged while offline is securely stored in local device memory. Once an active internet connection is detected, the standalone **Sync Manager** automatically uploads local records, resolves conflicting entries across linked accounts using a last-write-wins protocol, and updates the cloud database without losing data.
+Designed to work without Wi-Fi or cellular service. Activities logged offline are stored in browser IndexedDB through LocalForage and queued for synchronization; this local queue does not use application-level encryption. When connectivity returns, the **Sync Manager** submits pending records to the server. The server recognizes retried records and routes possible duplicates for review rather than applying a last-write-wins policy. Only records the server reports as processed are removed from the local queue; failed records remain available for retry.
 
 **How to Use:**
 1. Continue logging feedings, sleep, or diaper changes as normal when your device is offline or in low-coverage areas

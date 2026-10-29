@@ -33,14 +33,20 @@ export async function getQueuedActivities() {
 }
 
 export async function markActivityAsSynced(processedIds = []) {
-    if (processedIds.length === 0) return;
+    if (!Array.isArray(processedIds) || processedIds.length === 0) return;
 
+    const confirmedIds = new Set(
+        processedIds.filter((id) => id != null).map((id) => String(id))
+    );
     const currentQueue =
         (await activityStore.getItem('activityQueue')) || [];
 
-    const remainingQueue = currentQueue.filter(
-        (activity) => !processedIds.includes(activity.id)
-    );
+    const remainingQueue = currentQueue.filter((activity) => {
+        const activityId = activity && activity.id != null ? String(activity.id) : '';
+        return !confirmedIds.has(activityId);
+    });
 
-    await activityStore.setItem('activityQueue', remainingQueue);
+    if (remainingQueue.length !== currentQueue.length) {
+        await activityStore.setItem('activityQueue', remainingQueue);
+    }
 }
