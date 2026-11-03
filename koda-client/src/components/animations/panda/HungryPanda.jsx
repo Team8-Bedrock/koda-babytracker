@@ -17,10 +17,141 @@ function hungerState(t) {
   };
 }
 
-function ThoughtBubble() {
+const foodCache = new Map();
+
+function cloud(ctx) {
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "rgba(90,110,90,0.35)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  [[-26, -6, 30], [6, -18, 34], [30, 6, 28], [-4, 20, 30]].forEach(([x, y, r]) => {
+    ctx.moveTo(x + r, y);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+  });
+  ctx.fill();
+}
+
+function blob(ctx, x, y, rx, ry, color, rot = 0) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+const FOODS = {
+  honey(ctx) {
+    blob(ctx, 2, 10, 26, 22, "#e0a03a");
+    blob(ctx, 2, 6, 24, 18, "#f2b84b");
+    ctx.fillStyle = "#c98a2c";
+    ctx.fillRect(-20, -16, 44, 9);
+    blob(ctx, 2, -18, 20, 5, "#f7c45c");
+    ctx.fillStyle = "#ffd76a";
+    ctx.beginPath();
+    ctx.moveTo(-14, -14);
+    ctx.quadraticCurveTo(-18, 4, -10, 10);
+    ctx.quadraticCurveTo(-6, 2, -8, -14);
+    ctx.fill();
+    ctx.fillStyle = "#8a5a2b";
+    ctx.font = "bold 13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("HONEY", 2, 16);
+  },
+  carrot(ctx) {
+    ctx.save();
+    ctx.rotate(-0.6);
+    ctx.fillStyle = "#f08a2c";
+    ctx.beginPath();
+    ctx.moveTo(-11, -18);
+    ctx.quadraticCurveTo(0, -24, 11, -18);
+    ctx.lineTo(1, 34);
+    ctx.quadraticCurveTo(0, 36, -1, 34);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(170,80,20,0.5)";
+    ctx.lineWidth = 2;
+    [-6, 4, 14].forEach((y) => {
+      ctx.beginPath();
+      ctx.moveTo(-7 + y * 0.12, y);
+      ctx.lineTo(2 - y * 0.05, y + 2);
+      ctx.stroke();
+    });
+    [[-8, -30, -0.5], [0, -34, 0], [8, -30, 0.5]].forEach(([x, y, r]) => blob(ctx, x, y, 5, 12, "#5fb84a", r));
+    ctx.restore();
+  },
+  bug(ctx) {
+    blob(ctx, -10, -10, 13, 8, "rgba(200,232,255,0.95)", -0.5);
+    blob(ctx, 12, -10, 13, 8, "rgba(200,232,255,0.95)", 0.5);
+    ctx.strokeStyle = "rgba(120,170,210,0.8)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(-10, -10, 13, 8, -0.5, 0, Math.PI * 2);
+    ctx.ellipse(12, -10, 13, 8, 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    blob(ctx, 1, 6, 12, 15, "#4a4f6a");
+    blob(ctx, 1, -8, 9, 8, "#3a3e57");
+    blob(ctx, -3, -10, 3, 3, "#ffffff");
+    blob(ctx, 5, -10, 3, 3, "#ffffff");
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 2;
+    [2, 9].forEach((y) => {
+      ctx.beginPath();
+      ctx.moveTo(-8, y);
+      ctx.lineTo(10, y);
+      ctx.stroke();
+    });
+  },
+  apple(ctx) {
+    blob(ctx, -9, 6, 18, 20, "#d9322b");
+    blob(ctx, 9, 6, 18, 20, "#d9322b");
+    blob(ctx, -10, -2, 6, 8, "rgba(255,255,255,0.35)", -0.4);
+    ctx.strokeStyle = "#6b3f1e";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(0, -10);
+    ctx.quadraticCurveTo(2, -20, 6, -26);
+    ctx.stroke();
+    blob(ctx, 14, -22, 11, 5, "#5fb84a", -0.4);
+  },
+  eucalyptus(ctx) {
+    ctx.strokeStyle = "#8a7358";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-4, 34);
+    ctx.quadraticCurveTo(2, 0, -2, -32);
+    ctx.stroke();
+    [[-14, 18, -0.9], [12, 8, 0.9], [-13, -4, -0.9], [11, -16, 0.9], [-6, -30, -0.3]].forEach(([x, y, r], i) =>
+      blob(ctx, x, y, 11, 7, i % 2 ? "#a3bd94" : "#8fae84", r),
+    );
+  },
+};
+
+function getThoughtTexture(food) {
+  if (!food || food === "bamboo" || !FOODS[food]) return getTexture("thought");
+  if (!foodCache.has(food)) {
+    const c = document.createElement("canvas");
+    c.width = 128;
+    c.height = 128;
+    const ctx = c.getContext("2d");
+    ctx.translate(64, 64);
+    cloud(ctx);
+    ctx.save();
+    ctx.scale(0.82, 0.82);
+    ctx.translate(2, 0);
+    FOODS[food](ctx);
+    ctx.restore();
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    foodCache.set(food, tex);
+  }
+  return foodCache.get(food);
+}
+
+function ThoughtBubble({ food }) {
   const big = useRef(null);
   const dots = useRef([]);
-  const thought = getTexture("thought");
+  const thought = getThoughtTexture(food);
   const dot = getTexture("dot");
   useFrame((state) => {
     const t = state.clock.elapsedTime;
@@ -102,7 +233,7 @@ function Drool({ rig }) {
   );
 }
 
-export function HungryRig({ rig }) {
+export function HungryRig({ rig, food = "bamboo" }) {
   const bodyRef = useRef(null);
   const tmp = useMemo(() => ({ target: new THREE.Vector3() }), []);
 
@@ -142,7 +273,7 @@ export function HungryRig({ rig }) {
   return (
     <group ref={bodyRef}>
       <primitive object={rig.rig} />
-      <ThoughtBubble />
+      <ThoughtBubble food={food} />
       <RumbleLines />
       <Drool rig={rig} />
     </group>

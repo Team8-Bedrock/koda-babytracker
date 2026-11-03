@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { API_URL } from "../config";
 import { getCurrentUserId, setSelectedChildForUser } from "../utils/authStorage";
+import { removeNotification } from "../utils/notifications";
 
 const THEMES = {
   day: {
@@ -98,6 +99,13 @@ const dateText = (v) => {
 
 const NOTE_TOPICS = ["diaper", "mood", "sleeping", "playtime", "feeding", "allergies", "other"];
 const topicOf = (label) => (NOTE_TOPICS.includes(String(label || "").toLowerCase()) ? String(label).toLowerCase() : "other");
+
+const EditField = ({ label, children }) => (
+  <label style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+    <span style={{ fontSize: 9, letterSpacing: 1, textTransform: "uppercase", opacity: 0.55 }}>{label}</span>
+    {children}
+  </label>
+);
 
 const Field = ({ label, value }) => (
   <div style={{ minWidth: 0 }}>
@@ -215,6 +223,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
   const [profile, setProfile] = useState(child || {});
   const [editing, setEditing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState("");
   const [label, setLabel] = useState("");
   const sortedNotes = React.useMemo(
     () => notes.map((note, i) => ({ note, i })).sort((a, b) => NOTE_TOPICS.indexOf(topicOf(a.note.label)) - NOTE_TOPICS.indexOf(topicOf(b.note.label)) || a.i - b.i).map(({ note }) => note),
@@ -231,18 +240,29 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
   const headers = { "x-auth-token": token };
 
   useEffect(() => {
-    if (!childId || !token) return;
+    if (!childId || !token) return undefined;
     let active = true;
-    axios
-      .get(`${API_URL}/api/child-notes/${childId}`, { headers: { "x-auth-token": token } })
-      .then(({ data }) => {
-        if (!active) return;
-        setNotes(data.notes || []);
-        setIsParent(!!data.isParent);
-      })
-      .catch(() => active && setError("could not load notes"));
+    const load = () =>
+      axios
+        .get(`${API_URL}/api/child-notes/${childId}`, { headers: { "x-auth-token": token } })
+        .then(({ data }) => {
+          if (!active) return;
+          const list = data.notes || [];
+          setNotes(list);
+          setIsParent(!!data.isParent);
+          setError((current) => (current === "could not load notes" ? "" : current));
+          if (!data.isParent) {
+            list.forEach((note) => removeNotification(`note:${note._id}`));
+          }
+        })
+        .catch(() => active && setError("could not load notes"));
+    load();
+    const interval = setInterval(load, 15000);
+    window.addEventListener("focus", load);
     return () => {
       active = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", load);
     };
   }, [childId, token]);
 
@@ -290,7 +310,7 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
   const saveProfile = async () => {
     if (!profile.name?.trim() || !childId) return;
     setSavingProfile(true);
-    setError("");
+    setProfileError("");
     try {
       const { data } = await axios.put(
         `${API_URL}/api/children/${childId}`,
@@ -307,10 +327,11 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
       );
       setProfile(data);
       setSelectedChildForUser(data);
+      window.dispatchEvent(new CustomEvent("koda-selected-child-updated", { detail: { child: data } }));
       window.dispatchEvent(new CustomEvent("koda-header-label", { detail: { label: `${data.name}'s passport` } }));
       setEditing(false);
-    } catch {
-      setError("could not save passport");
+    } catch (err) {
+      setProfileError(err.response?.data?.msg || err.response?.data?.error || "could not save passport, try again");
     }
     setSavingProfile(false);
   };
@@ -350,14 +371,25 @@ export default function BabyProfile({ child, mood, photo, onClose }) {
               <div style={{ width: 84, height: 104, flexShrink: 0, borderRadius: 12, border: `1.5px dashed ${LINE}`, background: T.photo, overflow: "hidden" }}>
                 {photo}
               </div>
-              <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 10px", alignContent: "start", minWidth: 0 }}>
+              <div style={{ flex: 1, display: "grid", gridTemplateColumns: editing ? "1fr" : "1fr 1fr", gap: editing ? "6px" : "8px 10px", alignContent: "start", minWidth: 0 }}>
                 {editing ? (
                   <>
-                    <div style={{ gridColumn: "1 / -1" }}><input value={profile.name || ""} onChange={(event) => setProfile((value) => ({ ...value, name: event.target.value }))} placeholder="name" style={inputStyle} /></div>
-                    <input type="date" value={profile.dob ? String(profile.dob).slice(0, 10) : ""} onChange={(event) => setProfile((value) => ({ ...value, dob: event.target.value }))} aria-label="birthday" style={inputStyle} />
-                    <input value={profile.weight || ""} onChange={(event) => setProfile((value) => ({ ...value, weight: event.target.value }))} placeholder="weight" style={inputStyle} />
-                    <input value={profile.allergies || ""} onChange={(event) => setProfile((value) => ({ ...value, allergies: event.target.value }))} placeholder="allergies" style={{ ...inputStyle, gridColumn: "1 / -1" }} />
-                    <input value={profile.other || ""} onChange={(event) => setProfile((value) => ({ ...value, other: event.target.value }))} placeholder="other notes" style={{ ...inputStyle, gridColumn: "1 / -1" }} />
+                    <EditField label="name">
+                      <input value={profile.name || ""} onChange={(event) => setProfile((value) => ({ ...value, name: event.target.value }))} placeholder="name" style={inputStyle} />
+                    </EditField>
+                    <EditField label="birthday">
+                      <input type="date" value={profile.dob ? String(profile.dob).slice(0, 10) : ""} onChange={(event) => setProfile((value) => ({ ...value, dob: event.target.value }))} aria-label="birthday" style={inputStyle} />
+                    </EditField>
+                    <EditField label="weight (pounds)">
+                      <input inputMode="decimal" value={profile.weight || ""} onChange={(event) => setProfile((value) => ({ ...value, weight: event.target.value }))} placeholder="e.g. 14" style={inputStyle} />
+                    </EditField>
+                    <EditField label="allergies">
+                      <input value={profile.allergies || ""} onChange={(event) => setProfile((value) => ({ ...value, allergies: event.target.value }))} placeholder="none" style={inputStyle} />
+                    </EditField>
+                    <EditField label="other">
+                      <input value={profile.other || ""} onChange={(event) => setProfile((value) => ({ ...value, other: event.target.value }))} placeholder="anything else" style={inputStyle} />
+                    </EditField>
+                    {profileError ? <div style={{ fontSize: 11, fontWeight: 700, color: T.error }}>{profileError}</div> : null}
                   </>
                 ) : (
                   <>

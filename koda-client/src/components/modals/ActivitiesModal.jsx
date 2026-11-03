@@ -41,7 +41,7 @@ const splitSleep = (value) => {
   return match ? { time: match[1], detail: match[2] } : { time: value, detail: "" };
 };
 
-const ActivitiesModal = ({ activities, onClose }) => {
+const ActivitiesModal = ({ activities, loading = false, onClose }) => {
   const navigate = useNavigate();
 
   return (
@@ -63,7 +63,7 @@ const ActivitiesModal = ({ activities, onClose }) => {
           );
         })
       ) : (
-        <p className="hm-empty">No activities yet. Tap the + to get started!</p>
+        <p className="hm-empty">{loading ? "Loading today's activities..." : "No activities yet. Tap the + to get started!"}</p>
       )}
 
       <button type="button" className="hm-link-btn" onClick={() => navigate("/full-log")}>

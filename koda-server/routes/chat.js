@@ -61,6 +61,55 @@ async function checkAccess(req, res, next) {
         res.status(500).json({ msg: "Could not check chat access." });
     }
 }
+async function chatContacts(req) {
+    const me = req.chatUser;
+    const child = req.chatChild;
+    const links = await CaregiverLink.find({
+        parentId: child.userId,
+        status: "approved",
+        sharedChildren: child._id,
+    }).populate("caregiverId", "username role");
+
+    const caregivers = links
+        .filter((link) => link.caregiverId && link.chatPermissions?.enabled !== false)
+        .map((link) => link.caregiverId);
+
+    if (me.role === "parent") return caregivers;
+
+    const parent = await User.findById(child.userId, "username role familyChatName");
+    return parent ? [parent] : [];
+}
+
+async function resolvePartner(req, partnerId) {
+    if (!partnerId) return null;
+    if (!mongoose.isValidObjectId(partnerId)) return false;
+    const contacts = await chatContacts(req);
+    return contacts.find((user) => user._id.toString() === String(partnerId)) || false;
+}
+
+function conversationFilter(req, partnerId) {
+    const me = req.chatUser._id;
+    return {
+        childId: req.chatChild._id,
+        $or: [
+            { senderId: me, recipientId: partnerId },
+            { senderId: partnerId, recipientId: me },
+        ],
+    };
+}
+
+function visibleFilter(req) {
+    const me = req.chatUser._id;
+    return {
+        childId: req.chatChild._id,
+        $or: [
+            { recipientId: null },
+            { senderId: me },
+            { recipientId: me },
+        ],
+    };
+}
+
 router.patch("/family-name", async (req, res) => {
     try {
         const token = req.header("x-auth-token");
@@ -89,9 +138,53 @@ router.patch("/family-name", async (req, res) => {
     }
 });
 
+router.get("/:childId/contacts", checkAccess, async (req, res) => {
+    try {
+        const contacts = await chatContacts(req);
+        const parent = req.chatUser.role === "parent"
+            ? req.chatUser
+            : await User.findById(req.chatChild.userId, "familyChatName");
+
+        const groupLast = await ChatMessage.findOne({ childId: req.chatChild._id, recipientId: null })
+            .sort({ createdAt: -1 })
+            .populate("senderId", "username role");
+
+        const people = await Promise.all(
+            contacts.map(async (user) => {
+                const last = await ChatMessage.findOne(conversationFilter(req, user._id))
+                    .sort({ createdAt: -1 })
+                    .populate("senderId", "username role");
+                return { id: user._id, username: user.username, role: user.role, last };
+            })
+        );
+
+        res.json({
+            group: {
+                name: parent?.familyChatName || `${req.chatChild.name}'s family`,
+                memberCount: contacts.length + 1,
+                last: groupLast,
+            },
+            contacts: people,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ msg: "Could not load contacts." });
+    }
+});
+
 router.get("/:childId/messages", checkAccess, async (req, res) => {
     try {
-        const messages = await ChatMessage.find({ childId: req.chatChild._id })
+        const withParam = String(req.query.with || "");
+        let filter = { childId: req.chatChild._id, recipientId: null };
+        if (withParam === "all") {
+            filter = visibleFilter(req);
+        } else if (withParam) {
+            const partner = await resolvePartner(req, withParam);
+            if (!partner) return res.status(403).json({ msg: "You can't message that person." });
+            filter = conversationFilter(req, partner._id);
+        }
+
+        const messages = await ChatMessage.find(filter)
             .sort({ createdAt: -1 })
             .limit(100)
             .populate("senderId", "username role");
@@ -112,9 +205,14 @@ router.post("/:childId/messages", checkAccess, async (req, res) => {
         if (req.body.urgent === true && req.chatLink?.chatPermissions?.urgent === false) {
             return res.status(403).json({ msg: "Urgent messages are disabled for this caregiver." });
         }
+        const partner = await resolvePartner(req, req.body.to);
+        if (partner === false) {
+            return res.status(403).json({ msg: "You can't message that person." });
+        }
         const message = await ChatMessage.create({
             childId: req.chatChild._id,
             senderId: req.chatUser._id,
+            recipientId: partner ? partner._id : null,
             kind: "text",
             text,
             urgent: req.body.urgent === true,
@@ -141,6 +239,10 @@ router.post("/:childId/attachments", checkAccess, async (req, res) => {
         }
         if (req.body.urgent === true && req.chatLink?.chatPermissions?.urgent === false) {
             return res.status(403).json({ msg: "Urgent messages are disabled for this caregiver." });
+        }
+        const partner = await resolvePartner(req, req.body.to);
+        if (partner === false) {
+            return res.status(403).json({ msg: "You can't message that person." });
         }
         const mimeType = String(req.body.mimeType || "").split(";")[0].toLowerCase();
 
@@ -172,6 +274,7 @@ router.post("/:childId/attachments", checkAccess, async (req, res) => {
         const message = await ChatMessage.create({
             childId: req.chatChild._id,
             senderId: req.chatUser._id,
+            recipientId: partner ? partner._id : null,
             kind,
             attachmentId: attachment._id,
             urgent: req.body.urgent === true,
@@ -198,6 +301,12 @@ router.get("/:childId/attachments/:attachmentId", checkAccess, async (req, res) 
         });
 
         if (!attachment) return res.status(404).json({ msg: "Attachment not found." });
+
+        const owner = await ChatMessage.findOne({ attachmentId: attachment._id }, "senderId recipientId");
+        const me = req.chatUser._id.toString();
+        if (owner?.recipientId && ![owner.senderId?.toString(), owner.recipientId.toString()].includes(me)) {
+            return res.status(404).json({ msg: "Attachment not found." });
+        }
 
         res.set({
             "Content-Type": attachment.mimeType,

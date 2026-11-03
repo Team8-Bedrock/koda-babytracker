@@ -1,16 +1,22 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import "../../styling/pages/setUp.css";
 import { getCurrentUserId, selectedChildStorageKey } from "../../utils/authStorage";
 import { API_URL } from "../../config";
 import PasswordInput from "../../components/PasswordInput";
+import { useSlowFlag, warmServer } from "../../utils/warmup";
 
 const Login = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const slow = useSlowFlag(loading);
+
+  useEffect(() => {
+    warmServer();
+  }, []);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -110,7 +116,7 @@ const Login = () => {
         {error && <p className="setup-error">{error}</p>}
 
         <button className="setup-btn-primary" onClick={handleLogin} disabled={loading}>
-          {loading ? "logging in..." : "Login"}
+          {loading ? (slow ? "waking koda up, almost there..." : "logging in...") : "Login"}
         </button>
         <button type="button" className="setup-forgot" onClick={() => navigate("/forgot-password")}>
           Forgot Password?

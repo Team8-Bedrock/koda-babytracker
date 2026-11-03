@@ -5,6 +5,8 @@ import axios from "axios";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { API_URL } from "../config";
 import BabyProfile from "./BabyProfile";
+import AvatarStage from "./AvatarStage";
+import { getAvatarById } from "../constants/avatars";
 const own = (load) => ({ kind: "own", Comp: lazy(load) });
 const scene = (load) => ({ kind: "scene", Comp: lazy(load) });
 
@@ -701,20 +703,28 @@ export default function MoodBuddy({ child, refreshKey = 0, size = 130, bottom = 
     }, []);
 
     const profileEl = view === "profile" ? (
-        <BabyProfile
-            child={child}
-            mood={MOOD_INFO[mood] ? { short: shortText, sentence: info.sentence(name, state), cause: info.cause(state?.reason, state), when } : null}
-            photo={
-                anim ? (
-                    <Suspense fallback={null}>
-                        <AnimationView animal={animal} anim={anim} variant={state?.variant} front />
-                    </Suspense>
-                ) : (
-                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34 }} aria-hidden="true">🐾</div>
-                )
-            }
-            onClose={closeProfile}
-        />
+        <>
+            <style>{".mb-passport-stage{width:100%;height:100%}.mb-passport-stage canvas{width:100%!important;height:100%!important}"}</style>
+            <BabyProfile
+                child={child}
+                mood={MOOD_INFO[mood] ? { short: shortText, sentence: info.sentence(name, state), cause: info.cause(state?.reason, state), when } : null}
+                photo={
+                    anim ? (
+                        <Suspense fallback={null}>
+                            <AnimationView animal={animal} anim={anim} variant={state?.variant} front />
+                        </Suspense>
+                    ) : (
+                        <AvatarStage
+                            avatarId={animal}
+                            modelUrl={getAvatarById(animal)?.model}
+                            hints={[]}
+                            className="mb-passport-stage"
+                        />
+                    )
+                }
+                onClose={closeProfile}
+            />
+        </>
     ) : null;
 
     const celebrationEl = (

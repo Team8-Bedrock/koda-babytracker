@@ -12,6 +12,7 @@ import { addNotification } from "../utils/notifications";
 
 const ParentDashboard = () => {
   const [activities, setActivities] = useState([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(true);
   const [caregivers, setCaregivers] = useState([]);
 
   const [reviewVersion, setReviewVersion] = useState(0);
@@ -44,33 +45,45 @@ const ParentDashboard = () => {
       const userId = getCurrentUserId();
 
       if (!childId || !token || !userId) {
-        if (active) setActivities([]);
+        if (active) {
+          setActivities([]);
+          setActivitiesLoading(false);
+        }
         return;
       }
 
-      let serverData = {
-        feedings: [],
-        sleeps: [],
-        diapers: [],
-      };
+      let serverData = null;
 
       if (navigator.onLine) {
-        try {
-          const response = await axios.get(`${API_URL}/api/activities`, {
-            params: { childId },
-            headers: { "x-auth-token": token },
-            timeout: 10000,
-          });
-
-          serverData = response.data;
-          setAnomalyAlerts(response.data.anomalyAlerts || []);
-        } catch (err) {
-          console.error("Could not load online activities:", err);
+        for (let attempt = 0; attempt < 2 && !serverData; attempt++) {
+          try {
+            const response = await axios.get(`${API_URL}/api/activities`, {
+              params: { childId },
+              headers: { "x-auth-token": token },
+              timeout: 60000,
+            });
+            serverData = response.data || {};
+            setAnomalyAlerts(response.data?.anomalyAlerts || []);
+          } catch (err) {
+            console.error("Could not load online activities:", err);
+            if (err.response) break;
+          }
+        }
+        if (!serverData) {
+          if (active && currentRequest === requestNumber) setActivitiesLoading(false);
+          retryTimer = setTimeout(fetchData, 15000);
+          return;
         }
       }
+      serverData = serverData || {};
 
       try {
-        const queue = await getQueuedActivities();
+        let queue = [];
+        try {
+          queue = await getQueuedActivities();
+        } catch (err) {
+          console.error("Could not read offline activities:", err);
+        }
 
         const pendingEntries = queue
           .filter((entry) => {
@@ -103,11 +116,19 @@ const ParentDashboard = () => {
             ...entry,
             activityType: "diaper",
           })),
+          ...(serverData.moods || []).map((entry) => ({
+            ...entry,
+            activityType: "mood",
+          })),
+          ...(serverData.playtimes || []).map((entry) => ({
+            ...entry,
+            activityType: "playtime",
+          })),
           ...pendingEntries,
         ];
 
         const getEntryTime = (entry) =>
-          entry.timestamp || entry.endTime || entry.startTime;
+          entry.timestamp || entry.endTime || entry.startTime || entry.createdAt;
 
         const isToday = (value) => {
           if (!value) return false;
@@ -138,7 +159,7 @@ const ParentDashboard = () => {
               new Date(getEntryTime(b)) - new Date(getEntryTime(a))
           );
 
-        const recentActivities = ["feeding", "sleep", "diaper"]
+        const recentActivities = ["feeding", "sleep", "diaper", "mood", "playtime"]
           .map((activityType) => {
             const entry = todaysEntries.find(
               (item) => item.activityType === activityType
@@ -158,8 +179,12 @@ const ParentDashboard = () => {
               value = `${formatTime(entry.startTime)} - ${formatTime(
                 entry.endTime
               )}${entry.quality ? ` (${entry.quality})` : ""}`;
-            } else {
+            } else if (activityType === "diaper") {
               value = entry.type || "diaper change";
+            } else if (activityType === "mood") {
+              value = String(entry.mood || entry.value || "").split(":")[0].trim();
+            } else {
+              value = "";
             }
 
             if (entry.pendingSync) {
@@ -185,12 +210,16 @@ const ParentDashboard = () => {
           getCurrentUserId() === userId
         ) {
           setActivities(recentActivities);
+          setActivitiesLoading(false);
         }
       } catch (err) {
         console.error("Could not load saved activities:", err);
+        if (active) setActivitiesLoading(false);
       }
     };
 
+    let retryTimer;
+    setActivitiesLoading(true);
     fetchData();
 
     let midnightTimer;
@@ -216,6 +245,7 @@ const ParentDashboard = () => {
     return () => {
       active = false;
       clearTimeout(midnightTimer);
+      clearTimeout(retryTimer);
       window.removeEventListener("online", fetchData);
       window.removeEventListener("offline", fetchData);
       window.removeEventListener("offline-sync-complete", fetchData);
@@ -340,6 +370,7 @@ const ParentDashboard = () => {
         {isActivitiesOpen && (
           <ActivitiesModal
             activities={activities}
+            loading={activitiesLoading}
             onClose={() => setIsActivitiesOpen(false)}
           />
         )}
