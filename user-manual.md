@@ -132,17 +132,18 @@ Designed to work without Wi-Fi or cellular service. Activities logged offline ar
 
 ### Feature 5: AI Anomaly Detection & Visual Trend Analytics
 **Description:**  
-Koda’s AI engine analyzes structured logging data over a minimum 7-day period to spot behavioral trends, routine changes, and health anomalies (such as sudden shifts in sleep duration or missed feeding schedules). The **Analytics Page** provides parents with graphical trend charts, milestone updates, status evaluations, and clear legal disclaimers that insights do not replace clinical medical advice.
+The **Analytics Page** provides local activity comparisons and visual trends immediately. AI summaries become available after activity has been logged on at least 3 separate days within a rolling 5-day baseline. Until then, the summary explains that more logging is needed; charts remain available. Once the baseline is met, the summary uses up to 500 feeding, sleep, and diaper records from the last 5 days. The summary is produced by Google Gemini; child names and profile details are not sent. AI observations may be inaccurate and are not medical advice or a diagnosis.
 
 **How to Use:**
-1. Log activities consistently for at least 7 days to establish your child's baseline routine.
+1. Log your child's activities on at least 3 separate days within a 5-day period to establish a baseline. The charts are available while you build this baseline.
 2. Tap the **Analytics (Chart)** icon on the bottom navigation bar (Parent access only).
-3. Review the **Status Evaluation** card to see AI explanations for your child's current status animation (e.g., sleepy or hungry due to missed logs).
-4. Examine weekly trend graphs for sleep cycles, feedings, and diaper history, along with AI-generated summary recommendations.
+3. Examine the local trend graphs and key takeaways.
+4. The Key Takeaways summary loads automatically. Before 3 distinct logged days, it explains that more data is needed; after that, it sends up to 500 records from the last 5 days to Google Gemini. This requires an internet connection and a server-side `GEMINI_API_KEY`.
+5. Review the feeding, sleep, diaper, and key-insight bullet points. Contact a qualified healthcare professional about health concerns.
 
 <img src="images/analytics.PNG" alt="AI Analytics Dashboard & Trends" width="200">
 
-*Figure 5.1: Analytics dashboard displaying AI pattern anomaly analysis and trend summary.*
+*Figure 5.1: Analytics dashboard displaying activity trends and summaries.*
 
 <img src="images/scheduled_log_notification.PNG" alt="Scheduled Log Notification" width="200">
 
@@ -150,15 +151,15 @@ Koda’s AI engine analyzes structured logging data over a minimum 7-day period 
 
 ---
 
-### Feature 6: HIPAA-Compliant PDF Exporting
+### Feature 6: PDF Report Exporting
 **Description:**  
-Generates a secure, professionally formatted PDF report compiling raw activity logs, AI summaries, and visual trend charts Built to fulfill HIPAA technical safeguards (including client-side compilation in volatile memory and end-to-end data transmission security), these reports allow parents to share accurate health summaries with pediatricians.
+Generates a PDF report of activity data, visual trends, and AI-generated feeding, sleep, diaper, and key-insight summaries based on the same rolling 5-day baseline. If activity has been logged on fewer than 3 distinct days, the PDF explains that more logging is needed. This project does not establish HIPAA compliance, and exported reports should be treated as sensitive information.
 
 **How to Use:**
 1. Open the **Analytics Page** section from the dashboard.
 2. Select the specific date range required for your medical visit (e.g., daily or weekly summary).
 3. Tap the **Share/Export PDF** button at the bottom of the screen.
-4. The application compiles an encrypted PDF containing raw logs and trend charts, which can be saved to your device or sent directly to your healthcare provider.
+4. Download the report and use your own secure method if you choose to share it with a healthcare provider.
 
 <img src="images/export_screen.PNG" alt="PDF Export Screen" width="200">
 

@@ -85,6 +85,44 @@
   cursor: wait;
 }
 
+.analytics-ai-disclosure {
+  margin: 0;
+  font-size: 12px;
+}
+
+.analytics-ai-error {
+  margin: 0;
+  color: #a53d2b;
+  font-size: 13px;
+  text-align: center;
+}
+
+.analytics-summary-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 14px 0;
+  color: var(--k-ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.analytics-summary-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--k-sage-line);
+  border-top-color: var(--k-deep);
+  border-radius: 50%;
+  animation: analytics-summary-spin 0.8s linear infinite;
+}
+
+@keyframes analytics-summary-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ---------- shared Koda look (soft sage, matching every page) ---------- */
 
 .analytics-content .glass-card {

@@ -140,10 +140,16 @@ const drawChildInformation = (doc, childInfo, reportInfo) => {
 };
 
 // Draws a short summary of the child's logged activity
-const drawActivitySummary = (doc, summaryText) => {
+const drawActivitySummary = (doc, summaryText, aiSummary) => {
     const x = 48;
     const y = doc.y + 10;
     const width = 516;
+    const textWidth = width - 30;
+    const details = [
+        ['Feeding', aiSummary.feeding_summary],
+        ['Sleep', aiSummary.sleep_summary],
+        ['Diapers', aiSummary.diaper_summary]
+    ];
 
     doc
         .fillColor('#315B3D')
@@ -152,26 +158,73 @@ const drawActivitySummary = (doc, summaryText) => {
         .text('SUMMARY OF LOGGED ACTIVITY', x, y);
 
     const boxY = y + 22;
+    doc.font('Helvetica').fontSize(8);
+    const summaryLines = [
+        summaryText,
+        'AI SUMMARY (LAST 5 DAYS)',
+        ...details.map(([label, text]) => `${label}: ${text}`)
+    ];
+    const lineHeights = summaryLines.map((line) => doc.heightOfString(line, {
+        width: textWidth,
+        lineGap: 2
+    }));
+    const insights = aiSummary.key_insights || [];
+    const insightHeights = insights.map((insight) => doc.heightOfString(`- ${insight}`, {
+        width: textWidth,
+        lineGap: 2
+    }));
+    const boxHeight = Math.max(
+        75,
+        30
+            + lineHeights.reduce((total, height) => total + height + 3, 0)
+            + (insights.length ? 16 + insightHeights.reduce((total, height) => total + height + 3, 0) : 0)
+    );
 
     doc
-        .roundedRect(x, boxY, width, 75, 6)
+        .roundedRect(x, boxY, width, boxHeight, 6)
         .fillAndStroke('#F7F9F7', '#D9E2DA');
 
-    doc
-        .fillColor('#333333')
-        .font('Helvetica')
-        .fontSize(9)
-        .text(
-            summaryText,
-            x + 15,
-            boxY + 15,
-            {
-                width: width - 30,
-                lineGap: 3
-            }
-        );
+    let textY = boxY + 12;
+    summaryLines.forEach((line) => {
+        doc
+            .fillColor('#333333')
+            .font('Helvetica')
+            .fontSize(8)
+            .text(line, x + 15, textY, {
+                width: textWidth,
+                lineGap: 2
+            });
+        textY += doc.heightOfString(line, {
+            width: textWidth,
+            lineGap: 2
+        }) + 3;
+    });
 
-    doc.y = boxY + 90;
+    if (insights.length) {
+        doc
+            .fillColor('#315B3D')
+            .font('Helvetica-Bold')
+            .fontSize(8)
+            .text('KEY INSIGHTS', x + 15, textY + 2);
+
+        let insightY = textY + 14;
+        insights.forEach((insight) => {
+            doc
+                .fillColor('#333333')
+                .font('Helvetica')
+                .fontSize(8)
+                .text(`- ${insight}`, x + 15, insightY, {
+                    width: textWidth,
+                    lineGap: 2
+                });
+            insightY += doc.heightOfString(`- ${insight}`, {
+                width: textWidth,
+                lineGap: 2
+            }) + 3;
+        });
+    }
+
+    doc.y = boxY + boxHeight + 15;
 };
 
 // Draws the main activity totals for quick review

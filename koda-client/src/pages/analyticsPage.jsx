@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Download, TrendingUp, TrendingDown, Minus, Moon, Milk, Baby } from 'lucide-react';
@@ -23,6 +23,36 @@ const parseOunces = (detail) => {
   const match = detail.match(/(\d+(?:\.\d+)?)\s*oz/);
   return match ? Number(match[1]) : 0;
 };
+
+const getAnalyticsWindow = (range, periodsAgo) => {
+  const now = new Date();
+  const end = new Date(now);
+  const start = new Date(now);
+
+  if (range === 'week') {
+    end.setDate(now.getDate() - 7 * periodsAgo);
+    start.setDate(end.getDate() - 6);
+  } else {
+    end.setDate(now.getDate() - periodsAgo);
+    start.setDate(end.getDate());
+  }
+
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const getRecentSummaryWindow = () => {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - 4);
+  start.setHours(0, 0, 0, 0);
+  return { start, end };
+};
+
+const getLocalTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
 const TREND_DELTA_CLASS = { up: 'analytics-trend-delta--up', down: 'analytics-trend-delta--down', steady: 'analytics-trend-delta--steady', new: 'analytics-trend-delta--new' };
 
 const TrendDelta = ({ change }) => {
@@ -50,6 +80,10 @@ const AnalyticsPage = () => {
   const [isExportRangeOpen, setIsExportRangeOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiSummaryError, setAiSummaryError] = useState('');
+  const aiSummaryRequest = useRef(null);
 
   useEffect(() => {
     if (!isExportRangeOpen) return undefined;
@@ -136,31 +170,14 @@ const AnalyticsPage = () => {
 
     fetchHistory();
   }, [selectedChild?._id, canViewAnalytics]);
-  const getWindow = (periodsAgo) => {
-    const now = new Date();
-    const end = new Date(now);
-    const start = new Date(now);
-
-    if (range === 'week') {
-      end.setDate(now.getDate() - 7 * periodsAgo);
-      start.setDate(end.getDate() - 6);
-    } else {
-      end.setDate(now.getDate() - periodsAgo);
-      start.setDate(end.getDate());
-    }
-
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  };
 
   const filterByWindow = (items, { start, end }) => items.filter((item) => {
     const itemDate = new Date(item.timestamp);
     return itemDate >= start && itemDate <= end;
   });
 
-  const currentWindow = getWindow(0);
-  const previousWindow = getWindow(1);
+  const currentWindow = getAnalyticsWindow(range, 0);
+  const previousWindow = getAnalyticsWindow(range, 1);
 
   const filteredHistoryItems = useMemo(
     () => filterByWindow(historyItems, currentWindow),
@@ -191,51 +208,6 @@ const AnalyticsPage = () => {
     if (prev === 0) return curr === 0 ? 0 : null;
     return Math.round(((curr - prev) / prev) * 100);
   };
-
-  const previousPeriodLabel = range === 'week' ? 'last week' : 'yesterday';
-
-  const insights = useMemo(() => {
-    if (!filteredHistoryItems.length && !previousHistoryItems.length) {
-      return ['Not enough activity logged yet to generate observations — keep logging to build a trend.'];
-    }
-
-    const list = [];
-    const sleepChange = percentChange(currentStats.totalSleepMinutes, previousStats.totalSleepMinutes);
-    const feedingChange = percentChange(currentStats.totalFeedingOunces, previousStats.totalFeedingOunces);
-    const diaperChange = percentChange(currentStats.diaperCount, previousStats.diaperCount);
-
-    if (sleepChange === null) {
-      list.push(`No sleep data from ${previousPeriodLabel} to compare against yet.`);
-    } else if (!(currentStats.totalSleepMinutes === 0 && previousStats.totalSleepMinutes === 0)) {
-      if (sleepChange > 10) list.push(`Total sleep is up ${sleepChange}% compared to ${previousPeriodLabel}.`);
-      else if (sleepChange < -10) list.push(`Total sleep is down ${Math.abs(sleepChange)}% compared to ${previousPeriodLabel} — worth keeping an eye on.`);
-      else list.push(`Sleep totals are holding steady compared to ${previousPeriodLabel}.`);
-    }
-
-    if (feedingChange !== null && !(currentStats.totalFeedingOunces === 0 && previousStats.totalFeedingOunces === 0)) {
-      if (feedingChange > 10) list.push(`Feeding volume increased ${feedingChange}% from ${previousPeriodLabel}.`);
-      else if (feedingChange < -10) list.push(`Feeding volume decreased ${Math.abs(feedingChange)}% from ${previousPeriodLabel}.`);
-      else list.push(`Feeding volume is consistent with ${previousPeriodLabel}.`);
-    }
-
-    if (diaperChange !== null && !(currentStats.diaperCount === 0 && previousStats.diaperCount === 0)) {
-      if (diaperChange < -20) list.push(`Diaper changes are down ${Math.abs(diaperChange)}% from ${previousPeriodLabel} — could be worth monitoring hydration.`);
-      else if (diaperChange > 20) list.push(`Diaper changes are up ${diaperChange}% from ${previousPeriodLabel}.`);
-    }
-
-    const diaperItems = filteredHistoryItems.filter((item) => item.type === 'diaper');
-    const wetCount = diaperItems.filter((item) => item.detail === 'Wet').length;
-    if (diaperItems.length >= 4) {
-      const wetShare = Math.round((wetCount / diaperItems.length) * 100);
-      list.push(`Wet changes made up ${wetShare}% of diaper entries this ${range === 'week' ? 'week' : 'day'}.`);
-    }
-
-    if (!list.length) {
-      list.push('Everything looks consistent with recent activity — no notable shifts detected.');
-    }
-
-    return list;
-  }, [currentStats, previousStats, filteredHistoryItems, previousHistoryItems, previousPeriodLabel, range]);
 
   const sleepChartData = useMemo(() => {
     const sleepItems = filteredHistoryItems.filter((item) => item.type === 'sleep');
@@ -294,6 +266,7 @@ const AnalyticsPage = () => {
       const childId = selectedChild?._id;
       const childName = selectedChild?.name || 'child';
       const token = localStorage.getItem('token');
+      const summaryWindow = getRecentSummaryWindow();
 
       if (!childId || !token) {
         throw new Error('A selected child and authenticated user are required.');
@@ -301,8 +274,15 @@ const AnalyticsPage = () => {
 
       const response = await axios.post(
         `${API_URL}/api/reports/generate`,
-        { childId, range: reportRange, type: 'analytics' },
-        { headers: { 'x-auth-token': token }, responseType: 'blob' }
+        {
+          childId,
+          range: reportRange,
+          type: 'analytics',
+          summaryStart: summaryWindow.start.toISOString(),
+          summaryEnd: summaryWindow.end.toISOString(),
+          summaryTimeZone: getLocalTimeZone()
+        },
+        { headers: { 'x-auth-token': token }, responseType: 'blob', timeout: 65000 }
       );
 
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
@@ -320,6 +300,70 @@ const AnalyticsPage = () => {
       setExporting(false);
     }
   };
+
+  const loadAiSummary = useCallback(async () => {
+    let requestController;
+    try {
+      setAiSummaryLoading(true);
+      setAiSummaryError('');
+      setAiSummary(null);
+
+      const childId = selectedChild?._id;
+      const token = localStorage.getItem('token');
+      if (!childId || !token) {
+        throw new Error('Select a child and sign in to generate a summary.');
+      }
+
+      const { start, end } = getRecentSummaryWindow();
+      requestController = new AbortController();
+      aiSummaryRequest.current = requestController;
+      const response = await axios.post(
+        `${API_URL}/api/analytics/summary`,
+        {
+          childId,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          timeZone: getLocalTimeZone()
+        },
+        { headers: { 'x-auth-token': token }, timeout: 65000, signal: requestController.signal }
+      );
+      const summary = response.data;
+      if (
+        !summary
+        || typeof summary.feeding_summary !== 'string'
+        || typeof summary.sleep_summary !== 'string'
+        || typeof summary.diaper_summary !== 'string'
+        || !Array.isArray(summary.key_insights)
+        || !summary.key_insights.every((insight) => typeof insight === 'string')
+      ) {
+        throw new Error('The AI service returned an invalid summary.');
+      }
+      setAiSummary(summary);
+    } catch (error) {
+      if (error.code === 'ERR_CANCELED') return;
+      console.error('Could not generate AI activity summary:', error);
+      setAiSummaryError(
+        error.response?.data?.error
+        || error.message
+        || 'Unable to generate an AI summary right now. Please try again.'
+      );
+    } finally {
+      if (aiSummaryRequest.current === requestController) {
+        aiSummaryRequest.current = null;
+        setAiSummaryLoading(false);
+      }
+    }
+  }, [selectedChild?._id]);
+
+  useEffect(() => {
+    if (!canViewAnalytics || !selectedChild?._id) return undefined;
+
+    loadAiSummary();
+    return () => {
+      aiSummaryRequest.current?.abort();
+      aiSummaryRequest.current = null;
+    };
+  }, [canViewAnalytics, selectedChild?._id, loadAiSummary]);
 
   const formatMinutes = (minutes) => {
     if (minutes < 60) return `${minutes} min`;
@@ -363,18 +407,42 @@ const AnalyticsPage = () => {
             <FileText size={22} strokeWidth={2} color="#315b3d" />
             <span>summary</span>
           </div>
-          {loading ? (
-            <p className="empty-msg-light">loading…</p>
-          ) : (
-            <div>
-              {insights.map((line, index) => (
-                <div key={index} className="analytics-insight-row">
-                  <span className="analytics-insight-bullet" />
-                  <p className="empty-msg-light">{line}</p>
-                </div>
-              ))}
+          <p className="empty-msg-light analytics-ai-disclosure">
+            AI-generated observations are informational, not medical advice. Up to 500 activity records
+            from the last 5 days may be sent to Google Gemini; child names and profile details are not sent.
+          </p>
+          {aiSummaryLoading && (
+            <div className="analytics-summary-loading" role="status" aria-live="polite">
+              <span className="analytics-summary-spinner" aria-hidden="true" />
+              <span>Generating insights…</span>
             </div>
           )}
+          {aiSummaryError && (
+            <p className="analytics-ai-error" role="alert">
+              AI summary unavailable: {aiSummaryError}
+            </p>
+          )}
+          {aiSummary ? (
+            <div aria-live="polite">
+              {[
+                ['Feeding', aiSummary.feeding_summary],
+                ['Sleep', aiSummary.sleep_summary],
+                ['Diapers', aiSummary.diaper_summary]
+              ].map(([label, text]) => (
+                <p key={label} className="empty-msg-light analytics-summary-category">
+                  <strong>{label}:</strong> {text}
+                </p>
+              ))}
+              {aiSummary.key_insights.length ? aiSummary.key_insights.map((insight, index) => (
+                <div key={`${index}-${insight}`} className="analytics-insight-row">
+                  <span className="analytics-insight-bullet" />
+                  <p className="empty-msg-light">{insight}</p>
+                </div>
+              )) : <p className="empty-msg-light">No notable insights for this period.</p>}
+            </div>
+          ) : !aiSummaryLoading && !aiSummaryError && loading
+            ? <p className="empty-msg-light">loading activity…</p>
+            : null}
         </CollapsibleCard>
 
         {/* each card carries its own comparison label, so the section header

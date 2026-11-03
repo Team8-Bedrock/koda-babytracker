@@ -10,6 +10,78 @@ const OfflineActivity = require('../models/OfflineActivity');
 const User = require('../models/user');
 const Schedule = require('../models/Schedule');
 const mongoose = require('mongoose');
+const crypto = require('crypto');
+const {
+    generateBabySummary,
+    isBabySummaryFallback,
+    createInsufficientDataSummary,
+    getDistinctLoggedDays,
+    MINIMUM_LOGGED_DAYS,
+    BASELINE_WINDOW_DAYS
+} = require('../utils/babySummary');
+
+const MAX_SUMMARY_LOGS = 500;
+const MAX_SUMMARY_WINDOW_MS = 6 * 24 * 60 * 60 * 1000;
+const SUMMARY_CACHE_TTL_MS = 5 * 60 * 1000;
+const summaryRequests = new Map();
+
+const buildSummaryLogs = (feedings, sleeps, diapers) => [
+    ...feedings.map((entry) => ({
+        activity_type: 'feeding',
+        type: entry.type,
+        amount: entry.amount,
+        side: entry.side,
+        timestamp: entry.timestamp
+    })),
+    ...sleeps.map((entry) => ({
+        activity_type: 'sleep',
+        type: entry.type,
+        quality: entry.quality,
+        duration_minutes: entry.duration,
+        timestamp: entry.timestamp
+    })),
+    ...diapers.map((entry) => ({
+        activity_type: 'diaper',
+        type: entry.type,
+        timestamp: entry.timestamp
+    }))
+]
+    .sort((left, right) => new Date(right.timestamp) - new Date(left.timestamp))
+    .slice(0, MAX_SUMMARY_LOGS);
+
+const getSummaryCacheKey = (childId, startAt, endAt, logsArray) => {
+    const logsHash = crypto.createHash('sha256').update(JSON.stringify(logsArray)).digest('hex');
+    return `${childId}:${startAt.toISOString()}:${endAt.toISOString()}:${logsHash}`;
+};
+
+const getCachedBabySummary = async (cacheKey, logsArray) => {
+    const cachedSummary = summaryRequests.get(cacheKey);
+    if (cachedSummary && cachedSummary.expiresAt > Date.now()) {
+        return cachedSummary.promise;
+    }
+
+    const summaryRequest = generateBabySummary(logsArray);
+    const cacheEntry = {
+        promise: summaryRequest,
+        expiresAt: Date.now() + SUMMARY_CACHE_TTL_MS
+    };
+    summaryRequests.set(cacheKey, cacheEntry);
+    summaryRequest.then((summary) => {
+        if (summaryRequests.get(cacheKey) !== cacheEntry) return;
+        if (isBabySummaryFallback(summary)) {
+            summaryRequests.delete(cacheKey);
+            return;
+        }
+
+        cacheEntry.expiresAt = Date.now() + SUMMARY_CACHE_TTL_MS;
+        if (summaryRequests.size > 100) {
+            const oldestKey = summaryRequests.keys().next().value;
+            if (oldestKey !== cacheKey) summaryRequests.delete(oldestKey);
+        }
+    });
+
+    return summaryRequest;
+};
 
 const Mood = mongoose.models.Mood || mongoose.model('Mood', new mongoose.Schema({
     childId: { type: mongoose.Schema.Types.ObjectId, ref: 'Child', required: true },
@@ -219,6 +291,37 @@ const getRangeWindow = (range) => {
     return { start, end: now };
 };
 
+const getRecentSummaryWindow = () => {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(end);
+    start.setDate(start.getDate() - (BASELINE_WINDOW_DAYS - 1));
+    start.setHours(0, 0, 0, 0);
+    return { start, end };
+};
+
+const getDateKey = (date, timeZone) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(date);
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    const day = parts.find((part) => part.type === 'day')?.value;
+    return `${year}-${month}-${day}`;
+};
+
+const isRecentSummaryWindow = (start, end, timeZone) => {
+    const todayKey = getDateKey(new Date(), timeZone);
+    const [year, month, day] = todayKey.split('-').map(Number);
+    const firstBaselineDay = new Date(Date.UTC(year, month - 1, day - (BASELINE_WINDOW_DAYS - 1)));
+    const firstBaselineDayKey = firstBaselineDay.toISOString().slice(0, 10);
+    return getDateKey(start, timeZone) === firstBaselineDayKey
+        && getDateKey(end, timeZone) === todayKey;
+};
+
 const filterByRange = (items, range) => {
     const { start, end } = getRangeWindow(range);
     return items.filter((item) => {
@@ -226,6 +329,12 @@ const filterByRange = (items, range) => {
         return timestamp >= start && timestamp <= end;
     });
 };
+
+const filterByWindow = (items, { start, end }) => items.filter((item) => {
+    const timestamp = new Date(item.timestamp || item.startTime || item.endTime || item.createdAt || Date.now());
+    return timestamp >= start && timestamp <= end;
+});
+
 const calculateSleepDuration = (sleeps) => {
     if (!sleeps || sleeps.length === 0) {
         return {
@@ -881,14 +990,107 @@ router.get('/activities', authMiddleware, async (req, res) => {
     }
 });
 
+router.post('/analytics/summary', authMiddleware, requireParent, async (req, res) => {
+    try {
+        const { childId, start, end, timeZone } = req.body;
+        if (
+            typeof childId !== 'string'
+            || !mongoose.Types.ObjectId.isValid(childId)
+            || typeof start !== 'string'
+            || typeof end !== 'string'
+            || typeof timeZone !== 'string'
+        ) {
+            return res.status(400).json({ error: 'A valid childId, start, end, and timeZone are required.' });
+        }
+
+        const startAt = new Date(start);
+        const endAt = new Date(end);
+        try {
+            new Intl.DateTimeFormat('en-US', { timeZone });
+        } catch {
+            return res.status(400).json({ error: 'The summary time zone is invalid.' });
+        }
+        if (
+            !Number.isFinite(startAt.getTime())
+            || !Number.isFinite(endAt.getTime())
+            || endAt <= startAt
+            || endAt.getTime() - startAt.getTime() > MAX_SUMMARY_WINDOW_MS
+            || endAt.getTime() > Date.now() + 24 * 60 * 60 * 1000
+            || !isRecentSummaryWindow(startAt, endAt, timeZone)
+        ) {
+            return res.status(400).json({ error: 'The summary date range must cover the last five days.' });
+        }
+
+        const child = await findAuthorizedChild(childId, req.user.id);
+        if (!child) {
+            return res.status(404).json({ error: 'Child profile not found or access denied.' });
+        }
+
+        const filter = { childId, timestamp: { $gte: startAt, $lte: endAt } };
+        const [feedings, sleeps, diapers] = await Promise.all([
+            Feeding.find(filter).select('type amount side timestamp').sort({ timestamp: -1 }).limit(MAX_SUMMARY_LOGS).lean(),
+            Sleep.find(filter).select('type quality duration timestamp').sort({ timestamp: -1 }).limit(MAX_SUMMARY_LOGS).lean(),
+            Diaper.find(filter).select('type timestamp').sort({ timestamp: -1 }).limit(MAX_SUMMARY_LOGS).lean()
+        ]);
+
+        const logsArray = buildSummaryLogs(feedings, sleeps, diapers);
+        const loggedDays = getDistinctLoggedDays(logsArray, timeZone);
+        if (loggedDays < MINIMUM_LOGGED_DAYS) {
+            return res.json(createInsufficientDataSummary(loggedDays));
+        }
+
+        const summaryKey = getSummaryCacheKey(childId, startAt, endAt, logsArray);
+        const summary = await getCachedBabySummary(summaryKey, logsArray);
+        if (isBabySummaryFallback(summary)) {
+            return res.status(503).json({ error: 'AI summary is temporarily unavailable. Please try again later.' });
+        }
+
+        return res.json(summary);
+    } catch (err) {
+        console.error('Could not generate analytics summary:', err);
+        return res.status(500).json({ error: 'Could not generate an analytics summary.' });
+    }
+});
+
 // reports
 router.post('/reports/generate', authMiddleware, requireParent, async (req, res) => {
     try {
-        const { childId } = req.body;
+        const { childId, summaryStart, summaryEnd, summaryTimeZone } = req.body;
         const range = req.body.range || 'day';
 
         if (!childId) {
             return res.status(400).json({ error: "childId is required to generate a report" });
+        }
+
+        let summaryWindow = getRecentSummaryWindow();
+        let timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (summaryStart !== undefined || summaryEnd !== undefined || summaryTimeZone !== undefined) {
+            if (
+                typeof summaryStart !== 'string'
+                || typeof summaryEnd !== 'string'
+                || typeof summaryTimeZone !== 'string'
+            ) {
+                return res.status(400).json({ error: 'A valid summary start, end, and time zone are required.' });
+            }
+
+            summaryWindow = { start: new Date(summaryStart), end: new Date(summaryEnd) };
+            timeZone = summaryTimeZone;
+            try {
+                new Intl.DateTimeFormat('en-US', { timeZone });
+            } catch {
+                return res.status(400).json({ error: 'The summary time zone is invalid.' });
+            }
+
+            if (
+                !Number.isFinite(summaryWindow.start.getTime())
+                || !Number.isFinite(summaryWindow.end.getTime())
+                || summaryWindow.end <= summaryWindow.start
+                || summaryWindow.end.getTime() - summaryWindow.start.getTime() > MAX_SUMMARY_WINDOW_MS
+                || summaryWindow.end.getTime() > Date.now() + 24 * 60 * 60 * 1000
+                || !isRecentSummaryWindow(summaryWindow.start, summaryWindow.end, timeZone)
+            ) {
+                return res.status(400).json({ error: 'The summary date range must cover the last five days.' });
+            }
         }
 
         // Verify authorized access: primary parent (userId) OR authorized caregiver
@@ -924,6 +1126,18 @@ router.post('/reports/generate', authMiddleware, requireParent, async (req, res)
         const scopedFeedings = filterByRange(feedings, range);
         const scopedSleeps = filterByRange(sleeps, range);
         const scopedDiapers = filterByRange(diapers, range);
+        const baselineLogs = buildSummaryLogs(
+            filterByWindow(feedings, summaryWindow),
+            filterByWindow(sleeps, summaryWindow),
+            filterByWindow(diapers, summaryWindow)
+        );
+        const loggedDays = getDistinctLoggedDays(baselineLogs, timeZone);
+        const aiSummary = loggedDays < MINIMUM_LOGGED_DAYS
+            ? createInsufficientDataSummary(loggedDays)
+            : await getCachedBabySummary(
+                getSummaryCacheKey(childId, summaryWindow.start, summaryWindow.end, baselineLogs),
+                baselineLogs
+            );
 
         const sleepStats = calculateSleepDuration(scopedSleeps);
 
@@ -1001,9 +1215,14 @@ router.post('/reports/generate', authMiddleware, requireParent, async (req, res)
         // Page 1
         drawReportHeader(doc, range);
         drawChildInformation(doc, childInfo, reportInfo);
-        drawActivitySummary(doc, summaryText);
+        drawActivitySummary(doc, summaryText, aiSummary);
         drawAtAGlance(doc, atAGlanceStats);
-        const chartY = doc.y + 20;
+        let chartY = doc.y + 20;
+        if (chartY + 190 > doc.page.height - doc.page.margins.bottom) {
+            doc.addPage();
+            drawReportHeader(doc, range);
+            chartY = doc.y + 10;
+        }
 
         drawChartsPanel(doc, sleepChartData, feedingChartData, diaperSummary, range, chartStats, chartY);
 
