@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { User, Users, Baby, ChevronRight, Lock, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import '../styling/global/App.css';
 import '../styling/pages/accountSettings.css';
@@ -29,7 +29,12 @@ const AccountSettings = () => {
   const [selectedChild, setSelectedChild] = useState(null);
   const [role, setRole] = useState(null);
 
-  const [category, setCategory] = useState(null);
+  const location = useLocation();
+  const [category, setCategory] = useState(() => location.state?.openCategory || null);
+
+  useEffect(() => {
+    if (location.state?.openCategory) setCategory(location.state.openCategory);
+  }, [location.state]);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('koda-dark-mode') === 'true');
 
   const toggleDarkMode = () => {
@@ -72,7 +77,7 @@ const AccountSettings = () => {
 
   const panelTitles = {
     account: 'account settings',
-    caretaker: isCaregiver ? 'link to a parent' : 'caregiver settings',
+    caretaker: isCaregiver ? 'account linking' : 'caregiver settings',
     baby: `${childName}'s settings`,
   };
 
@@ -231,11 +236,11 @@ const AccountSettings = () => {
                     <span>{panelTitles.caretaker}</span>
                   </div>
 
-                  {isCaregiver ? <CaregiverLinkPanel /> : <CaregiverManagementPanel />}
-
-                  <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
-                    cancel
-                  </button>
+                  {isCaregiver ? (
+                    <CaregiverLinkPanel onCancel={closeCategory} />
+                  ) : (
+                    <CaregiverManagementPanel onCancel={closeCategory} />
+                  )}
                 </div>
               ) : (
                 <button type="button" className="account-menu-btn" onClick={() => openCategory('caretaker')}>
@@ -255,11 +260,7 @@ const AccountSettings = () => {
                       <span>{panelTitles.baby}</span>
                     </div>
 
-                    <ChildProfilePicker onSelectedChildChange={setSelectedChild} />
-
-                    <button type="button" className="account-toggle-link account-toggle-link--bottom" onClick={closeCategory}>
-                      cancel
-                    </button>
+                    <ChildProfilePicker onSelectedChildChange={setSelectedChild} onCancel={closeCategory} />
                   </div>
                 ) : (
                   <button type="button" className="account-menu-btn" onClick={() => openCategory('baby')}>

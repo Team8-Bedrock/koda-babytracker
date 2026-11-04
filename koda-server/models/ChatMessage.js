@@ -27,6 +27,12 @@ const ChatMessageSchema = new mongoose.Schema(
             maxlength: 2000,
             default: "",
         },
+        recipientId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+            index: true,
+        },
         attachmentId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "ChatAttachment",

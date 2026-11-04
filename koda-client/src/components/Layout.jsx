@@ -9,6 +9,12 @@ import {
   Settings as SettingsIcon,
   ChevronDown,
   CheckCircle2,
+  CalendarClock,
+  UserPlus,
+  CloudOff,
+  X,
+  Sparkles,
+  StickyNote,
 } from "lucide-react";
 import { getCurrentUserId, getSelectedChildForUser, setSelectedChildForUser } from "../utils/authStorage";
 import { getPageLabel, getPillFontSize } from "../constants/pageLabels";
@@ -18,15 +24,39 @@ import { getAvatarById } from "../constants/avatars";
 import NavIconButton from "./NavIconButton";
 import MoodBuddy from "./MoodBuddy";
 import NightTheme from "./NightTheme";
+import Backdrop, { WelcomeBackdrop } from "./backdrop";
 import ChildSwitchOverlay, { startChildSwitch } from "./childSwitch";
-import { addNotification, getNotifications, removeNotification } from "../utils/notifications";
+import TravelOverlay from "./Traveloverlay";
+import CaregiverLinkPrompt from "./Caregiverlinkprompt";
+import {
+  addNotification,
+  clearNotifications,
+  dismissNotification,
+  getDismissedIds,
+  getNotifications,
+  notificationKind,
+  removeNotification,
+  timeAgo,
+} from "../utils/notifications";
+
 import CharacterHead from "./CharacterHead";
 import "../styling/global/layout.css";
+
+const KIND_ICONS = {
+  caregiver: UserPlus,
+  schedule: CalendarClock,
+  chat: MessageCircle,
+  offline: CloudOff,
+  note: StickyNote,
+  general: Sparkles,
+};
+
+const NOTE_FRESH_MS = 7 * 24 * 60 * 60 * 1000;
 
 const Layout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [selectedChild, setSelectedChild] = useState(null);
+  const [selectedChild, setSelectedChild] = useState(() => getSelectedChildForUser());
   const [logoFailed, setLogoFailed] = useState(false);
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [childOptions, setChildOptions] = useState([]);
@@ -34,12 +64,19 @@ const Layout = ({ children }) => {
   const [switchKey, setSwitchKey] = useState(0);
   const [notifications, setNotifications] = useState(getNotifications);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [role, setRole] = useState(() => {
+    try {
+      return sessionStorage.getItem(`koda-role:${getCurrentUserId()}`) || null;
+    } catch {
+      return null;
+    }
+  });
+  const isCaregiver = role === "caregiver";
   const switcherRef = useRef(null);
   const notificationsRef = useRef(null);
   const isActivityLogPage = location.pathname.toLowerCase() === "/add-activity";
   const isDashboardPage = location.pathname.toLowerCase() === "/parentdashboard";
   const selectedAvatar = getAvatarById(selectedChild?.avatar);
-  const backgroundColors = selectedAvatar?.pageBackground || ["#d3e6ee", "#fdfbf3"];
 
   useEffect(() => {
     const savedChild = getSelectedChildForUser();
@@ -93,7 +130,7 @@ const Layout = ({ children }) => {
     let active = true;
     const checkChat = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/chat/${childId}/messages`, {
+        const response = await fetch(`${API_URL}/api/chat/${childId}/messages?with=all`, {
           headers: { "x-auth-token": token },
         });
         if (!response.ok) return;
@@ -117,18 +154,26 @@ const Layout = ({ children }) => {
             return isIncoming && !seenIds.has(message._id);
           });
 
-        if (incomingMessages.length > 0) {
-          const latestMessage = incomingMessages[incomingMessages.length - 1];
-          const senderName = latestMessage.senderId?.username || "Family chat";
+        const threads = new Map();
+        incomingMessages.forEach((message) => {
+          const senderId = String(message.senderId?._id || message.senderId);
+          const threadKey = message.recipientId ? senderId : "group";
+          if (!threads.has(threadKey)) threads.set(threadKey, []);
+          threads.get(threadKey).push(message);
+        });
+        threads.forEach((items, threadKey) => {
+          const latestMessage = items[items.length - 1];
+          const senderName = latestMessage.senderId?.username || "someone";
           addNotification({
-            groupId: `chat:${childId}`,
-            title: senderName,
+            groupId: `chat:${childId}:${threadKey}`,
+            title: threadKey === "group" ? `${senderName} in family chat` : senderName,
             path: "/chat",
-            message: `${incomingMessages.length} new ${incomingMessages.length === 1 ? "message" : "messages"}`,
-            count: incomingMessages.length,
+            state: { with: threadKey },
+            message: `${items.length} new ${items.length === 1 ? "message" : "messages"}`,
+            count: items.length,
           });
-          incomingMessages.forEach((message) => seenIds.add(message._id));
-        }
+        });
+        incomingMessages.forEach((message) => seenIds.add(message._id));
 
         localStorage.setItem(seenKey, JSON.stringify([...seenIds].slice(-500)));
       } catch (error) {
@@ -142,6 +187,161 @@ const Layout = ({ children }) => {
       clearInterval(interval);
     };
   }, [selectedChild?._id]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userId = getCurrentUserId();
+    if (!token || !userId || role) return;
+    fetch(`${API_URL}/api/auth/me`, { headers: { "x-auth-token": token } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => {
+        if (!user?.role) return;
+        try {
+          sessionStorage.setItem(`koda-role:${userId}`, user.role);
+        } catch {
+          return;
+        } finally {
+          setRole(user.role);
+        }
+      })
+      .catch(() => { });
+  }, [role]);
+
+  useEffect(() => {
+    if (isCaregiver && location.pathname.toLowerCase() === "/analytics") {
+      navigate("/ParentDashboard", { replace: true });
+    }
+  }, [isCaregiver, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!location.state?.openProfile) return undefined;
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("koda-open-profile"));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [location.key, location.state]);
+
+  useEffect(() => {
+    const childId = selectedChild?._id;
+    const token = localStorage.getItem("token");
+    const userId = getCurrentUserId();
+    if (!isCaregiver || !childId || !token || !userId) return undefined;
+    let active = true;
+    const seenKey = `notesSeen:${userId}:${childId}`;
+
+    const checkNotes = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/child-notes/${childId}`, {
+          headers: { "x-auth-token": token },
+        });
+        if (!response.ok || !active) return;
+        const data = await response.json();
+        if (data?.isParent) return;
+        const notes = Array.isArray(data?.notes) ? data.notes : [];
+        let seen = [];
+        try {
+          const saved = JSON.parse(localStorage.getItem(seenKey) || "[]");
+          seen = Array.isArray(saved) ? saved : [];
+        } catch {
+          seen = [];
+        }
+        const seenIds = new Set(seen);
+        const childName = selectedChild?.name || "your little one";
+
+        notes.forEach((note) => {
+          if (seenIds.has(note._id)) return;
+          seenIds.add(note._id);
+          const stamp = new Date(note.updatedAt || note.createdAt).getTime();
+          if (!Number.isFinite(stamp) || Date.now() - stamp > NOTE_FRESH_MS) return;
+          const topic = String(note.label || "note").toLowerCase();
+          const body = String(note.text || "").trim();
+          addNotification({
+            id: `note:${note._id}`,
+            title: `new note about ${childName}`,
+            message: `${topic}: ${body.length > 90 ? `${body.slice(0, 90)}…` : body}`,
+            path: "/ParentDashboard",
+            state: { openProfile: true },
+            notificationType: "note",
+          });
+        });
+
+        localStorage.setItem(seenKey, JSON.stringify([...seenIds].slice(-300)));
+      } catch (error) {
+        console.error("Could not check shared notes:", error);
+      }
+    };
+
+    checkNotes();
+    const interval = setInterval(checkNotes, 20000);
+    window.addEventListener("focus", checkNotes);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", checkNotes);
+    };
+  }, [isCaregiver, selectedChild?._id, selectedChild?.name]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userId = getCurrentUserId();
+    if (!token || !userId || isCaregiver) return undefined;
+    const skipKey = `koda-not-parent:${userId}`;
+    if (sessionStorage.getItem(skipKey)) return undefined;
+    let active = true;
+    let interval = null;
+
+    const checkRequests = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/caregiver-links/requests`, {
+          headers: { "x-auth-token": token },
+        });
+        if (response.status === 403) {
+          sessionStorage.setItem(skipKey, "1");
+          clearInterval(interval);
+          return;
+        }
+        if (!response.ok || !active) return;
+        const data = await response.json();
+        const links = Array.isArray(data?.links) ? data.links : [];
+        const pendingIds = new Set();
+        const dismissed = getDismissedIds();
+        const existing = getNotifications();
+
+        links
+          .filter((link) => link.status === "pending")
+          .forEach((link) => {
+            const id = `caregiver-request:${link.id}`;
+            pendingIds.add(id);
+            if (dismissed.has(id) || existing.some((item) => item.id === id)) return;
+            const name = link.caregiver?.username || "someone";
+            addNotification({
+              id,
+              title: "new caregiver request",
+              message: `${name} wants to help look after your little one. tap to review.`,
+              path: "/account",
+              state: { openCategory: "caretaker" },
+              notificationType: "caregiver-request",
+            });
+          });
+
+        existing
+          .filter((item) => item.notificationType === "caregiver-request" && !pendingIds.has(item.id))
+          .forEach((item) => removeNotification(item.id));
+      } catch (error) {
+        console.error("Could not check caregiver requests:", error);
+      }
+    };
+
+    checkRequests();
+    interval = setInterval(checkRequests, 20000);
+    const onFocus = () => checkRequests();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [isCaregiver]);
 
   useEffect(() => {
     if (!isSwitcherOpen) return;
@@ -175,7 +375,8 @@ const Layout = ({ children }) => {
   };
 
   const handleNotificationPress = (notification) => {
-    if (notification.notificationType !== "schedule-reminder") {
+    const keep = ["schedule-reminder", "caregiver-request", "note"].includes(notification.notificationType);
+    if (!keep) {
       setNotifications((current) =>
         current.filter((item) => item.id !== notification.id)
       );
@@ -183,32 +384,36 @@ const Layout = ({ children }) => {
     }
     if (notification.path) {
       setNotificationsOpen(false);
-      navigate(notification.path);
+      navigate(notification.path, notification.state ? { state: notification.state } : undefined);
     }
   };
+
+  const handleDismiss = (event, notification) => {
+    event.stopPropagation();
+    setNotifications((current) => current.filter((item) => item.id !== notification.id));
+    dismissNotification(notification);
+  };
+
+  const sortedNotifications = [...notifications].sort((a, b) => {
+    const rank = (n) => (n.notificationType === "caregiver-request" ? 0 : 1);
+    return rank(a) - rank(b) || (b.createdAt || 0) - (a.createdAt || 0);
+  });
 
   return (
     <div className="layout-mobile-frame">
       <NightTheme />
       <ChildSwitchOverlay />
-      {isDashboardPage ? (
+      <TravelOverlay />
+      <CaregiverLinkPrompt isCaregiver={isCaregiver} hasChild={Boolean(selectedChild?._id)} />
+      {!selectedChild ? (
+        <WelcomeBackdrop />
+      ) : isDashboardPage ? (
         <>
           <HabitatBackground key={`habitat-${switchKey}`} />
           {selectedChild ? <MoodBuddy key={`buddy-${selectedChild._id}-${switchKey}`} child={selectedChild} /> : null}
         </>
       ) : (
-        <div
-          className="layout-simple-background"
-          style={{
-            "--simple-bg-start": backgroundColors[0],
-            "--simple-bg-end": backgroundColors[1],
-          }}
-          aria-hidden="true"
-        >
-          <div className="firefly-layer">
-            {[...Array(6)].map((_, index) => <div key={index} className="firefly" />)}
-          </div>
-        </div>
+        <Backdrop animal={selectedAvatar?.id || selectedChild?.avatar} />
       )}
 
       <header className="layout-header">
@@ -281,21 +486,69 @@ const Layout = ({ children }) => {
             aria-label="Open notifications"
             className="header-bell-btn"
           />
-          {notifications.length > 0 && <span className="header-notification-dot" />}
+          {notifications.length > 0 && (
+            <span className="header-notification-dot" aria-hidden="true">
+              {notifications.length > 9 ? "9+" : notifications.length}
+            </span>
+          )}
           {notificationsOpen && (
             <div className="notifications-menu" role="region" aria-label="Notifications">
-              <h2>notifications</h2>
-              {notifications.length ? notifications.map((notification) => (
-                <button
-                  type="button"
-                  className="notification-item"
-                  key={notification.id}
-                  onClick={() => handleNotificationPress(notification)}
-                >
-                  <strong>{notification.title}</strong>
-                  <span>{notification.message}</span>
-                </button>
-              )) : <p className="notifications-empty">no new notifications</p>}
+              <div className="notifications-menu__head">
+                <h2>notifications</h2>
+                {notifications.length > 0 && (
+                  <button type="button" className="notifications-menu__clear" onClick={clearNotifications}>
+                    clear all
+                  </button>
+                )}
+              </div>
+              {sortedNotifications.length ? (
+                <ul className="notifications-list">
+                  {sortedNotifications.map((notification) => {
+                    const kind = notificationKind(notification);
+                    const Icon = KIND_ICONS[kind] || Sparkles;
+                    const when = timeAgo(notification.createdAt);
+                    return (
+                      <li key={notification.id} className={`notification-item notification-item--${kind}`}>
+                        <button
+                          type="button"
+                          className="notification-item__main"
+                          onClick={() => handleNotificationPress(notification)}
+                        >
+                          <span className="notification-item__icon" aria-hidden="true">
+                            <Icon size={17} strokeWidth={2.2} />
+                          </span>
+                          <span className="notification-item__text">
+                            <strong>{notification.title}</strong>
+                            <span>{String(notification.message || "").replace(`${notification.title} — `, "")}</span>
+                            {(when || kind === "caregiver") && (
+                              <span className="notification-item__meta">
+                                {kind === "caregiver" && <em>review</em>}
+                                {when}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="notification-item__dismiss"
+                          onClick={(event) => handleDismiss(event, notification)}
+                          aria-label={`Dismiss ${notification.title}`}
+                        >
+                          <X size={14} strokeWidth={2.4} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="notifications-empty">
+                  <span className="notifications-empty__icon" aria-hidden="true">
+                    <Bell size={20} strokeWidth={2} />
+                  </span>
+                  <strong>all caught up</strong>
+                  <span>we'll ring the bell when something needs you.</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -308,7 +561,9 @@ const Layout = ({ children }) => {
       <nav className="layout-bottom-nav">
         <NavIconButton icon={Home} onClick={() => navigate("/ParentDashboard")} />
         <NavIconButton icon={PlusSquare} onClick={() => navigate("/add-activity")} />
-        <NavIconButton icon={BarChart2} strokeWidth={2} onClick={() => navigate("/analytics")} />
+        {!isCaregiver && (
+          <NavIconButton icon={BarChart2} strokeWidth={2} onClick={() => navigate("/analytics")} />
+        )}
         <NavIconButton icon={MessageCircle} onClick={() => navigate("/chat")} />
         <NavIconButton icon={SettingsIcon} onClick={() => navigate("/account")} />
       </nav>

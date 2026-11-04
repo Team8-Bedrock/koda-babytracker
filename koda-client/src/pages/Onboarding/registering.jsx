@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import "../../styling/pages/setUp.css";
 import { API_URL } from "../../config";
 import PasswordInput from "../../components/PasswordInput";
+import { useSlowFlag, warmServer } from "../../utils/warmup";
 
 const Registering = () => {
   const navigate = useNavigate();
@@ -18,6 +19,11 @@ const Registering = () => {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const slow = useSlowFlag(loading);
+
+  useEffect(() => {
+    warmServer();
+  }, []);
 
   const [passwordChecks, setPasswordChecks] = useState({
     length: false,
@@ -157,7 +163,7 @@ const Registering = () => {
         {error && <p className="setup-error">{error}</p>}
 
         <button className="setup-btn-primary" onClick={handleSubmit} disabled={loading}>
-          {loading ? "signing up..." : "Sign Up"}
+          {loading ? (slow ? "waking koda up, almost there..." : "signing up...") : "Sign Up"}
         </button>
       </div>
     </div>

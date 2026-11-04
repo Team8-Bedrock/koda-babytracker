@@ -1,9 +1,8 @@
 // Renders the correct per-avatar 3D habitat scene behind every page
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useGLTF } from "@react-three/drei";
 import { getSelectedChildForUser } from "../utils/authStorage";
 import { getAvatarById, DEFAULT_MODEL } from "../constants/avatars";
-import { API_URL } from "../config";
 import FoxHabitat3D from "./habitats/FoxHabitat3D";
 import FrogHabitat3D from "./habitats/FrogHabitat3D";
 import BunnyHabitat3D from "./habitats/BunnyHabitat3D";
@@ -21,28 +20,12 @@ const HabitatBackground = () => {
   const selectedChild = getSelectedChildForUser();
   const character = getAvatarById(selectedChild?.avatar);
   const characterModel = character?.model || DEFAULT_MODEL;
-  const [isUnlinkedCaregiver, setIsUnlinkedCaregiver] = useState(false);
 
   useEffect(() => {
     useGLTF.preload(characterModel);
   }, [characterModel]);
 
-  useEffect(() => {
-    if (character) {
-      setIsUnlinkedCaregiver(false);
-      return;
-    }
-
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    fetch(`${API_URL}/api/auth/me`, { headers: { "x-auth-token": token } })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((user) => setIsUnlinkedCaregiver(user?.role === "caregiver"))
-      .catch(() => setIsUnlinkedCaregiver(false));
-  }, [character]);
-
-  if (!character && isUnlinkedCaregiver) {
+  if (!character) {
     return (
       <div className="habitat-background-container">
         <div className="setup-container habitat-caregiver-unlinked-bg">

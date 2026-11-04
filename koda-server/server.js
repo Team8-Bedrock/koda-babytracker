@@ -26,6 +26,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error("❌ Connection Error:", err));
 
 app.get('/', (req, res) => res.send("Koda API is Running..."));
+app.get('/api/health', (req, res) => res.json({ ok: true, db: mongoose.connection.readyState === 1 }));
 
 // Define routes
 const authRoutes = require('./routes/auth');
@@ -34,6 +35,6 @@ app.use('/api/auth', authRoutes);
 app.use("/api/children", childRoutes);
 app.use('/api/caregiver-links', caregiverLinkRoutes);
 app.use("/api/chat", require("./routes/chat"));
+app.use("/api/child-notes", require("./routes/childNotes"));
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
-

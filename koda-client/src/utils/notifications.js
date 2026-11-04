@@ -22,6 +22,7 @@ export const addNotification = ({
   title,
   message,
   path,
+  state,
   count = 1,
   notificationType,
   childId,
@@ -43,6 +44,7 @@ export const addNotification = ({
     next[groupIndex] = {
       ...existing,
       title,
+      createdAt: Date.now(),
       message: `${total} new ${total === 1 ? "message" : "messages"}`,
       count: total,
     };
@@ -54,6 +56,8 @@ export const addNotification = ({
       message: groupId ? `${title} — ${message}` : message,
       path,
       count,
+      createdAt: Date.now(),
+      ...(state ? { state } : {}),
       ...(notificationType ? { notificationType } : {}),
       ...(childId ? { childId } : {}),
       ...(activityType ? { activityType } : {}),
@@ -89,4 +93,64 @@ export const removeScheduleNotifications = (childId, activityType, loggedAt) => 
   if (next.length === current.length) return;
   localStorage.setItem(key, JSON.stringify(next));
   window.dispatchEvent(new Event("koda-notifications-updated"));
+};
+
+const dismissedKey = () => {
+  const userId = getCurrentUserId();
+  return userId ? `notificationsDismissed:${userId}` : null;
+};
+
+export const getDismissedIds = () => {
+  const key = dismissedKey();
+  if (!key) return new Set();
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return new Set(Array.isArray(value) ? value : []);
+  } catch {
+    return new Set();
+  }
+};
+
+export const dismissNotification = (notification) => {
+  if (!notification) return;
+  if (notification.notificationType === "caregiver-request") {
+    const key = dismissedKey();
+    if (key) {
+      const ids = getDismissedIds();
+      ids.add(notification.id);
+      localStorage.setItem(key, JSON.stringify([...ids].slice(-200)));
+    }
+  }
+  removeNotification(notification.id);
+};
+
+export const clearNotifications = () => {
+  getNotifications().forEach((notification) => {
+    if (notification.notificationType === "caregiver-request") dismissNotification(notification);
+  });
+  const key = getKey();
+  if (!key) return;
+  localStorage.setItem(key, "[]");
+  window.dispatchEvent(new Event("koda-notifications-updated"));
+};
+
+export const notificationKind = (notification) => {
+  if (notification?.notificationType === "caregiver-request") return "caregiver";
+  if (notification?.notificationType === "schedule-reminder") return "schedule";
+  if (notification?.notificationType === "note") return "note";
+  if (String(notification?.groupId || "").startsWith("chat:")) return "chat";
+  if (/offline|sync|device/i.test(`${notification?.title || ""} ${notification?.message || ""}`)) return "offline";
+  return "general";
+};
+
+export const timeAgo = (value) => {
+  const time = Number(value);
+  if (!Number.isFinite(time) || time <= 0) return "";
+  const minutes = Math.floor((Date.now() - time) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "yesterday" : `${days}d ago`;
 };

@@ -20,7 +20,7 @@ const ACTIVITY_OPTIONS = [
   { type: 'mood', label: 'mood' },
 ];
 
-const SCHEDULABLE_TYPES = ['feeding', 'sleep', 'diaper', 'playtime', 'mood'];
+const SCHEDULABLE_TYPES = ['feeding', 'sleep'];
 
 const MOOD_OPTIONS = ['tired', 'mad', 'sad', 'energetic', 'happy', 'quiet', 'other'];
 
