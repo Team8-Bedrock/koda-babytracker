@@ -1,4 +1,11 @@
-import { getNotifications, removeScheduleNotifications } from "../notifications";
+import {
+  addNotification,
+  dismissNotification,
+  getDismissedIds,
+  getNotifications,
+  notificationKind,
+  removeScheduleNotifications,
+} from "../notifications";
 
 describe("schedule reminder notifications", () => {
   beforeEach(() => {
@@ -56,5 +63,24 @@ describe("schedule reminder notifications", () => {
     removeScheduleNotifications("child-1", "feeding", new Date("2026-10-29T18:15:01.000Z"));
 
     expect(getNotifications()).toEqual(reminders);
+  });
+
+  it("keeps routine alerts dismissed when the dashboard refreshes", () => {
+    const alert = {
+      id: "routine:child-1:activity-1",
+      title: "AI routine check",
+      message: "Feeding log differs from the recent routine.",
+      notificationType: "routine-alert",
+      childId: "child-1",
+    };
+
+    addNotification(alert);
+    expect(notificationKind(getNotifications()[0])).toBe("routine");
+
+    dismissNotification(alert);
+    addNotification(alert);
+
+    expect(getNotifications()).toEqual([]);
+    expect(getDismissedIds().has(alert.id)).toBe(true);
   });
 });

@@ -368,6 +368,10 @@ html.koda-night .link-prompt__steps li {
     color: #27305a;
 }
 
+html.koda-night .layout-mobile-frame .link-prompt__card h2 {
+    color: #27305a !important;
+}
+
 html.koda-night .link-prompt__lead,
 html.koda-night .link-prompt__later,
 html.koda-night .link-prompt__close {

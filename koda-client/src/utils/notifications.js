@@ -33,6 +33,7 @@ export const addNotification = ({
   if (!key) return;
   const current = getNotifications();
   if (id && current.some((item) => item.id === id)) return;
+  if (notificationType === "routine-alert" && id && getDismissedIds().has(id)) return;
   const groupIndex = groupId
     ? current.findIndex((item) => item.groupId === groupId)
     : -1;
@@ -113,7 +114,7 @@ export const getDismissedIds = () => {
 
 export const dismissNotification = (notification) => {
   if (!notification) return;
-  if (notification.notificationType === "caregiver-request") {
+  if (["caregiver-request", "routine-alert"].includes(notification.notificationType)) {
     const key = dismissedKey();
     if (key) {
       const ids = getDismissedIds();
@@ -126,7 +127,9 @@ export const dismissNotification = (notification) => {
 
 export const clearNotifications = () => {
   getNotifications().forEach((notification) => {
-    if (notification.notificationType === "caregiver-request") dismissNotification(notification);
+    if (["caregiver-request", "routine-alert"].includes(notification.notificationType)) {
+      dismissNotification(notification);
+    }
   });
   const key = getKey();
   if (!key) return;
@@ -137,6 +140,7 @@ export const clearNotifications = () => {
 export const notificationKind = (notification) => {
   if (notification?.notificationType === "caregiver-request") return "caregiver";
   if (notification?.notificationType === "schedule-reminder") return "schedule";
+  if (notification?.notificationType === "routine-alert") return "routine";
   if (notification?.notificationType === "note") return "note";
   if (String(notification?.groupId || "").startsWith("chat:")) return "chat";
   if (/offline|sync|device/i.test(`${notification?.title || ""} ${notification?.message || ""}`)) return "offline";

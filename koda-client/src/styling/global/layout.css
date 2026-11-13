@@ -293,6 +293,12 @@ html.koda-night .layout-simple-background {
   --n-icon: #3b6a96;
 }
 
+.notification-item--routine {
+  --n-tint: rgba(232, 154, 69, 0.16);
+  --n-icon-bg: #f7e6c8;
+  --n-icon: #9a5d19;
+}
+
 .notification-item--chat {
   --n-tint: rgba(247, 198, 217, 0.26);
   --n-icon-bg: #f7d6e3;

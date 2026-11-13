@@ -72,14 +72,14 @@ Koda provides distinct registration pathways for Primary Parents (Account Admins
 
 ### Feature 2: Core Activity Logging with Dark Mode
 **Description:**  
-Allows parents and caregivers to log core daily activities including feedings (bottle ounces, breast side, or solids), sleep duration (start/end times and crib/car location), diaper changes (wet, solid, or mixed), and mood updates. Successfully logged entries instantly update the home page **"Today's Activities"** dashboard panel and sync to the analytics page. A dedicated Dark Mode theme is built into the main logging pages to prevent screen glare during nighttime feedings and bedtimes.
+Allows parents and caregivers to log core daily activities including feedings (bottle ounces, breast side, or solids), sleep duration (start/end times and crib/car location), diaper changes (wet, solid, or mixed), and mood updates. Successfully logged entries instantly update the home page **"Today's Activities"** dashboard panel, which shows up to the three most recent logs from today, and sync to the analytics page. A dedicated Dark Mode theme is built into the main logging pages to prevent screen glare during nighttime feedings and bedtimes.
 
 **How to Use:**
 1. From the **Habitat Dashboard**, tap the **+ (Log)** icon on the bottom navigation bar.
 2. Choose the activity category: **Feeding**, **Sleeping**, **Diaper Change**, **Mood**, or **Playtime**.
 3. Fill in the specific event parameters (e.g., feeding amount in oz, diaper type, or sleep start/end times).
 4. *(Optional)* Toggle **Dark Mode** on the top header for nighttime data entry.
-5. Tap **Save Entry** The activity immediately appears under the **"Today's Activities"** card on your dashboard.
+5. Tap **Save Entry**. The activity immediately appears under the **"Today's Activities"** card on your dashboard.
 
 <img src="images/log_activity.PNG" alt="Activity Logging Selection and Input Form" width="200">
 
@@ -173,7 +173,7 @@ Generates a PDF report of activity data, visual trends, and AI-generated feeding
 
 ### Feature 7: Multi-User Access Controls & In-App Messaging
 **Description:**  
-Primary Parent Admins have full access control to manage linked Caregivers. Parents can adjust permissions, toggle individual features (such as Chat Access or Logging Access), or revoke access entirely at any time. The feature also includes a secure, encrypted in-app messaging channel for direct communication between parents and active caregivers, complete with an **Emergency Alert** button to bypass silent notifications during urgent situations.
+Primary Parent Admins have full access control to manage linked Caregivers. Parents can adjust permissions, toggle individual features (such as Chat Access or Logging Access), or revoke access entirely at any time. Caregivers see a child name in the top bar only after a child has been connected to their account. The feature also includes an in-app messaging channel for direct communication between parents and active caregivers, complete with an **Emergency Alert** button to bypass silent notifications during urgent situations.
 
 **How to Use:**
 1. **Caregiver Permission Control:** Navigate to **Settings > Caregiver Settings** Toggle individual switches to grant or revoke **Chat Access** or **Logging Access**, or select **Delete User** to remove a caregiver.

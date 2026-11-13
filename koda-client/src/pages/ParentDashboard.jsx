@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { ClipboardList, TriangleAlert, Bell } from "lucide-react";
+import { ClipboardList, Bell } from "lucide-react";
 import "../styling/pages/parentDashboard.css";
 import { getSelectedChildForUser, getCurrentUserId } from "../utils/authStorage";
 import { API_URL } from "../config";
@@ -8,17 +8,16 @@ import ActivitiesModal from "../components/modals/ActivitiesModal";
 import NavIconButton from "../components/NavIconButton";
 import OfflineDuplicateReview from "../components/OfflineDuplicateReview";
 import { getQueuedActivities } from "../utils/offlineStorage";
-import { addNotification } from "../utils/notifications";
+import { addNotification, getDismissedIds } from "../utils/notifications";
 
 const ParentDashboard = () => {
   const [activities, setActivities] = useState([]);
   const [activitiesLoading, setActivitiesLoading] = useState(true);
-  const [caregivers, setCaregivers] = useState([]);
+  //const [caregivers, setCaregivers] = useState([]);
 
   const [reviewVersion, setReviewVersion] = useState(0);
 
   const [isActivitiesOpen, setIsActivitiesOpen] = useState(true);
-  const [anomalyAlerts, setAnomalyAlerts] = useState([]);
   const [scheduleReminders, setScheduleReminders] = useState([]);
   const shownReminderKeys = useRef(new Set());
 
@@ -63,7 +62,20 @@ const ParentDashboard = () => {
               timeout: 60000,
             });
             serverData = response.data || {};
-            setAnomalyAlerts(response.data?.anomalyAlerts || []);
+            const dismissedAlerts = getDismissedIds();
+            (response.data?.anomalyAlerts || []).forEach((alert) => {
+              const id = `routine:${childId}:${alert.id}`;
+              if (dismissedAlerts.has(id)) return;
+              addNotification({
+                id,
+                title: "AI routine check",
+                message: `${alert.activityType === "sleep" ? "Sleep" : "Feeding"} log: ${alert.message}. Pattern estimates only; not medical advice.`,
+                path: "/ParentDashboard",
+                notificationType: "routine-alert",
+                childId,
+                activityType: alert.activityType,
+              });
+            });
           } catch (err) {
             console.error("Could not load online activities:", err);
             if (err.response) break;
@@ -159,14 +171,8 @@ const ParentDashboard = () => {
               new Date(getEntryTime(b)) - new Date(getEntryTime(a))
           );
 
-        const recentActivities = ["feeding", "sleep", "diaper", "mood", "playtime"]
-          .map((activityType) => {
-            const entry = todaysEntries.find(
-              (item) => item.activityType === activityType
-            );
-
-            if (!entry) return null;
-
+        const recentActivities = todaysEntries.slice(0, 3).map((entry) => {
+            const activityType = entry.activityType;
             let value = "";
 
             if (activityType === "feeding") {
@@ -200,9 +206,7 @@ const ParentDashboard = () => {
                   : formatTime(getEntryTime(entry)),
               rawTime: getEntryTime(entry),
             };
-          })
-          .filter(Boolean)
-          .sort((a, b) => new Date(b.rawTime) - new Date(a.rawTime));
+          });
 
         if (
           active &&
@@ -374,7 +378,7 @@ const ParentDashboard = () => {
             onClose={() => setIsActivitiesOpen(false)}
           />
         )}
-        {(scheduleReminders.length > 0 || anomalyAlerts.length > 0) && (
+        {scheduleReminders.length > 0 && (
           <div className="dashboard-notice-stack" aria-live="polite">
             {scheduleReminders.map((reminder, index) => (
               <div className="dashboard-reminder" role="status" key={`${reminder.activityType}-${reminder.occursAt}-${index}`}>
@@ -386,20 +390,6 @@ const ParentDashboard = () => {
                 </span>
               </div>
             ))}
-            {anomalyAlerts.length > 0 && (
-              <div className="dashboard-anomaly" role="status">
-                <div className="dashboard-anomaly-heading">
-                  <TriangleAlert size={17} aria-hidden="true" />
-                  <strong>AI routine check</strong>
-                </div>
-                {anomalyAlerts.map((alert) => (
-                  <p key={alert.id}>
-                    {alert.activityType === "sleep" ? "Sleep" : "Feeding"} log: {alert.message}.
-                  </p>
-                ))}
-                <small>Pattern estimates only; not medical advice.</small>
-              </div>
-            )}
           </div>
         )}
       </div>

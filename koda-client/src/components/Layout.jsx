@@ -12,6 +12,7 @@ import {
   CalendarClock,
   UserPlus,
   CloudOff,
+  TriangleAlert,
   X,
   Sparkles,
   StickyNote,
@@ -48,6 +49,7 @@ const KIND_ICONS = {
   chat: MessageCircle,
   offline: CloudOff,
   note: StickyNote,
+  routine: TriangleAlert,
   general: Sparkles,
 };
 
@@ -69,6 +71,13 @@ const Layout = ({ children }) => {
       return sessionStorage.getItem(`koda-role:${getCurrentUserId()}`) || null;
     } catch {
       return null;
+    }
+  });
+  const [roleResolved, setRoleResolved] = useState(() => {
+    try {
+      return Boolean(sessionStorage.getItem(`koda-role:${getCurrentUserId()}`));
+    } catch {
+      return false;
     }
   });
   const isCaregiver = role === "caregiver";
@@ -96,9 +105,11 @@ const Layout = ({ children }) => {
       const child = event.detail?.child;
       if (!child) return;
       setSelectedChild(child);
-      setChildOptions((current) => current.map((option) => (
-        option._id === child._id ? child : option
-      )));
+      setChildOptions((current) => (
+        current.some((option) => option._id === child._id)
+          ? current.map((option) => (option._id === child._id ? child : option))
+          : [...current, child]
+      ));
     };
     window.addEventListener("koda-selected-child-updated", updateChild);
     return () => window.removeEventListener("koda-selected-child-updated", updateChild);
@@ -191,7 +202,11 @@ const Layout = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem("token");
     const userId = getCurrentUserId();
-    if (!token || !userId || role) return;
+    if (!token || !userId || role) {
+      setRoleResolved(true);
+      return undefined;
+    }
+    let active = true;
     fetch(`${API_URL}/api/auth/me`, { headers: { "x-auth-token": token } })
       .then((res) => (res.ok ? res.json() : null))
       .then((user) => {
@@ -204,7 +219,13 @@ const Layout = ({ children }) => {
           setRole(user.role);
         }
       })
-      .catch(() => { });
+      .catch(() => { })
+      .finally(() => {
+        if (active) setRoleResolved(true);
+      });
+    return () => {
+      active = false;
+    };
   }, [role]);
 
   useEffect(() => {
@@ -361,7 +382,16 @@ const Layout = ({ children }) => {
     return () => window.removeEventListener("koda-header-label", updateHeader);
   }, []);
 
-  const pageLabel = headerLabel || getPageLabel(location.pathname, selectedChild?.name || "Gracie");
+  const headerChild = isCaregiver
+    ? childOptions.find((child) => child._id === selectedChild?._id) || childOptions[0]
+    : selectedChild;
+  const pageLabel = headerLabel || (headerChild?.name
+    ? getPageLabel(location.pathname, headerChild.name)
+    : isCaregiver
+      ? ""
+      : getPageLabel(location.pathname, "Gracie"));
+  const showChildSwitcher = roleResolved && (!isCaregiver || Boolean(headerChild?._id));
+  const showLinkChildSwitcher = roleResolved && isCaregiver && !headerChild?._id;
 
   const handleSelectChild = (child) => {
     setIsSwitcherOpen(false);
@@ -375,7 +405,7 @@ const Layout = ({ children }) => {
   };
 
   const handleNotificationPress = (notification) => {
-    const keep = ["schedule-reminder", "caregiver-request", "note"].includes(notification.notificationType);
+    const keep = ["schedule-reminder", "caregiver-request", "note", "routine-alert"].includes(notification.notificationType);
     if (!keep) {
       setNotifications((current) =>
         current.filter((item) => item.id !== notification.id)
@@ -439,7 +469,7 @@ const Layout = ({ children }) => {
           <div className="name-dropdown-btn layout-name-pill-static">
             Activity Log
           </div>
-        ) : (
+        ) : showChildSwitcher ? (
           <div className="child-switcher" ref={switcherRef}>
             <button
               className="name-dropdown-btn"
@@ -458,7 +488,7 @@ const Layout = ({ children }) => {
                     <button
                       key={child._id}
                       type="button"
-                      className={`child-switcher-item ${selectedChild?._id === child._id ? "child-switcher-item--active" : ""}`}
+                      className={`child-switcher-item ${headerChild?._id === child._id ? "child-switcher-item--active" : ""}`}
                       onClick={() => handleSelectChild(child)}
                       style={{ animation: `kcsItemIn 0.28s cubic-bezier(.2,1.3,.4,1) ${index * 0.05}s both` }}
                     >
@@ -466,7 +496,7 @@ const Layout = ({ children }) => {
                         <CharacterHead child={child} size={30} style={{ background: "rgba(255,255,255,0.55)", boxShadow: "inset 0 0 0 1.5px rgba(90,70,53,0.18)" }} />
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{child.name}</span>
                       </span>
-                      {selectedChild?._id === child._id && <CheckCircle2 size={14} />}
+                      {headerChild?._id === child._id && <CheckCircle2 size={14} />}
                     </button>
                   ))
                 ) : (
@@ -475,7 +505,38 @@ const Layout = ({ children }) => {
               </div>
             )}
           </div>
-        )}
+        ) : showLinkChildSwitcher ? (
+          <div className="child-switcher" ref={switcherRef}>
+            <button
+              type="button"
+              className="name-dropdown-btn"
+              onClick={() => setIsSwitcherOpen((prev) => !prev)}
+              aria-expanded={isSwitcherOpen}
+              aria-label="Link a child"
+              style={{ "--pill-font-size": `${getPillFontSize("Link Child")}px` }}
+            >
+              <span>Link Child</span>
+              <ChevronDown size={14} strokeWidth={2.5} className="layout-name-pill-chevron" />
+            </button>
+            {isSwitcherOpen && (
+              <div className="child-switcher-menu">
+                <button
+                  type="button"
+                  className="child-switcher-item child-switcher-item--add"
+                  onClick={() => {
+                    setIsSwitcherOpen(false);
+                    navigate("/account", { state: { openCategory: "caretaker" } });
+                  }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <UserPlus size={16} aria-hidden="true" />
+                    Link a child
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : null}
 
         <div className="header-notifications" ref={notificationsRef}>
           <NavIconButton
