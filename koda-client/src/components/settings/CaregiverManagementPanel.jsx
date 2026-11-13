@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { KeyRound, RefreshCw, Check, X, Trash2 } from "lucide-react";
 import { API_URL } from "../../config";
@@ -47,6 +47,7 @@ const CaregiverManagementPanel = ({ onCancel }) => {
   const [outcomes, setOutcomes] = useState({});
   const [freshId, setFreshId] = useState(null);
   const timers = useRef([]);
+  const loadRequestRef = useRef(0);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
@@ -70,26 +71,44 @@ const CaregiverManagementPanel = ({ onCancel }) => {
     }, duration);
   };
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
+    const requestId = ++loadRequestRef.current;
     try {
       const [codeRes, requestsRes] = await Promise.all([
-        axios.get(`${API_URL}/api/caregiver-links/code`, { headers: authHeaders() }),
-        axios.get(`${API_URL}/api/caregiver-links/requests`, { headers: authHeaders() }),
+        axios.get(`${API_URL}/api/caregiver-links/code`, {
+          headers: { ...authHeaders(), "Cache-Control": "no-cache" },
+        }),
+        axios.get(`${API_URL}/api/caregiver-links/requests`, {
+          headers: { ...authHeaders(), "Cache-Control": "no-cache" },
+        }),
       ]);
-      setCode(codeRes.data.code);
-      setChildren(requestsRes.data.children || []);
-      setLinks(requestsRes.data.links || []);
+      if (requestId === loadRequestRef.current) {
+        setCode(codeRes.data.code);
+        setChildren(requestsRes.data.children || []);
+        setLinks(requestsRes.data.links || []);
+      }
     } catch (err) {
-      setStatus("could not load caregiver settings.");
+      if (requestId === loadRequestRef.current) setStatus("could not load caregiver settings.");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") loadAll();
+    };
+    const interval = setInterval(refreshWhenVisible, 5000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      loadRequestRef.current += 1;
+    };
+  }, [loadAll]);
 
   const regenerateCode = async () => {
     try {

@@ -85,6 +85,7 @@ const Layout = ({ children }) => {
   const notificationsRef = useRef(null);
   const isActivityLogPage = location.pathname.toLowerCase() === "/add-activity";
   const isDashboardPage = location.pathname.toLowerCase() === "/parentdashboard";
+  const activePath = location.pathname.replace(/\/+$/, "").toLowerCase();
   const selectedAvatar = getAvatarById(selectedChild?.avatar);
 
   useEffect(() => {
@@ -137,7 +138,7 @@ const Layout = ({ children }) => {
   useEffect(() => {
     const childId = selectedChild?._id;
     const token = localStorage.getItem("token");
-    if (!childId || !token) return undefined;
+    if (!childId || !token || !roleResolved) return undefined;
     let active = true;
     const checkChat = async () => {
       try {
@@ -168,16 +169,17 @@ const Layout = ({ children }) => {
         const threads = new Map();
         incomingMessages.forEach((message) => {
           const senderId = String(message.senderId?._id || message.senderId);
-          const threadKey = message.recipientId ? senderId : "group";
+          const threadKey = (message.recipientId || role === "caregiver") ? senderId : "group";
           if (!threads.has(threadKey)) threads.set(threadKey, []);
           threads.get(threadKey).push(message);
         });
         threads.forEach((items, threadKey) => {
           const latestMessage = items[items.length - 1];
           const senderName = latestMessage.senderId?.username || "someone";
+          const isFamilyBroadcast = threadKey === "group";
           addNotification({
             groupId: `chat:${childId}:${threadKey}`,
-            title: threadKey === "group" ? `${senderName} in family chat` : senderName,
+            title: isFamilyBroadcast ? `${senderName} in family chat` : senderName,
             path: "/chat",
             state: { with: threadKey },
             message: `${items.length} new ${items.length === 1 ? "message" : "messages"}`,
@@ -197,7 +199,7 @@ const Layout = ({ children }) => {
       active = false;
       clearInterval(interval);
     };
-  }, [selectedChild?._id]);
+  }, [selectedChild?._id, role, roleResolved]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -620,13 +622,44 @@ const Layout = ({ children }) => {
 
 
       <nav className="layout-bottom-nav">
-        <NavIconButton icon={Home} onClick={() => navigate("/ParentDashboard")} />
-        <NavIconButton icon={PlusSquare} onClick={() => navigate("/add-activity")} />
+        <NavIconButton
+          icon={Home}
+          className={activePath === "/parentdashboard" ? "nav-icon-btn--active" : ""}
+          aria-label="Home"
+          aria-current={activePath === "/parentdashboard" ? "page" : undefined}
+          onClick={() => navigate("/ParentDashboard")}
+        />
+        <NavIconButton
+          icon={PlusSquare}
+          className={activePath === "/add-activity" ? "nav-icon-btn--active" : ""}
+          aria-label="Add activity"
+          aria-current={activePath === "/add-activity" ? "page" : undefined}
+          onClick={() => navigate("/add-activity")}
+        />
         {!isCaregiver && (
-          <NavIconButton icon={BarChart2} strokeWidth={2} onClick={() => navigate("/analytics")} />
+          <NavIconButton
+            icon={BarChart2}
+            strokeWidth={2}
+            className={activePath === "/analytics" ? "nav-icon-btn--active" : ""}
+            aria-label="Analytics"
+            aria-current={activePath === "/analytics" ? "page" : undefined}
+            onClick={() => navigate("/analytics")}
+          />
         )}
-        <NavIconButton icon={MessageCircle} onClick={() => navigate("/chat")} />
-        <NavIconButton icon={SettingsIcon} onClick={() => navigate("/account")} />
+        <NavIconButton
+          icon={MessageCircle}
+          className={activePath === "/chat" ? "nav-icon-btn--active" : ""}
+          aria-label="Chat"
+          aria-current={activePath === "/chat" ? "page" : undefined}
+          onClick={() => navigate("/chat")}
+        />
+        <NavIconButton
+          icon={SettingsIcon}
+          className={activePath === "/account" ? "nav-icon-btn--active" : ""}
+          aria-label="Settings"
+          aria-current={activePath === "/account" ? "page" : undefined}
+          onClick={() => navigate("/account")}
+        />
       </nav>
     </div>
   );

@@ -170,6 +170,12 @@ function Chat() {
     }, [location.state]);
 
     useEffect(() => {
+        if (thread !== "group" || inbox?.role !== "caregiver") return;
+        const parent = inbox.contacts?.find((person) => person.role === "parent");
+        if (parent) setThread(String(parent.id));
+    }, [inbox, thread]);
+
+    useEffect(() => {
         if (!childId) return undefined;
         let active = true;
 
@@ -539,27 +545,34 @@ function Chat() {
     };
 
     if (!thread) {
-        const rows = [
-            {
-                key: "group",
-                name: groupName,
-                sub: inbox?.group?.memberCount
-                    ? `everyone · ${inbox.group.memberCount} ${inbox.group.memberCount === 1 ? "person" : "people"}`
-                    : "everyone",
-                last: inbox?.group?.last,
-                group: true,
-            },
-            ...contacts.map((person) => ({
+        const rows = inbox?.role === "caregiver"
+            ? contacts.map((person) => ({
                 key: String(person.id),
                 name: person.username,
-                sub: person.role === "parent" ? "parent" : "caregiver",
+                sub: "parent",
                 last: person.last,
-            })),
-        ].sort((x, y) => {
-            if (x.group) return -1;
-            if (y.group) return 1;
-            return new Date(y.last?.createdAt || 0) - new Date(x.last?.createdAt || 0);
-        });
+            }))
+            : [
+                {
+                    key: "group",
+                    name: groupName,
+                    sub: inbox?.group?.memberCount
+                        ? `everyone · ${inbox.group.memberCount} ${inbox.group.memberCount === 1 ? "person" : "people"}`
+                        : "everyone",
+                    last: inbox?.group?.last,
+                    group: true,
+                },
+                ...contacts.map((person) => ({
+                    key: String(person.id),
+                    name: person.username,
+                    sub: person.role === "parent" ? "parent" : "caregiver",
+                    last: person.last,
+                })),
+            ].sort((x, y) => {
+                if (x.group) return -1;
+                if (y.group) return 1;
+                return new Date(y.last?.createdAt || 0) - new Date(x.last?.createdAt || 0);
+            });
 
         return (
             <main className="chat-page">
@@ -633,7 +646,9 @@ function Chat() {
                         <h1>{threadPartner ? activeContact?.username || "..." : groupName}</h1>
                         <p className="chat-panel-sub">
                             {threadPartner
-                                ? `${activeContact?.role === "parent" ? "parent" : "caregiver"} · only you two can see this`
+                                ? inbox?.role === "caregiver"
+                                    ? "parent · direct and family messages"
+                                    : `${activeContact?.role === "parent" ? "parent" : "caregiver"} · only you two can see this`
                                 : inbox?.group?.memberCount ? `everyone · ${inbox.group.memberCount} people` : "everyone"}
                         </p>
                     </div>

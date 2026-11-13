@@ -98,6 +98,19 @@ function conversationFilter(req, partnerId) {
     };
 }
 
+function threadFilter(req, partnerId) {
+    if (req.chatUser.role !== "caregiver") return conversationFilter(req, partnerId);
+
+    return {
+        childId: req.chatChild._id,
+        $or: [
+            { senderId: req.chatUser._id, recipientId: partnerId },
+            { senderId: partnerId, recipientId: req.chatUser._id },
+            { senderId: partnerId, recipientId: null },
+        ],
+    };
+}
+
 function visibleFilter(req) {
     const me = req.chatUser._id;
     return {
@@ -151,7 +164,7 @@ router.get("/:childId/contacts", checkAccess, async (req, res) => {
 
         const people = await Promise.all(
             contacts.map(async (user) => {
-                const last = await ChatMessage.findOne(conversationFilter(req, user._id))
+                const last = await ChatMessage.findOne(threadFilter(req, user._id))
                     .sort({ createdAt: -1 })
                     .populate("senderId", "username role");
                 return { id: user._id, username: user.username, role: user.role, last };
@@ -159,6 +172,7 @@ router.get("/:childId/contacts", checkAccess, async (req, res) => {
         );
 
         res.json({
+            role: req.chatUser.role,
             group: {
                 name: parent?.familyChatName || `${req.chatChild.name}'s family`,
                 memberCount: contacts.length + 1,
@@ -181,7 +195,7 @@ router.get("/:childId/messages", checkAccess, async (req, res) => {
         } else if (withParam) {
             const partner = await resolvePartner(req, withParam);
             if (!partner) return res.status(403).json({ msg: "You can't message that person." });
-            filter = conversationFilter(req, partner._id);
+            filter = threadFilter(req, partner._id);
         }
 
         const messages = await ChatMessage.find(filter)

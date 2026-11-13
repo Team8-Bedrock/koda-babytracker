@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { KeyRound, CheckCircle2, Clock, XCircle, Check } from "lucide-react";
@@ -6,35 +6,60 @@ import { API_URL } from "../../config";
 import { getSelectedChildForUser, setSelectedChildForUser } from "../../utils/authStorage";
 import { startTravel } from "../Traveloverlay";
 
+const authHeaders = () => ({ "x-auth-token": localStorage.getItem("token") });
+
 // Lets a caregiver redeem a parent's 6-character link code and see their access status.
 const CaregiverLinkPanel = ({ onCancel }) => {
   const navigate = useNavigate();
   const [link, setLink] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [linkError, setLinkError] = useState("");
   const [code, setCode] = useState("");
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [activeChildId, setActiveChildId] = useState(getSelectedChildForUser()?._id || null);
   const [pickedId, setPickedId] = useState(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const linkRequestRef = useRef(0);
 
-  const authHeaders = { "x-auth-token": localStorage.getItem("token") };
+  const fetchLink = useCallback(async () => {
+    const requestId = ++linkRequestRef.current;
 
-  const fetchLink = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/caregiver-links/mine`, { headers: authHeaders });
-      setLink(res.data);
+      const res = await axios.get(`${API_URL}/api/caregiver-links/mine`, {
+        headers: {
+          ...authHeaders(),
+          "Cache-Control": "no-cache",
+        },
+      });
+      if (requestId === linkRequestRef.current) {
+        setLink(res.data);
+        setLinkError("");
+      }
     } catch (err) {
-      setLink(null);
+      if (requestId === linkRequestRef.current) {
+        setLinkError(err.response?.data?.msg || "could not refresh link status.");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === linkRequestRef.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchLink();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") fetchLink();
+    };
+    const interval = setInterval(refreshWhenVisible, 5000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      linkRequestRef.current += 1;
+    };
+  }, [fetchLink]);
 
   const handleSubmit = async (event) => {
     event?.preventDefault();
@@ -47,7 +72,7 @@ const CaregiverLinkPanel = ({ onCancel }) => {
 
     try {
       setSubmitting(true);
-      await axios.post(`${API_URL}/api/caregiver-links/redeem`, { code: cleanCode }, { headers: authHeaders });
+      await axios.post(`${API_URL}/api/caregiver-links/redeem`, { code: cleanCode }, { headers: authHeaders() });
       setCode("");
       await fetchLink();
       setSavedFlash(true);
@@ -142,6 +167,7 @@ const CaregiverLinkPanel = ({ onCancel }) => {
   if (stage === "code") {
     return (
       <div className="caregiver-link-panel">
+        {linkError && <p className="empty-msg-light account-empty-msg--status" role="status">{linkError}</p>}
         {link?.status === "denied" && (
           <p className="empty-msg-light account-empty-msg--status caregiver-link-denied">
             <XCircle size={16} /> your last request was denied. try entering a new code below.
@@ -178,6 +204,7 @@ const CaregiverLinkPanel = ({ onCancel }) => {
   if (stage === "pending") {
     return (
       <div className="caregiver-link-panel">
+        {linkError && <p className="empty-msg-light account-empty-msg--status" role="status">{linkError}</p>}
         <p className="empty-msg-light account-empty-msg--status caregiver-link-pending">
           <Clock size={16} /> waiting for {link.parent?.username || "the parent"} to approve your request.
         </p>
@@ -188,6 +215,7 @@ const CaregiverLinkPanel = ({ onCancel }) => {
 
   return (
     <div className="caregiver-link-panel">
+      {linkError && <p className="empty-msg-light account-empty-msg--status" role="status">{linkError}</p>}
       <p className="empty-msg-light account-empty-msg--status caregiver-link-approved">
         <CheckCircle2 size={16} /> linked to {link.parent?.username || "a parent"}'s account
       </p>

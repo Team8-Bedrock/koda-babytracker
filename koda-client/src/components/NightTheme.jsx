@@ -112,6 +112,16 @@ html.koda-night .name-dropdown-btn svg { color: #27305a !important; }
 html.koda-night .child-switcher-item { background: transparent !important; color: #27305a !important; }
 html.koda-night .child-switcher-item--active { background: #ccd2fb !important; }
 html.koda-night .child-switcher-empty { color: #4a5384 !important; }
+html.koda-night .layout-bottom-nav .nav-icon-btn:hover,
+html.koda-night .layout-bottom-nav .nav-icon-btn:focus-visible,
+html.koda-night .layout-bottom-nav .nav-icon-btn--active {
+  background: #27305a !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(10, 14, 40, 0.4) !important;
+}
+html.koda-night .layout-bottom-nav .nav-icon-btn:hover svg,
+html.koda-night .layout-bottom-nav .nav-icon-btn:focus-visible svg,
+html.koda-night .layout-bottom-nav .nav-icon-btn--active svg { color: #ffffff !important; }
 html.koda-night .layout-logo-btn { background: transparent !important; box-shadow: none !important; }
 html.koda-night :focus-visible { outline: 2px solid #f4d77a !important; outline-offset: 2px !important; }
 

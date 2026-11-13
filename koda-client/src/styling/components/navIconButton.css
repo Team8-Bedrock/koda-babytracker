@@ -12,4 +12,22 @@
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.2);
   cursor: pointer;
   padding: 0;
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.layout-bottom-nav .nav-icon-btn:hover,
+.layout-bottom-nav .nav-icon-btn:focus-visible,
+.layout-bottom-nav .nav-icon-btn--active {
+  background: #315b3d;
+  box-shadow: 0 4px 14px rgba(49, 91, 61, 0.35);
+}
+
+.layout-bottom-nav .nav-icon-btn:hover svg,
+.layout-bottom-nav .nav-icon-btn:focus-visible svg,
+.layout-bottom-nav .nav-icon-btn--active svg {
+  color: #fffdf7 !important;
+}
+
+.layout-bottom-nav .nav-icon-btn:active {
+  transform: scale(0.94);
 }
