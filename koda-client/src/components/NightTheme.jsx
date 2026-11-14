@@ -115,13 +115,17 @@ html.koda-night .child-switcher-empty { color: #4a5384 !important; }
 html.koda-night .layout-bottom-nav .nav-icon-btn:hover,
 html.koda-night .layout-bottom-nav .nav-icon-btn:focus-visible,
 html.koda-night .layout-bottom-nav .nav-icon-btn--active {
-  background: #27305a !important;
-  color: #ffffff !important;
-  box-shadow: 0 4px 14px rgba(10, 14, 40, 0.4) !important;
+  background: #7788d8 !important;
+  color: #fff4bd !important;
+  box-shadow: 0 4px 14px rgba(65, 78, 140, 0.32) !important;
 }
 html.koda-night .layout-bottom-nav .nav-icon-btn:hover svg,
 html.koda-night .layout-bottom-nav .nav-icon-btn:focus-visible svg,
-html.koda-night .layout-bottom-nav .nav-icon-btn--active svg { color: #ffffff !important; }
+html.koda-night .layout-bottom-nav .nav-icon-btn--active svg {
+  color: #fff4bd !important;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 1px 2px rgba(28, 35, 75, 0.45));
+}
 html.koda-night .layout-logo-btn { background: transparent !important; box-shadow: none !important; }
 html.koda-night :focus-visible { outline: 2px solid #f4d77a !important; outline-offset: 2px !important; }
 

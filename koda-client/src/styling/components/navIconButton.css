@@ -18,14 +18,16 @@
 .layout-bottom-nav .nav-icon-btn:hover,
 .layout-bottom-nav .nav-icon-btn:focus-visible,
 .layout-bottom-nav .nav-icon-btn--active {
-  background: #315b3d;
-  box-shadow: 0 4px 14px rgba(49, 91, 61, 0.35);
+  background: #c8e8d0;
+  box-shadow: 0 4px 14px rgba(49, 91, 61, 0.24);
 }
 
 .layout-bottom-nav .nav-icon-btn:hover svg,
 .layout-bottom-nav .nav-icon-btn:focus-visible svg,
 .layout-bottom-nav .nav-icon-btn--active svg {
-  color: #fffdf7 !important;
+  color: #244b30 !important;
+  stroke-width: 2.35;
+  filter: drop-shadow(0 1px 1px rgba(36, 75, 48, 0.2));
 }
 
 .layout-bottom-nav .nav-icon-btn:active {
