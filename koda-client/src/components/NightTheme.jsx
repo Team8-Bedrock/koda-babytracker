@@ -2,11 +2,19 @@ import { useLayoutEffect } from "react";
 
 const CSS = `
 html.koda-night body { background: #2a3560 !important; color: #e8e6ff; }
-html.koda-night .layout-header,
-html.koda-night .layout-bottom-nav {
+html.koda-night .layout-header {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.koda-night .layout-bottom-nav {
+  background: rgba(33, 42, 82, 0.44) !important;
+  border-color: rgba(220, 225, 255, 0.14) !important;
+  box-shadow: 0 -3px 14px rgba(10, 14, 40, 0.12) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.1) !important;
+  backdrop-filter: blur(12px) saturate(1.1) !important;
 }
 html.koda-night .layout-bottom-nav button,
 html.koda-night .layout-bottom-nav svg,

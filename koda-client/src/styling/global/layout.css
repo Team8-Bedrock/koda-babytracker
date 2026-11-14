@@ -49,11 +49,14 @@ html.koda-night .layout-simple-background {
   margin: 0 auto;
   height: 66px;
   padding-bottom: env(safe-area-inset-bottom);
-  background: transparent;
+  background: rgba(255, 253, 247, 0.36);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  backdrop-filter: blur(12px) saturate(1.1);
   display: flex;
   justify-content: space-around;
   align-items: center;
-  border-top: 1.5px solid rgba(90, 70, 53, 0.4);
+  border-top: 1.5px solid rgba(90, 70, 53, 0.24);
+  box-shadow: 0 -3px 14px rgba(49, 63, 48, 0.06);
   z-index: 1000;
 }
 

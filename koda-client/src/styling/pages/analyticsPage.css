@@ -117,6 +117,14 @@
   animation: analytics-summary-spin 0.8s linear infinite;
 }
 
+.analytics-chart-loading {
+  display: grid;
+  place-items: center;
+  color: var(--k-ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 @keyframes analytics-summary-spin {
   to {
     transform: rotate(360deg);

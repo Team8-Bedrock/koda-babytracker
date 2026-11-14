@@ -176,8 +176,8 @@ const AnalyticsPage = () => {
     return itemDate >= start && itemDate <= end;
   });
 
-  const currentWindow = getAnalyticsWindow(range, 0);
-  const previousWindow = getAnalyticsWindow(range, 1);
+  const currentWindow = useMemo(() => getAnalyticsWindow(range, 0), [range]);
+  const previousWindow = useMemo(() => getAnalyticsWindow(range, 1), [range]);
 
   const filteredHistoryItems = useMemo(
     () => filterByWindow(historyItems, currentWindow),
@@ -478,13 +478,15 @@ const AnalyticsPage = () => {
         </CollapsibleCard>
 
         <CollapsibleCard title="sleep pattern">
-          {sleepChartData.length > 0 ? (
+          {loading ? (
+            <div className="analytics-chart-loading" style={{ height: 160 }} role="status">Loading chart…</div>
+          ) : sleepChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={sleepChartData}>
                 <XAxis dataKey="label" />
                 <YAxis />
                 <Tooltip formatter={(value) => [formatMinutes(value), 'Sleep duration']} />
-                <Bar dataKey="minutes" fill="#8A7BC2" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="minutes" fill="#8A7BC2" radius={[8, 8, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -493,13 +495,15 @@ const AnalyticsPage = () => {
         </CollapsibleCard>
 
         <CollapsibleCard title="feeding pattern">
-          {feedingChartData.length > 0 ? (
+          {loading ? (
+            <div className="analytics-chart-loading" style={{ height: 200 }} role="status">Loading chart…</div>
+          ) : feedingChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={feedingChartData} layout="vertical" margin={{ top: 5, right: 38, bottom: 5, left: 0 }}>
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="label" width={54} axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(value) => [`${value} oz`, 'Feeding amount']} />
-                <Bar dataKey="ounces" fill="#789F75" radius={[0, 6, 6, 0]} barSize={18}>
+                <Bar dataKey="ounces" fill="#789F75" radius={[0, 6, 6, 0]} barSize={18} isAnimationActive={false}>
                   <LabelList dataKey="ounces" position="right" formatter={(value) => `${value} oz`} fontSize={11} />
                 </Bar>
               </BarChart>
@@ -510,11 +514,13 @@ const AnalyticsPage = () => {
         </CollapsibleCard>
 
         <CollapsibleCard title="diaper pattern">
-          {diaperTotal > 0 ? (
+          {loading ? (
+            <div className="analytics-chart-loading" style={{ height: 190 }} role="status">Loading chart…</div>
+          ) : diaperTotal > 0 ? (
             <div className="analytics-diaper-chart">
               <ResponsiveContainer width="100%" height={190}>
                 <PieChart>
-                  <Pie data={diaperChartData} dataKey="value" nameKey="name" innerRadius={48} outerRadius={76} paddingAngle={2}>
+                  <Pie data={diaperChartData} dataKey="value" nameKey="name" innerRadius={48} outerRadius={76} paddingAngle={2} isAnimationActive={false}>
                     {diaperChartData.map((item, index) => (
                       <Cell key={item.name} fill={DIAPER_COLORS[index]} />
                     ))}
