@@ -262,6 +262,11 @@
   color: #315b3d;
 }
 
+.hm-link-btn--no-underline,
+.hm-link-btn--no-underline:hover {
+  text-decoration: none;
+}
+
 .hm-link-btn-icon {
   display: flex;
   align-items: center;

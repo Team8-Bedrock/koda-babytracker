@@ -12,6 +12,24 @@ import CaregiverLinkPanel from '../components/settings/CaregiverLinkPanel';
 import CaregiverManagementPanel from '../components/settings/CaregiverManagementPanel';
 import ChildProfilePicker from '../components/settings/ChildProfilePicker';
 import DarkModeToggle from '../components/DarkModeToggle';
+import { getCurrentUserId } from '../utils/authStorage';
+
+const getCachedRole = () => {
+  try {
+    return sessionStorage.getItem(`koda-role:${getCurrentUserId()}`) || null;
+  } catch {
+    return null;
+  }
+};
+
+const getCachedEmail = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    return typeof user?.email === 'string' ? user.email : '';
+  } catch {
+    return '';
+  }
+};
 
 const CollapseRow = ({ open, children, topGap = false }) => (
   <div
@@ -25,9 +43,9 @@ const CollapseRow = ({ open, children, topGap = false }) => (
 
 const AccountSettings = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(getCachedEmail);
   const [selectedChild, setSelectedChild] = useState(null);
-  const [role, setRole] = useState(null);
+  const [role, setRole] = useState(getCachedRole);
 
   const location = useLocation();
   const [category, setCategory] = useState(() => location.state?.openCategory || null);
@@ -51,7 +69,7 @@ const AccountSettings = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
-  const [accessChecked, setAccessChecked] = useState(false);
+  const [accessChecked, setAccessChecked] = useState(() => Boolean(getCachedRole()));
 
   useEffect(() => {
     const savedChild = getSelectedChildForUser();
@@ -70,7 +88,17 @@ const AccountSettings = () => {
       .catch(() => setAccessChecked(true));
   }, [navigate]);
 
-  if (!accessChecked) return null;
+  if (!accessChecked) {
+    return (
+      <Layout>
+        <div className="account-content">
+          <div className="glass-card glass-card--translucent" role="status" aria-live="polite">
+            <p className="empty-msg-light">loading settings…</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   const isCaregiver = role === 'caregiver';
   const childName = selectedChild?.name || 'Gracie';
