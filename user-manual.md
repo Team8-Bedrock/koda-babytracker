@@ -132,13 +132,13 @@ Designed to work without Wi-Fi or cellular service. Activities logged offline ar
 
 ### Feature 5: AI Anomaly Detection & Visual Trend Analytics
 **Description:**  
-The **Analytics Page** provides local activity comparisons and visual trends immediately. AI summaries become available after activity has been logged on at least 3 separate days within a rolling 5-day baseline. Until then, the summary explains that more logging is needed; charts remain available. Once the baseline is met, the summary uses up to 500 feeding, sleep, and diaper records from the last 5 days. The summary is produced by Google Gemini; child names and profile details are not sent. AI observations may be inaccurate and are not medical advice or a diagnosis.
+The **Analytics Page** provides local activity comparisons and visual trends immediately. The first AI routine baseline is established after activity has been logged on at least 3 separate days within a rolling 5-day period. Until then, the summary explains that more logging is needed; charts remain available. After establishment, summaries continue to be available even when fewer activities are logged in a later 5-day period. The original baseline remains available for comparison while the adaptive baseline gradually reflects newer routines; routine changes influence adaptation only when supported by activity logged on at least 3 separate days within a 5-day period. Summaries use up to 500 feeding, sleep, and diaper records from the last 5 days. The summary is produced by Google Gemini; child names and profile details are not sent. AI observations may be inaccurate and are not medical advice or a diagnosis.
 
 **How to Use:**
-1. Log your child's activities on at least 3 separate days within a 5-day period to establish a baseline. The charts are available while you build this baseline.
+1. Log your child's activities on at least 3 separate days within a 5-day period to establish the first baseline. The charts are available while you build this baseline.
 2. Tap the **Analytics (Chart)** icon on the bottom navigation bar (Parent access only).
 3. Examine the local trend graphs and key takeaways.
-4. The Key Takeaways summary loads automatically. Before 3 distinct logged days, it explains that more data is needed; after that, it sends up to 500 records from the last 5 days to Google Gemini. This requires an internet connection and a server-side `GEMINI_API_KEY`.
+4. The Key Takeaways summary loads automatically. Until the first baseline is established, it explains that more data is needed. After that, it sends up to 500 records from the last 5 days and aggregate baseline statistics to Google Gemini. This requires an internet connection and a server-side `GEMINI_API_KEY`.
 5. Review the feeding, sleep, diaper, and key-insight bullet points. Contact a qualified healthcare professional about health concerns.
 
 <img src="images/analytics.PNG" alt="AI Analytics Dashboard & Trends" width="200">

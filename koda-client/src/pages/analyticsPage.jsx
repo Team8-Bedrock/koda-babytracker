@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Download, TrendingUp, TrendingDown, Minus, Moon, Milk, Baby } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, Minus, Moon, Milk, Baby, Info } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts';
 import '../styling/global/App.css';
 import '../styling/pages/analyticsPage.css';
@@ -405,12 +405,8 @@ const AnalyticsPage = () => {
         <CollapsibleCard title="key takeaways">
           <div className="card-header">
             <FileText size={22} strokeWidth={2} color="#315b3d" />
-            <span>summary</span>
+            <span>AI summary</span>
           </div>
-          <p className="empty-msg-light analytics-ai-disclosure">
-            AI-generated observations are informational, not medical advice. Up to 500 activity records
-            from the last 5 days may be sent to Google Gemini; child names and profile details are not sent.
-          </p>
           {aiSummaryLoading && (
             <div className="analytics-summary-loading" role="status" aria-live="polite">
               <span className="analytics-summary-spinner" aria-hidden="true" />
@@ -424,15 +420,13 @@ const AnalyticsPage = () => {
           )}
           {aiSummary ? (
             <div aria-live="polite">
-              {[
-                ['Feeding', aiSummary.feeding_summary],
-                ['Sleep', aiSummary.sleep_summary],
-                ['Diapers', aiSummary.diaper_summary]
-              ].map(([label, text]) => (
-                <p key={label} className="empty-msg-light analytics-summary-category">
-                  <strong>{label}:</strong> {text}
-                </p>
-              ))}
+              <p className="empty-msg-light analytics-summary-text">
+                {[...new Set([
+                  aiSummary.feeding_summary,
+                  aiSummary.sleep_summary,
+                  aiSummary.diaper_summary
+                ].map((text) => text.trim()).filter(Boolean))].join(' ')}
+              </p>
               {aiSummary.key_insights.length ? aiSummary.key_insights.map((insight, index) => (
                 <div key={`${index}-${insight}`} className="analytics-insight-row">
                   <span className="analytics-insight-bullet" />
@@ -443,6 +437,10 @@ const AnalyticsPage = () => {
           ) : !aiSummaryLoading && !aiSummaryError && loading
             ? <p className="empty-msg-light">loading activity…</p>
             : null}
+          <p className="empty-msg-light analytics-ai-disclosure">
+            <Info size={15} strokeWidth={2.2} aria-hidden="true" />
+            <span>Important: AI insights aren’t medical advice.</span>
+          </p>
         </CollapsibleCard>
 
         {/* each card carries its own comparison label, so the section header

@@ -16,6 +16,9 @@ const {
     isBabySummaryFallback,
     createInsufficientDataSummary,
     getDistinctLoggedDays,
+    findLatestQualifyingBaselineLogs,
+    createRoutineProfile,
+    blendRoutineProfiles,
     MINIMUM_LOGGED_DAYS,
     BASELINE_WINDOW_DAYS
 } = require('../utils/babySummary');
@@ -49,18 +52,20 @@ const buildSummaryLogs = (feedings, sleeps, diapers) => [
     .sort((left, right) => new Date(right.timestamp) - new Date(left.timestamp))
     .slice(0, MAX_SUMMARY_LOGS);
 
-const getSummaryCacheKey = (childId, startAt, endAt, logsArray) => {
-    const logsHash = crypto.createHash('sha256').update(JSON.stringify(logsArray)).digest('hex');
+const getSummaryCacheKey = (childId, startAt, endAt, logsArray, routineBaseline = null) => {
+    const logsHash = crypto.createHash('sha256')
+        .update(JSON.stringify({ logsArray, routineBaseline }))
+        .digest('hex');
     return `${childId}:${startAt.toISOString()}:${endAt.toISOString()}:${logsHash}`;
 };
 
-const getCachedBabySummary = async (cacheKey, logsArray) => {
+const getCachedBabySummary = async (cacheKey, logsArray, routineBaseline = null) => {
     const cachedSummary = summaryRequests.get(cacheKey);
     if (cachedSummary && cachedSummary.expiresAt > Date.now()) {
         return cachedSummary.promise;
     }
 
-    const summaryRequest = generateBabySummary(logsArray);
+    const summaryRequest = generateBabySummary(logsArray, routineBaseline);
     const cacheEntry = {
         promise: summaryRequest,
         expiresAt: Date.now() + SUMMARY_CACHE_TTL_MS
@@ -81,6 +86,102 @@ const getCachedBabySummary = async (cacheKey, logsArray) => {
     });
 
     return summaryRequest;
+};
+
+const loadOrEstablishRoutineBaseline = async (child, logsArray, loggedDays, timeZone) => {
+    const logsHash = crypto.createHash('sha256').update(JSON.stringify(logsArray)).digest('hex');
+    let baseline = child.aiRoutineBaseline?.toObject
+        ? child.aiRoutineBaseline.toObject()
+        : child.aiRoutineBaseline;
+    let profileLogs = logsArray;
+    let profileLogsHash = logsHash;
+
+    if (!baseline && loggedDays < MINIMUM_LOGGED_DAYS) {
+        if (!child.aiRoutineBaselineHistoryCheckedAt) {
+            const historicalEntries = await Promise.all([
+                Feeding.find({ childId: child._id, timestamp: { $lte: new Date() } })
+                    .sort({ timestamp: -1 }).limit(MAX_SUMMARY_LOGS).lean(),
+                Sleep.find({ childId: child._id, timestamp: { $lte: new Date() } })
+                    .sort({ timestamp: -1 }).limit(MAX_SUMMARY_LOGS).lean(),
+                Diaper.find({ childId: child._id, timestamp: { $lte: new Date() } })
+                    .sort({ timestamp: -1 }).limit(MAX_SUMMARY_LOGS).lean()
+            ]);
+            const historicalLogs = buildSummaryLogs(...historicalEntries);
+            const qualifyingLogs = findLatestQualifyingBaselineLogs(historicalLogs, timeZone);
+            if (qualifyingLogs) {
+                profileLogs = qualifyingLogs;
+                profileLogsHash = crypto.createHash('sha256').update(JSON.stringify(profileLogs)).digest('hex');
+            } else {
+                await Child.updateOne(
+                    { _id: child._id, aiRoutineBaselineHistoryCheckedAt: { $exists: false } },
+                    { $set: { aiRoutineBaselineHistoryCheckedAt: new Date() } }
+                );
+                return null;
+            }
+        } else {
+            return null;
+        }
+    }
+
+    if (!baseline) {
+        const now = new Date();
+        const profile = createRoutineProfile(profileLogs, timeZone);
+        const candidate = {
+            establishedAt: now,
+            updatedAt: now,
+            lastAdaptedInputHash: profileLogsHash,
+            initialProfile: profile,
+            adaptiveProfile: profile
+        };
+        await Child.updateOne(
+            { _id: child._id, aiRoutineBaseline: { $exists: false } },
+            { $set: { aiRoutineBaseline: candidate } }
+        );
+        const latestChild = await Child.findById(child._id).select('aiRoutineBaseline').lean();
+        baseline = latestChild?.aiRoutineBaseline;
+    }
+
+    if (!baseline) {
+        throw new Error('Could not establish the child activity baseline.');
+    }
+
+    if (loggedDays >= MINIMUM_LOGGED_DAYS && logsHash !== baseline.lastAdaptedInputHash) {
+        const now = new Date();
+        const nextAdaptiveProfile = blendRoutineProfiles(
+            baseline.adaptiveProfile || baseline.initialProfile,
+            createRoutineProfile(logsArray, timeZone)
+        );
+        const updateResult = await Child.updateOne(
+            {
+                _id: child._id,
+                'aiRoutineBaseline.lastAdaptedInputHash': baseline.lastAdaptedInputHash
+            },
+            {
+                $set: {
+                    'aiRoutineBaseline.adaptiveProfile': nextAdaptiveProfile,
+                    'aiRoutineBaseline.lastAdaptedInputHash': logsHash,
+                    'aiRoutineBaseline.updatedAt': now
+                }
+            }
+        );
+
+        if (updateResult.matchedCount) {
+            baseline = {
+                ...baseline,
+                adaptiveProfile: nextAdaptiveProfile,
+                lastAdaptedInputHash: logsHash,
+                updatedAt: now
+            };
+        } else {
+            const latestChild = await Child.findById(child._id).select('aiRoutineBaseline').lean();
+            baseline = latestChild?.aiRoutineBaseline || baseline;
+        }
+    }
+
+    return {
+        initial_profile: baseline.initialProfile,
+        adaptive_profile: baseline.adaptiveProfile || baseline.initialProfile
+    };
 };
 
 const Mood = mongoose.models.Mood || mongoose.model('Mood', new mongoose.Schema({
@@ -1035,12 +1136,13 @@ router.post('/analytics/summary', authMiddleware, requireParent, async (req, res
 
         const logsArray = buildSummaryLogs(feedings, sleeps, diapers);
         const loggedDays = getDistinctLoggedDays(logsArray, timeZone);
-        if (loggedDays < MINIMUM_LOGGED_DAYS) {
+        const routineBaseline = await loadOrEstablishRoutineBaseline(child, logsArray, loggedDays, timeZone);
+        if (!routineBaseline) {
             return res.json(createInsufficientDataSummary(loggedDays));
         }
 
-        const summaryKey = getSummaryCacheKey(childId, startAt, endAt, logsArray);
-        const summary = await getCachedBabySummary(summaryKey, logsArray);
+        const summaryKey = getSummaryCacheKey(childId, startAt, endAt, logsArray, routineBaseline);
+        const summary = await getCachedBabySummary(summaryKey, logsArray, routineBaseline);
         if (isBabySummaryFallback(summary)) {
             return res.status(503).json({ error: 'AI summary is temporarily unavailable. Please try again later.' });
         }
@@ -1132,11 +1234,18 @@ router.post('/reports/generate', authMiddleware, requireParent, async (req, res)
             filterByWindow(diapers, summaryWindow)
         );
         const loggedDays = getDistinctLoggedDays(baselineLogs, timeZone);
-        const aiSummary = loggedDays < MINIMUM_LOGGED_DAYS
+        const routineBaseline = await loadOrEstablishRoutineBaseline(
+            childProfile,
+            baselineLogs,
+            loggedDays,
+            timeZone
+        );
+        const aiSummary = !routineBaseline
             ? createInsufficientDataSummary(loggedDays)
             : await getCachedBabySummary(
-                getSummaryCacheKey(childId, summaryWindow.start, summaryWindow.end, baselineLogs),
-                baselineLogs
+                getSummaryCacheKey(childId, summaryWindow.start, summaryWindow.end, baselineLogs, routineBaseline),
+                baselineLogs,
+                routineBaseline
             );
 
         const sleepStats = calculateSleepDuration(scopedSleeps);

@@ -86,8 +86,24 @@
 }
 
 .analytics-ai-disclosure {
-  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--k-sage-line);
   font-size: 12px;
+  line-height: 1.4;
+}
+
+.analytics-ai-disclosure svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--k-ink-soft);
+}
+
+.analytics-summary-text {
+  margin: 0 0 10px;
 }
 
 .analytics-ai-error {
